@@ -89,6 +89,34 @@ class PublicCommands : CommandSupport() {
         reply(plugin, event, "当前已连接服务器：${plugin.getBotName()}")
     }
 
+    @Commands("帮助")
+    fun help(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        val help = """
+            |可用命令列表：
+            |  帮助 —— 查看所有命令
+            |  查信息 [OpenId] —— 查询 OpenId
+            |  查管理 <OpenId> —— 查询管理员状态
+            |  加管理 <OpenId> —— 添加管理员
+            |  删管理 <OpenId> —— 删除管理员
+            |  管理方式 [QQ/手动/双重] —— 设置管理员判定方式
+            |  添加白名单 <玩家名> —— 添加玩家白名单
+            |  删除白名单 <玩家名> —— 删除玩家白名单
+            |  查白名单 —— 查看白名单列表
+            |  查在线 —— 查询在线玩家
+            |  在线服务器 —— 查看已连接服务器
+            |  发信息 <内容> —— 发送消息到游戏
+            |  执行命令 <命令> —— 执行服务器命令
+            |  执行 <命令> —— 执行自定义命令
+            |  管理员执行 <命令> —— 管理员执行自定义命令
+            |  全量 —— 切换全量聊天转发
+            |  motd <地址> —— 查询服务器状态
+            |  agent <任务> —— AI 执行管理任务
+            |  stop —— 紧急停止 AI 任务
+            |  newsession —— 清除 AI 会话上下文
+        """.trimMargin()
+        event.sendMessage(help)
+    }
+
     @Commands("执行")
     fun runCustomCommand(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (params.isBlank()) {

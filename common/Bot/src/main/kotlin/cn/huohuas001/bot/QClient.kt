@@ -47,6 +47,7 @@ object QClient {
             starter.registerListenerHost(AgentInteractionListener())
             starter.APPLICATION.logger.setLogLevel(1)
             starter.APPLICATION.logger.setOutFile(logFilePattern)
+            MenuManager.syncGroupPanels(starter, plugin.getGroupOpenIdList())
         } catch (error: Exception) {
             if (suppressConsoleOutput) {
                 QqBotConsoleOutputFilter.uninstall()

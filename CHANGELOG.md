@@ -1,7 +1,8 @@
-# HuHoBot Penguin v1.1.0-alpha.2
+# HuHoBot Penguin v1.1.0-alpha.3
 
 ## 新功能
 
+- feat(menu): 启动时自动同步指令面板到 QQ 群，包含全部 20 条命令
 - feat(motd): 新增 `/motd <服务器地址>` 命令，查询 MC 服务器状态（图片 + Markdown）
 - feat(stop): 新增 `/stop` 命令，紧急停止所有 AI 任务输出和处理
 - feat(message): 添加消息提及用户解析和格式化功能
