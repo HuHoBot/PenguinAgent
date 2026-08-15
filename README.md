@@ -68,6 +68,7 @@ cd PenguinClient
 - **全量** —— 切换全量聊天转发
 - **/motd `<服务器地址>`** —— 查询 MC 服务器状态（图片 + Markdown）
 - **/agent `<任务描述>`** —— AI Agent 执行服务器管理任务
+- **/stop** —— 紧急停止所有 AI 任务
 - **/newsession** —— 清除 AI 会话上下文
 
 ## 模块结构
