@@ -5,6 +5,7 @@ import cn.huohuas001.bot.agent.AgentCommands
 import cn.huohuas001.bot.events.commands.AdministrationCommands
 import cn.huohuas001.bot.events.commands.AuthenticationCommands
 import cn.huohuas001.bot.events.commands.BaseCommand
+import cn.huohuas001.bot.events.commands.MotdCommands
 import cn.huohuas001.bot.events.commands.PublicCommands
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
@@ -22,6 +23,7 @@ class GroupMessageHandler(
         registerCommand(AdministrationCommands())
         registerCommand(AuthenticationCommands())
         registerCommand(AgentCommands())
+        registerCommand(MotdCommands())
     }
 
     fun registerCommand(command: BaseCommand) {
