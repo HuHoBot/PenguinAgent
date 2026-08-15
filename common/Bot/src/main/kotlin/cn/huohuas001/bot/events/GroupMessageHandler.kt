@@ -10,6 +10,7 @@ import cn.huohuas001.bot.events.commands.PublicCommands
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 import io.github.kloping.qqbot.impl.ListenerHost
+import io.github.kloping.qqbot.impl.message.v2.BaseMessageEvent
 import java.util.concurrent.CopyOnWriteArrayList
 
 /** QQ 群消息事件入口，负责群限制、命令分发和全量聊天转发。 */
@@ -64,8 +65,50 @@ class GroupMessageHandler(
             .fullForwarding(groupId, plugin.getFullAmount())
         if (!enabled || !plugin.getChatFormat().postChat) return
 
-        var message = event.rawMessage.content ?: return
-        val senderName = event.sender?.username?: "unknown"
+        val senderName = event.sender?.username ?: "unknown"
+
+        // 从原始 JSON 提取附件信息（SDK 未映射 asr_refer_text 等新字段）
+        val metadata = (event as? BaseMessageEvent<*>)?.metadata
+        val attachmentsJson = metadata?.getJSONArray("attachments")
+
+        val parts = mutableListOf<String>()
+
+        // 文本内容
+        val textContent = event.rawMessage.content?.trim().orEmpty()
+        if (textContent.isNotEmpty()) {
+            parts.add(textContent)
+        }
+
+        // 附件内容
+        if (attachmentsJson != null) {
+            for (i in attachmentsJson.indices) {
+                val att = attachmentsJson.getJSONObject(i) ?: continue
+                val contentType = att.getString("content_type") ?: ""
+                when {
+                    contentType == "voice" -> {
+                        val asrText = att.getString("asr_refer_text")?.trim()
+                        parts.add(if (!asrText.isNullOrEmpty()) "[语音消息] [$asrText]" else "[语音消息]")
+                    }
+                    contentType.startsWith("image/") -> {
+                        parts.add("[图片]")
+                    }
+                    contentType == "image/gif" -> {
+                        parts.add("[表情包]")
+                    }
+                    contentType.startsWith("video/") -> {
+                        parts.add("[视频]")
+                    }
+                    else -> {
+                        val filename = att.getString("filename") ?: "文件"
+                        parts.add("[文件: $filename]")
+                    }
+                }
+            }
+        }
+
+        if (parts.isEmpty()) return
+
+        var message = parts.joinToString(" ")
 
         val mentions = event.rawMessage.mentions
         if (mentions != null) {
