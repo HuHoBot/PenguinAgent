@@ -1,0 +1,15 @@
+name: HuHoBotPenguin
+main: cn.huohuas001.huhobotPenguin.nukkit.HuHoBotNukkit
+version: '${version}'
+api: ["1.0.5"]
+load: POSTWORLD
+author: "HuoHuas001"
+prefix: "HuHoBot"
+commands:
+  huhobot:
+    description: HuHoBot control command
+    usage: "/huhobot reload"
+    permission: huhobot.command
+permissions:
+  huhobot.command:
+    default: op

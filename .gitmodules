@@ -1,0 +1,3 @@
+[submodule "deps/qqpd-bot-java"]
+	path = deps/qqpd-bot-java
+	url = git@github.com:HuHoBot/qqpd-bot-java.git

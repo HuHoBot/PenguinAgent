@@ -1,0 +1,5 @@
+name: HuHoBotPenguin
+version: '${version}'
+main: cn.huohuas001.huhobotPenguin.bungee.HuHoBotBungee
+author: HuoHuas001
+description: HuHoBot BungeeCord Adapter

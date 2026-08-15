@@ -1,0 +1,166 @@
+name: Java CI & Release
+
+on:
+  push:
+    branches: [ "main", "dev", "master" ]
+    paths:
+      - '.github/workflows/build.yml'
+      - '.gitmodules'
+      - 'common/**'
+      - 'deps/qqpd-bot-java'
+      - 'deps/qqpd-bot-java/**'
+      - 'server/**'
+      - 'build.gradle.kts'
+    tags:
+      - 'v*' # 匹配 v 开头的标签
+  pull_request:
+    paths:
+      - '.github/workflows/build.yml'
+      - '.gitmodules'
+      - 'common/**'
+      - 'deps/qqpd-bot-java'
+      - 'deps/qqpd-bot-java/**'
+      - 'server/**'
+      - 'build.gradle.kts'
+
+env:
+  GRADLE_VERSION: 8.14.5
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # 获取完整提交历史
+          submodules: recursive # 拉取 qqpd-bot-java 及其嵌套子模块
+
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+          test -f deps/qqpd-bot-java/pom.xml
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v5
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        env:
+          WS_SERVER_URL: ${{ secrets.WS_SERVER_URL }}
+        run: |
+          ./gradlew build \
+            -x test \
+            -Dorg.gradle.daemon=false
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-artifacts
+          path: |
+            build/gather-jar/HuHoBot-*.jar
+          retention-days: 1  # 仅保留1天临时文件
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    # 新增权限配置
+    permissions:
+      contents: write  # 必须的权限
+      actions: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release info
+        id: changelog
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          # 修复：使用正确的标签格式匹配
+          VERSION=${TAG_NAME#v}  # 去除v前缀（如果CHANGELOG使用纯版本号）
+          
+          CHANGELOG_CONTENT=$(awk -v version="[v$VERSION]" '
+            BEGIN {RS="## "; FS="\n"}
+            $1 ~ version {
+              sub(/\[.*\] - .*\n/, "")
+              gsub(/`/, "\\`")
+              gsub(/"/, "\\\"")
+              print
+              exit
+            }
+          ' CHANGELOG.md)
+
+          EOF_MARKER=$(openssl rand -base64 12)
+          echo "body<<$EOF_MARKER" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+
+          # 添加标签名输出
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts
+
+      - name: Setup workspace
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}  # 去掉v前缀
+          echo '{"latest":"$VERSION"}' > artifacts/latest.json
+
+      #- name: Upload to R2
+      #  uses: ryand56/r2-upload-action@latest
+      #  with:
+      #    r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
+      #    r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+      #    r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      #    r2-bucket: ${{ secrets.R2_BUCKET }}
+      #    source-dir: artifacts
+      #    destination-dir: kotlin
+
+      - name: Get timestamp
+        id: get-time
+        run: echo "TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1  # 改用更可靠的 Action
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag_name }}
+          name: HuHoBot ${{ steps.changelog.outputs.tag_name }}
+          body: |
+            ${{ steps.changelog.outputs.body }}
+
+            ### 构建信息
+            - 构建时间: ${{ steps.get-time.outputs.TIME }}
+            - 提交哈希: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          files: |
+            artifacts/HuHoBot-*.jar

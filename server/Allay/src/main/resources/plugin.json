@@ -1,0 +1,7 @@
+{
+  "entrance": "cn.huohuas001.huhobotPenguin.allay.HuHoBotAllay",
+  "name": "HuHoBotPenguin",
+  "authors": ["HuoHuas001"],
+  "version": "${version}",
+  "api_version": ">=0.17.0"
+}

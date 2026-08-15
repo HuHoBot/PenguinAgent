@@ -1,0 +1,94 @@
+config-version: 5
+
+# 服务器显示名称，可在进服/退服格式中通过 {server} 使用。
+serverName: "HuHoBot"
+
+bot:
+  app-id: ""
+  secret: ""
+  name: "HuHoBot"
+  groups: []
+  # 屏蔽 QQ SDK 直接写入 System.out 的调试信息。
+  suppress-console-output: true
+
+# 仅 Proxy 端使用。通过 Redis 将命令发送到子服务器，并接收命令输出回调。
+# 命令格式：服务器名:命令；例如 lobby:say hello。ALL:命令 会发送到所有子服务器。
+redis:
+  enabled: false
+  host: "localhost"
+  port: 6379
+  password: ""
+  channel: "HuHoBotChannel"
+
+chat-format:
+  from-game: "[游戏] {message}"
+  from-group: "[QQ] {name}: {message}"
+  post-chat: true
+  # 只有以该内容开头的游戏消息才会转发；转发时会移除该内容。留空表示全部转发。
+  start-with: "#"
+
+player-events:
+  join:
+    enabled: true
+    # 可用占位符：{name}、{player}、{server}、{platform}
+    format: "[游戏] {name} 加入了服务器"
+  quit:
+    enabled: true
+    # 可用占位符：{name}、{player}、{server}、{platform}
+    format: "[游戏] {name} 离开了服务器"
+
+# 配置键对应插件数据目录 Markdown/ 下的文件。
+markdown:
+  queryOnline: "online.md"
+
+motd:
+  server-ip: "127.0.0.1"
+  # Proxy 默认查询端口为 25565。
+  api: ""
+  text: ""
+  post-img: false
+  use-markdown: false
+
+whitelist:
+  # 未带“服务器名:”前缀时命令在代理本地执行；向所有子服发送请配置为 ALL:命令。
+  add-command: "ALL:whitelist add {name}"
+  del-command: "ALL:whitelist remove {name}"
+
+filter-regex: []
+
+admin:
+  # qq: 仅群主/QQ 群管理员；config: 仅手动名单；both: 任一满足
+  mode: both
+  openids: []
+
+features:
+  full-amount: false
+
+commands:
+  查信息: true
+  查管理: true
+  加管理: true
+  删管理: true
+  管理方式: true
+  添加白名单: true
+  删除白名单: true
+  查白名单: true
+  查在线: true
+  在线服务器: true
+  发信息: true
+  执行命令: true
+  执行: true
+  管理员执行: true
+  全量: true
+  认证: true
+  解除认证: true
+
+audit:
+  base-url: ""
+  api-key: ""
+  model: "gpt-4o-mini"
+
+custom-commands:
+  # - key: "公告"
+  #   command: "say {params}"
+  #   permission: 1

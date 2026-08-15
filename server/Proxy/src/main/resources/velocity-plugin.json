@@ -1,0 +1,8 @@
+{
+  "id": "huhobot",
+  "name": "HuHoBotPenguin",
+  "version": "${version}",
+  "description": "HuHoBot Velocity Adapter",
+  "authors": ["HuoHuas001"],
+  "main": "cn.huohuas001.huhobotPenguin.velocity.HuHoBotVelocity"
+}

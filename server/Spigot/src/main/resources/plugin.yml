@@ -1,0 +1,17 @@
+name: HuHoBotPenguin
+version: '${version}'
+
+main: cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
+api-version: '1.18'
+
+commands:
+  huhobot:
+    description: HuHoBot control command
+    usage: "/huhobot reload|info"
+    aliases: [hb]
+    permission: huhobot.command
+
+permissions:
+  huhobot.command:
+    description: Allows use of HuHoBot control commands
+    default: op
