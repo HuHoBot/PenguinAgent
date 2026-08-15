@@ -1,8 +1,10 @@
-# HuHoBot Penguin v1.1.0-alpha.1
+# HuHoBot Penguin v1.1.0-alpha.2
 
 ## 新功能
 
 - feat(motd): 新增 `/motd <服务器地址>` 命令，查询 MC 服务器状态（图片 + Markdown）
+- feat(stop): 新增 `/stop` 命令，紧急停止所有 AI 任务输出和处理
+- feat(message): 添加消息提及用户解析和格式化功能
 - feat(agent): 新增 AI Agent 系统，管理员通过 `@机器人 /agent 任务描述` 触发 AI 执行服务器管理任务
 - feat(agent): AI 通过 function call 获取插件列表、命令帮助、执行命令、读取日志
 - feat(agent): 命令执行支持手动审批模式（按钮卡片同意/拒绝，仅管理员与群主可审批）

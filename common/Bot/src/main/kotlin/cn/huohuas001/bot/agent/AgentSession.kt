@@ -19,6 +19,9 @@ class AgentSession(
     /** 会话是否已结束（AI 已给出最终答复）。 */
     var finished: Boolean = false
 
+    /** 紧急停止标记：设置后立即终止所有输出和 AI 处理。 */
+    @Volatile var stopped: Boolean = false
+
     /** 正在等待管理员审批的执行请求；null 表示没有待审批项。 */
     var awaitingApproval: PendingApproval? = null
 

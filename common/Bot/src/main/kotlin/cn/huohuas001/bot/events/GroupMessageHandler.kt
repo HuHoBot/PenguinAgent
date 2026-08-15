@@ -64,8 +64,22 @@ class GroupMessageHandler(
             .fullForwarding(groupId, plugin.getFullAmount())
         if (!enabled || !plugin.getChatFormat().postChat) return
 
-        val message = event.rawMessage.content ?: return
+        var message = event.rawMessage.content ?: return
         val senderName = event.sender?.username?: "unknown"
+
+        val mentions = event.rawMessage.mentions
+        if (mentions != null) {
+            for (mention in mentions) {
+                val mentionId = mention.id ?: continue
+                val mentionName = mention.username ?: continue
+                message = message
+                    .replace("<@!$mentionId>", "@$mentionName")
+                    .replace("<@$mentionId>", "@$mentionName")
+                    .replace("<$mentionId>", "@$mentionName")
+                    .replace(mentionId, "@$mentionName")
+            }
+        }
+
         plugin.broadcastMessage(plugin.formatGroupMessage(senderName, plugin.auditText(message)))
     }
 }

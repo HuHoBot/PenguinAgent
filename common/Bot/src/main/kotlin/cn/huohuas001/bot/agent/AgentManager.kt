@@ -100,6 +100,11 @@ object AgentManager {
         var steps = 0
 
         while (true) {
+            if (session.stopped) {
+                sendToGroup(plugin, session, "⏹️ 任务已紧急停止")
+                finish(plugin, session)
+                return
+            }
             if (++steps > MAX_STEPS) {
                 sendToGroup(plugin, session, AgentMessageFormatter.error("处理步骤过多，任务已中止"))
                 finish(plugin, session)
@@ -264,6 +269,11 @@ object AgentManager {
         val session = sessions.values.firstOrNull { it.awaitingApproval?.approvalId == approvalId } ?: return
         val pending = session.awaitingApproval ?: return
 
+        if (session.stopped) {
+            session.awaitingApproval = null
+            return
+        }
+
         if (session.groupOpenId != groupOpenId) {
             plugin.log_warning("Agent 审批群不匹配，已忽略 approvalId=$approvalId")
             sendToGroup(plugin, session, AgentMessageFormatter.noPermissionNotice())
@@ -342,8 +352,9 @@ object AgentManager {
     }
 
     private fun sendToGroup(plugin: HuHoBot, session: AgentSession, content: String) {
-        if (content.isBlank()) return
+        if (session.stopped || content.isBlank()) return
         splitMessages(content).forEach { chunk ->
+            if (session.stopped) return
             plugin.sendMarkdownToGroup(session.groupOpenId, chunk)
         }
     }
@@ -384,6 +395,19 @@ object AgentManager {
         if (removed) {
             plugin.log_info("Agent 会话已手动清除：group=$groupOpenId user=$requestUserId")
         }
+    }
+
+    /** 紧急停止：立即终止指定用户的所有活跃会话，阻止后续输出和 AI 处理。 */
+    fun stopAgent(plugin: HuHoBot, groupOpenId: String, requestUserId: String) {
+        var count = 0
+        sessions.values.forEach { session ->
+            if (session.requestUserId == requestUserId && session.groupOpenId == groupOpenId && !session.finished) {
+                session.stopped = true
+                session.awaitingApproval = null
+                count++
+            }
+        }
+        plugin.log_info("Agent 紧急停止：group=$groupOpenId user=$requestUserId 停止了 $count 个会话")
     }
 
     private fun systemMessage(content: String): JSONObject =

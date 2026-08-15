@@ -24,4 +24,15 @@ class AgentCommands : CommandSupport() {
         AgentManager.clearSession(plugin, groupOpenId, userId)
         event.sendMessage("✅ 会话上下文已清除，下次 /agent 将开始全新对话。")
     }
+
+    @Commands("stop", "Stop")
+    fun stop(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+        val groupOpenId = event.metadata?.getString("group_openid")
+            ?: event.groupOpenId
+            ?: event.groupId
+        val userId = event.sender?.openid ?: event.sender?.id ?: ""
+        AgentManager.stopAgent(plugin, groupOpenId, userId)
+        event.sendMessage("⏹️ 已紧急停止所有 AI 任务")
+    }
 }
