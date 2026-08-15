@@ -12,14 +12,12 @@ class MotdCommands : CommandSupport() {
     fun motd(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val host = params.trim()
         if (host.isBlank()) {
-            reply(plugin, event, "用法: /motd <服务器地址>\n示例: /motd mc.hypixel.net:25565")
+            reply(plugin, event, "用法: /motd <服务器地址>\n示例: /motd mc.hypixel.net")
             return
         }
 
-        val serverAddress = if (host.contains(":")) host else "$host:25565"
-
-        val apiUrl = "https://motdbe.blackbe.work/api/java?host=$serverAddress"
-        val imgApiUrl = "https://motdbe.blackbe.work/status_img/java?host=$serverAddress"
+        val apiUrl = "https://motd.minebbs.com/api/status?ip=$host&stype=je"
+        val imgUrl = "https://motd.minebbs.com/api/status_img?ip=$host&stype=je&theme=simple"
 
         try {
             val response = fetchJson(apiUrl)
@@ -30,39 +28,41 @@ class MotdCommands : CommandSupport() {
 
             val status = response.getString("status") ?: "unknown"
             if (status != "online") {
-                reply(plugin, event, "服务器 $serverAddress 当前离线或无法连接")
+                val error = response.getString("error") ?: "服务器离线或无法连接"
+                reply(plugin, event, "服务器 $host 当前离线\n$error")
                 return
             }
 
-            val motd = response.getString("motd") ?: "未知"
-            val version = response.getString("version") ?: "未知"
-            val agreement = response.getString("agreement") ?: "未知"
             val online = response.getIntValue("online")
             val max = response.getIntValue("max")
             val delay = response.getIntValue("delay")
-            val levelName = response.getString("level_name") ?: ""
-            val gamemode = response.getString("gamemode") ?: ""
+            val version = response.getString("version") ?: "未知"
+            val protocol = response.getString("protocol") ?: "未知"
+            val motd = response.getString("motd") ?: "未知"
 
-            val sampleArray = response.getJSONArray("sample")
+            val playersObj = response.getJSONObject("players")
+            val playersOnline = playersObj?.getIntValue("online") ?: online
+            val playersMax = playersObj?.getIntValue("max") ?: max
+
+            val sampleArray = playersObj?.getJSONArray("list")
             val playerList = mutableListOf<String>()
             if (sampleArray != null) {
                 for (i in 0 until sampleArray.size) {
                     val player = sampleArray.getJSONObject(i)
-                    player?.getString("name")?.let { playerList.add(it) }
+                    player?.getString("name_clean")?.let { playerList.add(it) }
+                        ?: player?.getString("name")?.let { playerList.add(it) }
                 }
             }
 
             val markdown = buildString {
-                appendLine("**服务器状态查询**")
+                appendLine("**MC 服务器状态查询**")
                 appendLine()
                 appendLine("状态: 在线")
-                appendLine("描述: $motd")
-                appendLine("延迟: ${delay}ms")
+                appendLine("MOTD: $motd")
                 appendLine("版本: $version")
-                appendLine("协议: $agreement")
-                appendLine("在线人数: $online/$max")
-                if (gamemode.isNotBlank()) appendLine("游戏模式: $gamemode")
-                if (levelName.isNotBlank()) appendLine("存档名称: $levelName")
+                appendLine("协议: $protocol")
+                appendLine("在线人数: $playersOnline/$playersMax")
+                appendLine("延迟: ${delay}ms")
                 if (playerList.isNotEmpty()) {
                     appendLine()
                     appendLine("**在线玩家:**")
@@ -70,7 +70,7 @@ class MotdCommands : CommandSupport() {
                 }
             }
 
-            replyWithImg(plugin, event, markdown, imgApiUrl)
+            replyWithImg(plugin, event, markdown, imgUrl)
         } catch (e: Exception) {
             plugin.log_error("MOTD 查询异常: ${e.message}")
             reply(plugin, event, "查询出错: ${e.message}")
@@ -80,8 +80,8 @@ class MotdCommands : CommandSupport() {
     private fun fetchJson(urlStr: String): com.alibaba.fastjson.JSONObject? {
         val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 8000
-            readTimeout = 8000
+            connectTimeout = 10000
+            readTimeout = 10000
             setRequestProperty("User-Agent", "HuHoBotPenguin/1.1")
         }
         return try {
