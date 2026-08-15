@@ -16,8 +16,8 @@ class MotdCommands : CommandSupport() {
             return
         }
 
-        val apiUrl = "https://motd.minebbs.com/api/status?ip=$host&stype=je"
-        val imgUrl = "https://motd.minebbs.com/api/status_img?ip=$host&stype=je&theme=simple"
+        val apiUrl = "https://motd.minebbs.com/api/status?ip=$host&stype=auto"
+        val imgUrl = "https://motd.minebbs.com/api/status_img?ip=$host&stype=auto&theme=simple"
 
         try {
             val response = fetchJson(apiUrl)
@@ -33,34 +33,33 @@ class MotdCommands : CommandSupport() {
                 return
             }
 
-            val online = response.getIntValue("online")
-            val max = response.getIntValue("max")
-            val delay = response.getIntValue("delay")
+            val serverType = response.getString("type") ?: "Java"
             val version = response.getString("version") ?: "未知"
-            val protocol = response.getString("protocol") ?: "未知"
-            val motd = response.getString("motd") ?: "未知"
+            val protocol = response.getIntValue("protocol")
+            val delay = response.getIntValue("delay")
+
+            val motdObj = response.getJSONObject("motd")
+            val motdText = motdObj?.getString("pureMotd") ?: motdObj?.getString("clean") ?: "未知"
 
             val playersObj = response.getJSONObject("players")
-            val playersOnline = playersObj?.getIntValue("online") ?: online
-            val playersMax = playersObj?.getIntValue("max") ?: max
+            val playersOnline = playersObj?.getIntValue("online") ?: 0
+            val playersMax = playersObj?.getIntValue("max") ?: 0
+            val sampleStr = playersObj?.getString("sample") ?: ""
 
-            val sampleArray = playersObj?.getJSONArray("list")
-            val playerList = mutableListOf<String>()
-            if (sampleArray != null) {
-                for (i in 0 until sampleArray.size) {
-                    val player = sampleArray.getJSONObject(i)
-                    player?.getString("name_clean")?.let { playerList.add(it) }
-                        ?: player?.getString("name")?.let { playerList.add(it) }
-                }
+            val playerList = if (sampleStr.isNotBlank()) {
+                sampleStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                emptyList()
             }
 
             val markdown = buildString {
                 appendLine("**MC 服务器状态查询**")
                 appendLine()
+                appendLine("类型: $serverType")
                 appendLine("状态: 在线")
-                appendLine("MOTD: $motd")
+                appendLine("MOTD: $motdText")
                 appendLine("版本: $version")
-                appendLine("协议: $protocol")
+                if (protocol > 0) appendLine("协议: $protocol")
                 appendLine("在线人数: $playersOnline/$playersMax")
                 appendLine("延迟: ${delay}ms")
                 if (playerList.isNotEmpty()) {
@@ -70,7 +69,10 @@ class MotdCommands : CommandSupport() {
                 }
             }
 
-            replyWithImg(plugin, event, markdown, imgUrl)
+            plugin.replyWithImg(event, "", imgUrl)
+
+            val groupOpenId = groupId(event)
+            plugin.sendMarkdownToGroup(groupOpenId, markdown)
         } catch (e: Exception) {
             plugin.log_error("MOTD 查询异常: ${e.message}")
             reply(plugin, event, "查询出错: ${e.message}")
@@ -82,7 +84,9 @@ class MotdCommands : CommandSupport() {
             requestMethod = "GET"
             connectTimeout = 10000
             readTimeout = 10000
-            setRequestProperty("User-Agent", "HuHoBotPenguin/1.1")
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            setRequestProperty("Referer", "https://motd.minebbs.com/")
+            setRequestProperty("Accept", "application/json, text/plain, */*")
         }
         return try {
             if (conn.responseCode == 200) {
