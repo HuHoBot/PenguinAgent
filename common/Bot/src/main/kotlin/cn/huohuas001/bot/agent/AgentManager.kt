@@ -249,6 +249,10 @@ object AgentManager {
         val data = interaction?.data?.resolved?.button_data ?: return
         if (!data.startsWith(ACTION_PREFIX)) return
 
+        val groupOpenId = interaction.group_openid ?: return
+        val memberOpenId = interaction.group_member_openid ?: ""
+        plugin.log_info("Agent 审批回调: group=$groupOpenId, member=$memberOpenId, data=$data")
+
         // event.response(0) 调用 QQ API 确认交互，但该端点返回 405（jsoup 在抛异常前打日志），
         // 不影响审批功能，跳过调用以消除日志噪音。
 
@@ -256,8 +260,6 @@ object AgentManager {
         if (parts.size < 4) return
         val approvalId = parts[2]
         val decision = parts[3]
-        val groupOpenId = interaction.group_openid ?: return
-        val memberOpenId = interaction.group_member_openid ?: return
 
         val session = sessions.values.firstOrNull { it.awaitingApproval?.approvalId == approvalId } ?: return
         val pending = session.awaitingApproval ?: return
@@ -297,9 +299,16 @@ object AgentManager {
         groupId: String,
         memberOpenId: String
     ): Boolean {
+        plugin.log_info("Agent 审批权限检查: memberOpenId=$memberOpenId, requestUserId=${session.requestUserId}, group=$groupId")
+        if (memberOpenId.isBlank()) {
+            plugin.log_warning("Agent 审批: group_member_openid 为空，无法验证权限")
+            return false
+        }
         if (memberOpenId == session.requestUserId) return true
         if (memberOpenId in plugin.getAdminList()) return true
-        return CommandRepositories.administrators.contains(groupId, memberOpenId)
+        if (CommandRepositories.administrators.contains(groupId, memberOpenId)) return true
+        plugin.log_warning("Agent 审批: $memberOpenId 不在管理员列表中")
+        return false
     }
 
     // ---------------------------------------------------------------- 工具方法
