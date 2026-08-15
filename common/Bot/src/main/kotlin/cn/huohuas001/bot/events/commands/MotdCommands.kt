@@ -38,15 +38,16 @@ class MotdCommands : CommandSupport() {
             val protocol = response.getIntValue("protocol")
             val delay = response.getIntValue("delay")
 
-            val motdObj = response.getJSONObject("motd")
-            val motdText = motdObj?.getString("pureMotd") ?: motdObj?.getString("clean") ?: "未知"
+            val motdText = response.getString("pureMotd")
+                ?: response.getJSONObject("motd")?.getString("pureMotd")
+                ?: "未知"
 
             val playersObj = response.getJSONObject("players")
             val playersOnline = playersObj?.getIntValue("online") ?: 0
             val playersMax = playersObj?.getIntValue("max") ?: 0
             val sampleStr = playersObj?.getString("sample") ?: ""
 
-            val playerList = if (sampleStr.isNotBlank()) {
+            val playerList = if (sampleStr.isNotBlank() && sampleStr != "无") {
                 sampleStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             } else {
                 emptyList()
