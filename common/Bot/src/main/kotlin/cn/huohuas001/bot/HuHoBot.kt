@@ -1,5 +1,6 @@
 package cn.huohuas001.bot
 
+import cn.huohuas001.bot.agent.AgentConfig
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.SensitiveFilter
 import cn.huohuas001.bot.provider.*
@@ -34,6 +35,11 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     /** 向配置中的所有 QQ 群发送自定义 Markdown。 */
     override fun sendMarkdown(markdownContent: String, keyboard: Keyboard?) {
         QClient.sendMarkdown(markdownContent, keyboard)
+    }
+
+    /** 向指定 QQ 群发送自定义 Markdown。 */
+    override fun sendMarkdownToGroup(groupOpenId: String, markdownContent: String, keyboard: Keyboard?) {
+        QClient.sendMarkdownToGroup(groupOpenId, markdownContent, keyboard)
     }
 
     /** 回复触发消息所在的 QQ 群，发送自定义 Markdown。 */
@@ -134,6 +140,20 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     /** 使用当前平台的命令执行器执行原生命令。 */
     override fun dispatchCommand(command: String): CompletableFuture<HExecution> =
         createCommandExecutor().execute(command.removePrefix("/"))
+
+    /** 组装 AI Agent 配置；未启用或缺少接口地址/密钥时返回 null。 */
+    fun getAgentConfig(): AgentConfig? {
+        val baseUrl = getAgentBaseUrl()
+        val apiKey = getAgentApiKey()
+        if (baseUrl.isNullOrBlank() || apiKey.isNullOrBlank()) return null
+        return AgentConfig(
+            enabled = getAgentEnabled(),
+            baseUrl = baseUrl,
+            apiKey = apiKey,
+            model = getAgentModel()?.takeIf(String::isNotBlank) ?: "gpt-4o-mini",
+            commandMode = getAgentCommandMode()
+        )
+    }
 
     /** 异步启动 QQ 客户端，避免阻塞各服务端平台的主线程。 */
     fun launchQqClient() {

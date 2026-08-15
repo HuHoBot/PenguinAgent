@@ -16,7 +16,10 @@ class HybridCommandExecutor(private val plugin: HuHoBotSpigot) : HExecution {
 
         plugin.submit {
             try {
-                Bukkit.dispatchCommand(sender, command)
+                // 使用服务端真实控制台执行命令：原版命令（如 give）依赖
+                // CraftConsoleCommandSender，自定义 CommandSender 会导致
+                // VanillaCommandWrapper 强转失败而抛 CommandException。
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)
                 completeAfterCommandOutput(result)
             } catch (error: Exception) {
                 outputAppender.stopCapture()

@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.events
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.agent.AgentCommands
 import cn.huohuas001.bot.events.commands.AdministrationCommands
 import cn.huohuas001.bot.events.commands.AuthenticationCommands
 import cn.huohuas001.bot.events.commands.BaseCommand
@@ -20,6 +21,7 @@ class GroupMessageHandler(
         registerCommand(PublicCommands())
         registerCommand(AdministrationCommands())
         registerCommand(AuthenticationCommands())
+        registerCommand(AgentCommands())
     }
 
     fun registerCommand(command: BaseCommand) {

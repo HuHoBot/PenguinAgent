@@ -5,7 +5,7 @@ plugins {
 
 allprojects {
     group = "cn.huohuas001"
-    version = "1.0.1"
+    version = "1.1.0-alpha.1"
 
     repositories {
         maven("https://maven.aliyun.com/repository/public")

@@ -75,6 +75,7 @@ commands:
   全量: true
   认证: true
   解除认证: true
+  agent: true
 
 audit:
   # 本地 sensitive-words/*.txt 命中后才调用 OpenAI 兼容接口二审
@@ -82,6 +83,18 @@ audit:
   base-url: ""
   api-key: ""
   model: "gpt-4o-mini"
+
+# AI Agent：管理员 @机器人 /agent <任务描述> 让 AI 管理服务器
+# 需要 OpenAI 兼容的 Chat Completions 接口（支持 function calling）
+# AI 可调用工具获取插件/命令帮助，并执行服务器命令。
+agent:
+  enabled: false
+  base-url: ""
+  api-key: ""
+  model: "gpt-4o-mini"
+  # auto: 自动执行命令，仅推送思考/输出/工具调用信息
+  # manual: 执行命令前需管理员在 QQ 按钮卡片上点击审批（默认）
+  command-mode: "manual"
 
 # /执行 <key> [参数]：仅 permission=0
 # /管理员执行 <key> [参数]：可执行全部权限等级

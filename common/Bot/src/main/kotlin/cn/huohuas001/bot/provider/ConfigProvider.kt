@@ -1,5 +1,6 @@
 package cn.huohuas001.bot.provider
 
+import cn.huohuas001.bot.agent.AgentCommandMode
 import cn.huohuas001.bot.tools.filterTextByRegex
 import java.io.File
 
@@ -194,5 +195,42 @@ interface ConfigProvider {
     fun getServerName(): String = getBotName()
     fun getPlatform(): String
     fun getPluginVersion(): String
+
+    /** 服务器 Minecraft 版本信息（供 AI Agent 生成匹配的命令语法）。 */
+    fun getServerVersion(): String = "未知"
     fun getCustomCommands(): List<CustomCommandDetail> = emptyList()
+
+    /** AI Agent 总开关；关闭时 /agent 命令不可用。 */
+    fun getAgentEnabled(): Boolean = false
+
+    /** AI Agent 的 OpenAI 兼容接口地址；留空则 Agent 不可用。 */
+    fun getAgentBaseUrl(): String? = System.getenv("HUHOBOT_AGENT_BASE_URL")
+
+    /** AI Agent 的接口密钥。 */
+    fun getAgentApiKey(): String? = System.getenv("HUHOBOT_AGENT_API_KEY")
+
+    /** AI Agent 使用的模型名。 */
+    fun getAgentModel(): String? = System.getenv("HUHOBOT_AGENT_MODEL")
+
+    /** AI Agent 命令执行模式，默认手动审批。 */
+    fun getAgentCommandMode(): AgentCommandMode = AgentCommandMode.MANUAL
+
+    /** 获取服务器插件列表，供 AI Agent 使用。 */
+    fun getServerPluginList(): List<String> = emptyList()
+
+    /**
+     * 获取服务器命令帮助信息，供 AI Agent 使用。
+     *
+     * @param plugin  可选插件名；为空表示不按插件过滤
+     * @param command 可选具体命令名；为空表示返回插件/全部命令概览
+     */
+    fun getServerCommandHelp(plugin: String?, command: String?): String = "当前平台不支持查询命令信息"
+
+    /**
+     * 读取服务端最新日志（如 logs/latest.log），供 AI Agent 分析插件报错、警告等。
+     *
+     * @param lines   可选，读取日志末尾行数；null 表示使用平台默认值（通常为 50）
+     * @param keyword 可选，只返回包含该关键词的日志行及其上下文；null 表示不过滤
+     */
+    fun getServerLogs(lines: Int?, keyword: String?): String = "当前平台不支持读取服务端日志"
 }

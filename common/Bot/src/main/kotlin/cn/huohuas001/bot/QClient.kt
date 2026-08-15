@@ -1,5 +1,6 @@
 package cn.huohuas001.bot
 
+import cn.huohuas001.bot.agent.AgentInteractionListener
 import cn.huohuas001.bot.events.GroupMessageHandler
 import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.provider.BotShared
@@ -43,6 +44,7 @@ object QClient {
             starter.config.code = Intents.PUBLIC_INTENTS.and(Intents.GROUP_INTENTS)
             starter.run()
             starter.registerListenerHost(groupMessageHandler)
+            starter.registerListenerHost(AgentInteractionListener())
             starter.APPLICATION.logger.setLogLevel(1)
             starter.APPLICATION.logger.setOutFile(logFilePattern)
         } catch (error: Exception) {
@@ -129,6 +131,32 @@ object QClient {
             }
         }
 
+    }
+
+    /** 向指定 QQ 群发送自定义 Markdown。 */
+    fun sendMarkdownToGroup(groupOpenId: String, markdownContent: String, keyboard: Keyboard? = null) {
+        val plugin = BotShared.getPlugin()
+        if (!::starter.isInitialized) {
+            plugin.log_warning("QQ 机器人未启动，无法发送 Markdown")
+            return
+        }
+        if (markdownContent.isBlank()) return
+
+        val markdown = Markdown().setContent(markdownContent)
+        val payload = V2MsgData()
+            .setContent(markdownContent)
+            .setMsg_type(2)
+            .setMarkdown(markdown)
+        if (keyboard != null) {
+            markdown.setKeyboard(keyboard)
+            payload.setKeyboard(keyboard)
+        }
+
+        try {
+            starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+        } catch (error: Exception) {
+            plugin.log_error("向QQ群 $groupOpenId 发送 Markdown 失败: ${error.message}")
+        }
     }
 
     /** 回复指定群消息并发送自定义 Markdown。 */

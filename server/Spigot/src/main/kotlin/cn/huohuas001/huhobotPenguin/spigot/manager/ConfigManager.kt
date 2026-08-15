@@ -1,5 +1,6 @@
 package cn.huohuas001.huhobotPenguin.spigot.manager
 
+import cn.huohuas001.bot.agent.AgentCommandMode
 import cn.huohuas001.bot.provider.AdminMode
 import cn.huohuas001.bot.provider.ChatFormat
 import cn.huohuas001.bot.provider.ConfigUpgrader
@@ -160,6 +161,13 @@ class ConfigManager(
     fun customCommands(): List<CustomCommandDetail> =
         plugin.config.getMapList("custom-commands").mapNotNull(::parseCustomCommand)
 
+    fun agentEnabled(): Boolean = plugin.config.getBoolean("agent.enabled", false)
+    fun agentBaseUrl(): String? = plugin.config.getString("agent.base-url")?.takeIf(String::isNotBlank)
+    fun agentApiKey(): String? = plugin.config.getString("agent.api-key")?.takeIf(String::isNotBlank)
+    fun agentModel(): String? = plugin.config.getString("agent.model")?.takeIf(String::isNotBlank)
+    fun agentCommandMode(): AgentCommandMode =
+        AgentCommandMode.from(plugin.config.getString("agent.command-mode")) ?: AgentCommandMode.MANUAL
+
     private fun parseCustomCommand(values: Map<*, *>): CustomCommandDetail? {
         val key = values["key"]?.toString()?.trim().orEmpty()
         val command = values["command"]?.toString()?.trim().orEmpty()
@@ -193,7 +201,8 @@ class ConfigManager(
             "管理员执行",
             "全量",
             "认证",
-            "解除认证"
+            "解除认证",
+            "agent"
         )
 
         private val DEFAULT_VALUES: Map<String, Any> = buildMap {
@@ -233,6 +242,11 @@ class ConfigManager(
             put("audit.base-url", "")
             put("audit.api-key", "")
             put("audit.model", "gpt-4o-mini")
+            put("agent.enabled", false)
+            put("agent.base-url", "")
+            put("agent.api-key", "")
+            put("agent.model", "gpt-4o-mini")
+            put("agent.command-mode", "manual")
             put("custom-commands", emptyList<Map<String, Any>>())
             put("command-sender", "Hybrid")
 

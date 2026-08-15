@@ -40,6 +40,9 @@ class CommandOutputAppender private constructor() : AbstractAppender(
         return messages.toList()
     }
 
+    /** 返回当前已捕获的日志内容（不会停止捕获，也不会清空）。 */
+    fun getCaptured(): List<String> = messages.toList()
+
     companion object {
         private var instance: CommandOutputAppender? = null
 

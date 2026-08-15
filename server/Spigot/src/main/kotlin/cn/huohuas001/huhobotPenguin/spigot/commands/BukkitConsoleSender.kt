@@ -19,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 class BukkitConsoleSender(private val plugin: HuHoBotSpigot) : ConsoleCommandSender, HExecution {
     private val messages = CopyOnWriteArrayList<String>()
+    private val outputAppender = CommandOutputAppender.getInstance()
 
     private val spigotSender = object : CommandSender.Spigot() {
         override fun sendMessage(component: BaseComponent) {
@@ -122,17 +123,25 @@ class BukkitConsoleSender(private val plugin: HuHoBotSpigot) : ConsoleCommandSen
         messages.add(message)
     }
 
-    override fun getRawString(): String = messages.joinToString("\n")
+    override fun getRawString(): String {
+        val captured = outputAppender.getCaptured()
+        return if (captured.isNotEmpty()) captured.joinToString("\n") else messages.joinToString("\n")
+    }
 
     override fun execute(command: String): CompletableFuture<HExecution> {
         val result = CompletableFuture<HExecution>()
         clearMessages()
+        outputAppender.startCapture()
 
         plugin.submit {
             try {
-                Bukkit.dispatchCommand(this, command)
+                // 使用服务端真实控制台执行命令：原版命令（如 give）依赖
+                // CraftConsoleCommandSender，自定义 CommandSender 会导致
+                // VanillaCommandWrapper 强转失败而抛 CommandException。
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)
                 completeAfterCommandOutput(result)
             } catch (error: Exception) {
+                outputAppender.stopCapture()
                 result.completeExceptionally(error)
             }
         }

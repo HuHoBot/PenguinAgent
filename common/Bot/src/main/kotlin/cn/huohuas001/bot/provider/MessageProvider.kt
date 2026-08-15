@@ -9,6 +9,9 @@ interface MessageProvider {
     /** 向配置中的所有 QQ 群发送自定义 Markdown，可选附带消息键盘。 */
     fun sendMarkdown(markdownContent: String, keyboard: Keyboard? = null)
 
+    /** 向指定 QQ 群发送自定义 Markdown，可选附带消息键盘。 */
+    fun sendMarkdownToGroup(groupOpenId: String, markdownContent: String, keyboard: Keyboard? = null)
+
     /** 回复指定的 QQ 群消息，发送自定义 Markdown，可选附带消息键盘。 */
     fun replyMarkdown(
         event: GroupMessageEvent,

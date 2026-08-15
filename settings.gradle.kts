@@ -19,13 +19,14 @@ project(":server-AdapterCommon").projectDir = file("server/AdapterCommon")
 include(":server-Spigot")
 project(":server-Spigot").projectDir = file("server/Spigot")
 
-include(":server-Allay")
-project(":server-Allay").projectDir = file("server/Allay")
-
-include(":server-Nukkit")
-project(":server-Nukkit").projectDir = file("server/Nukkit")
-
-include(":server-Proxy")
-project(":server-Proxy").projectDir = file("server/Proxy")
+// 目前仅构建 Spigot 平台；如需其他平台可取消下方注释。
+// include(":server-Allay")
+// project(":server-Allay").projectDir = file("server/Allay")
+//
+// include(":server-Nukkit")
+// project(":server-Nukkit").projectDir = file("server/Nukkit")
+//
+// include(":server-Proxy")
+// project(":server-Proxy").projectDir = file("server/Proxy")
 
 rootProject.name = "HuHoBotPenguin"

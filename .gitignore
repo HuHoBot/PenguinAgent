@@ -52,3 +52,4 @@ bin/
 ### Mac OS ###
 .DS_Store
 /common/Bot/src/main/generated/
+TestServer/
