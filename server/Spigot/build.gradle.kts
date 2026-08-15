@@ -75,9 +75,11 @@ tasks {
     }
 
     processResources {
-        val props = mapOf("version" to version)
+        val ver = project.version.toString()
         filesMatching("plugin.yml") {
-            expand(props)
+            filter(org.apache.tools.ant.filters.ReplaceTokens::class, mapOf(
+                "tokens" to mapOf("version" to ver)
+            ))
         }
     }
 }

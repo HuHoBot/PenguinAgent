@@ -1,5 +1,5 @@
 name: HuHoBotPenguin
-version: '${version}'
+version: '@version@'
 
 main: cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
 api-version: '1.18'
