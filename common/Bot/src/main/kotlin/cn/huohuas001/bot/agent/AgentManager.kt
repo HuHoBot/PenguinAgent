@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.agent
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.state.CommandRepositories
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -188,6 +189,45 @@ object AgentManager {
                         sendToGroup(plugin, session, AgentMessageFormatter.skillLoading(skillName))
                         val result0 = AgentTools.loadSkill(query)
                         session.messages.add(toolMessage(toolCallId, result0.aiText))
+                    }
+
+                    // ── QQ 群管理工具 ──
+                    AgentTools.TOOL_GET_GROUP_INFO,
+                    AgentTools.TOOL_GET_BOT_STATE,
+                    AgentTools.TOOL_GET_JOIN_REQUESTS,
+                    AgentTools.TOOL_APPROVE_JOIN_REQUEST,
+                    AgentTools.TOOL_GET_MUTE_STATUS,
+                    AgentTools.TOOL_SET_MEMBER_MUTE,
+                    AgentTools.TOOL_LIST_AUTO_APPROVE_POLICIES,
+                    AgentTools.TOOL_CREATE_AUTO_APPROVE_POLICY,
+                    AgentTools.TOOL_UPDATE_AUTO_APPROVE_POLICY,
+                    AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY,
+                    AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY,
+                    AgentTools.TOOL_UPDATE_WHITELIST_USERS -> {
+                        val starter = QClient.getStarter()
+                        if (starter == null) {
+                            session.messages.add(toolMessage(toolCallId, "QQ Bot 未启动，无法调用群管理 API。"))
+                            continue
+                        }
+                        val result0 = when (functionName) {
+                            AgentTools.TOOL_GET_GROUP_INFO -> AgentTools.getGroupInfo(starter, query)
+                            AgentTools.TOOL_GET_BOT_STATE -> AgentTools.getBotState(starter, query)
+                            AgentTools.TOOL_GET_JOIN_REQUESTS -> AgentTools.getJoinRequests(starter, query)
+                            AgentTools.TOOL_APPROVE_JOIN_REQUEST -> AgentTools.approveJoinRequest(starter, query)
+                            AgentTools.TOOL_GET_MUTE_STATUS -> AgentTools.getMuteStatus(starter, query)
+                            AgentTools.TOOL_SET_MEMBER_MUTE -> AgentTools.setMemberMute(starter, query)
+                            AgentTools.TOOL_LIST_AUTO_APPROVE_POLICIES -> AgentTools.listAutoApprovePolicies(starter, query)
+                            AgentTools.TOOL_CREATE_AUTO_APPROVE_POLICY -> AgentTools.createAutoApprovePolicy(starter, query)
+                            AgentTools.TOOL_UPDATE_AUTO_APPROVE_POLICY -> AgentTools.updateAutoApprovePolicy(starter, query)
+                            AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY -> AgentTools.deleteAutoApprovePolicy(starter, query)
+                            AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY -> AgentTools.executeAutoApprovePolicy(starter, query)
+                            AgentTools.TOOL_UPDATE_WHITELIST_USERS -> AgentTools.updateWhitelistUsers(starter, query)
+                            else -> AgentTools.ToolResult("未知工具: $functionName")
+                        }
+                        session.messages.add(toolMessage(toolCallId, result0.aiText))
+                        if (result0.displayTitle.isNotEmpty()) {
+                            sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result0.displayTitle, result0.displayContent))
+                        }
                     }
 
                     else -> {

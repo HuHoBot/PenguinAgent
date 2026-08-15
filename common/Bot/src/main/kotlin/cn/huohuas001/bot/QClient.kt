@@ -19,6 +19,9 @@ object QClient {
     private lateinit var starter: Starter
     private lateinit var groupMessageHandler: GroupMessageHandler
 
+    /** 获取 QQ Bot Starter 实例（供 Agent 群管理 API 使用）。 */
+    fun getStarter(): Starter? = if (::starter.isInitialized) starter else null
+
     /**
      * 注册指令处理器,收到群消息后会自动分发
      */

@@ -1,9 +1,11 @@
 package cn.huohuas001.bot.agent
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.provider.BotShared
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
+import io.github.kloping.qqbot.Starter
 
 /** AI 可通过 function calling 使用的服务器工具。 */
 object AgentTools {
@@ -22,6 +24,44 @@ object AgentTools {
 
     /** 加载命令语法 SKILL（按需加载，减少 token 消耗）。 */
     const val TOOL_LOAD_SKILL = "load_skill"
+
+    // ── QQ 群管理工具 ──
+
+    /** 获取群基本信息 */
+    const val TOOL_GET_GROUP_INFO = "get_group_info"
+
+    /** 获取机器人群内状态 */
+    const val TOOL_GET_BOT_STATE = "get_bot_state"
+
+    /** 拉取入群申请列表 */
+    const val TOOL_GET_JOIN_REQUESTS = "get_join_requests"
+
+    /** 审批入群申请 */
+    const val TOOL_APPROVE_JOIN_REQUEST = "approve_join_request"
+
+    /** 查询群禁言状态 */
+    const val TOOL_GET_MUTE_STATUS = "get_mute_status"
+
+    /** 设置群成员禁言 */
+    const val TOOL_SET_MEMBER_MUTE = "set_member_mute"
+
+    /** 查询入群自动审批策略列表 */
+    const val TOOL_LIST_AUTO_APPROVE_POLICIES = "list_auto_approve_policies"
+
+    /** 创建入群自动审批策略 */
+    const val TOOL_CREATE_AUTO_APPROVE_POLICY = "create_auto_approve_policy"
+
+    /** 修改入群自动审批策略 */
+    const val TOOL_UPDATE_AUTO_APPROVE_POLICY = "update_auto_approve_policy"
+
+    /** 删除入群自动审批策略 */
+    const val TOOL_DELETE_AUTO_APPROVE_POLICY = "delete_auto_approve_policy"
+
+    /** 执行入群自动审批策略 */
+    const val TOOL_EXECUTE_AUTO_APPROVE_POLICY = "execute_auto_approve_policy"
+
+    /** 修改入群自动审批策略的白名单号码 */
+    const val TOOL_UPDATE_WHITELIST_USERS = "update_whitelist_users"
 
     /** 构建 function calling 工具清单。 */
     fun buildTools(): JSONArray = JSONArray().apply {
@@ -137,6 +177,62 @@ object AgentTools {
                 })
             })
         })
+        // ── QQ 群管理工具 ──
+        add(toolDef(TOOL_GET_GROUP_INFO, "获取 QQ 群基本信息（群名、人数、标签等）。", mapOf(
+            "group_openid" to "群 OpenID"
+        )))
+        add(toolDef(TOOL_GET_BOT_STATE, "获取机器人在指定群中的状态（角色、入群时间等）。", mapOf(
+            "group_openid" to "群 OpenID"
+        )))
+        add(toolDef(TOOL_GET_JOIN_REQUESTS, "拉取入群申请列表。机器人需为群管理员。", mapOf(
+            "group_openid" to "群 OpenID",
+            "cursor" to "分页游标（可选）",
+            "limit" to "每页数量（可选，默认20）"
+        )))
+        add(toolDef(TOOL_APPROVE_JOIN_REQUEST, "审批入群申请。approve=通过，decline=拒绝。机器人需为群管理员。", mapOf(
+            "group_openid" to "群 OpenID",
+            "member_openid" to "申请人 OpenID",
+            "join_request_id" to "申请 ID",
+            "approve" to "true=通过，false=拒绝",
+            "reject_reason" to "拒绝理由（仅 decline 时，可选）",
+            "blacklist" to "是否同时拉黑（仅 decline 时，可选）"
+        )))
+        add(toolDef(TOOL_GET_MUTE_STATUS, "查询群禁言状态（全员禁言配置、被禁言成员列表）。", mapOf(
+            "group_openid" to "群 OpenID"
+        )))
+        add(toolDef(TOOL_SET_MEMBER_MUTE, "设置群成员禁言。add=禁言，del=解除禁言。最大禁言30天。", mapOf(
+            "group_openid" to "群 OpenID",
+            "member_openid" to "成员 OpenID",
+            "op" to "操作：add=禁言，del=解除",
+            "mute_expire_at" to "禁言到期时间 RFC3339（仅 add，可选）"
+        )))
+        add(toolDef(TOOL_LIST_AUTO_APPROVE_POLICIES, "查询入群自动审批策略列表。", mapOf(
+            "cursor" to "分页游标（可选）",
+            "limit" to "每页数量（可选，默认20）"
+        )))
+        add(toolDef(TOOL_CREATE_AUTO_APPROVE_POLICY, "创建入群自动审批策略。最多20个策略。", mapOf(
+            "group_openids" to "关联群 OpenID 列表（与 group_ids 二选一）",
+            "group_ids" to "关联 QQ 群号列表（与 group_openids 二选一）",
+            "enable" to "是否启用（默认 true）",
+            "remark" to "策略备注（可选）"
+        )))
+        add(toolDef(TOOL_UPDATE_AUTO_APPROVE_POLICY, "修改入群自动审批策略（启用/停用/增删关联群）。", mapOf(
+            "strategy_id" to "策略 ID",
+            "enable" to "是否启用（可选）",
+            "remark" to "备注（可选）",
+            "group_action" to "关联群操作 JSON（可选）：{op:'add'/'del', group_openids:[...]} 或 {op:'add'/'del', group_ids:[...]}"
+        )))
+        add(toolDef(TOOL_DELETE_AUTO_APPROVE_POLICY, "删除入群自动审批策略。", mapOf(
+            "strategy_id" to "策略 ID"
+        )))
+        add(toolDef(TOOL_EXECUTE_AUTO_APPROVE_POLICY, "执行入群自动审批策略，对关联群命中白名单的申请自动通过（异步约10分钟）。", mapOf(
+            "strategy_id" to "策略 ID"
+        )))
+        add(toolDef(TOOL_UPDATE_WHITELIST_USERS, "修改入群自动审批策略的白名单 QQ 号码。单次最多10000个，上限10万。", mapOf(
+            "strategy_id" to "策略 ID",
+            "op" to "操作：add=新增，del=删除",
+            "users" to "QQ 号码列表（字符串数组）"
+        )))
     }
 
     /** 工具执行结果。 */
@@ -236,6 +332,230 @@ object AgentTools {
             }
         } catch (error: Throwable) {
             ToolResult("加载 SKILL 失败: ${error.message}")
+        }
+    }
+
+    // ── QQ 群管理工具执行方法 ──
+
+    fun getGroupInfo(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+        if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
+        return try {
+            val info = GroupManagementApi.getGroupInfo(starter, groupOpenId)
+            val text = "群名: ${info.getString("group_name")}\n" +
+                "成员数: ${info.getIntValue("group_member_num")}\n" +
+                "分类: ${info.getString("group_class_text")}\n" +
+                "简介: ${info.getString("group_finger_memo")}\n" +
+                "标签: ${info.getJSONArray("group_tags")?.joinToString(", ") { it.toString() }}"
+            ToolResult(aiText = text, displayTitle = "群信息", displayContent = text)
+        } catch (e: Exception) {
+            ToolResult("获取群信息失败: ${e.message}")
+        }
+    }
+
+    fun getBotState(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+        if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
+        return try {
+            val info = GroupManagementApi.getBotState(starter, groupOpenId)
+            val text = "角色: ${info.getString("member_role")}\n" +
+                "入群时间: ${info.getString("joined_at")}\n" +
+                "接收消息设置: ${info.getString("recv_msg_setting")}\n" +
+                "主动推送: ${info.getBooleanValue("allow_proactive_msg")}"
+            ToolResult(aiText = text, displayTitle = "机器人状态", displayContent = text)
+        } catch (e: Exception) {
+            ToolResult("获取机器人状态失败: ${e.message}")
+        }
+    }
+
+    fun getJoinRequests(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+        if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
+        val cursor = query.getString("cursor")?.trim().orEmpty()
+        val limit = query.getInteger("limit") ?: 20
+        return try {
+            val resp = GroupManagementApi.getJoinRequests(starter, groupOpenId, cursor, limit)
+            val list = resp.getJSONArray("list")
+            if (list == null || list.isEmpty()) {
+                return ToolResult("当前没有入群申请。")
+            }
+            val sb = StringBuilder("入群申请列表（${list.size} 条）：\n")
+            for (i in list.indices) {
+                val r = list.getJSONObject(i)
+                sb.appendLine("${i + 1}. ${r.getString("username")} (${r.getString("member_openid")}) " +
+                    "来源: ${r.getString("apply_source")} 时间: ${r.getString("apply_at")}")
+            }
+            val nextCursor = resp.getString("next_cursor")
+            if (nextCursor.isNotEmpty()) sb.appendLine("下一页游标: $nextCursor")
+            ToolResult(aiText = sb.toString(), displayTitle = "入群申请", displayContent = sb.toString())
+        } catch (e: Exception) {
+            ToolResult("获取入群申请列表失败: ${e.message}")
+        }
+    }
+
+    fun approveJoinRequest(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+        val memberOpenId = query.getString("member_openid")?.trim().orEmpty()
+        val joinRequestId = query.getString("join_request_id")?.trim().orEmpty()
+        val approve = query.getBoolean("approve") ?: true
+        val rejectReason = query.getString("reject_reason")?.trim().orEmpty()
+        val blacklist = query.getBoolean("blacklist") ?: false
+        if (groupOpenId.isEmpty() || memberOpenId.isEmpty()) return ToolResult("请指定 group_openid 和 member_openid。")
+        return try {
+            GroupManagementApi.approveJoinRequest(starter, groupOpenId, memberOpenId, joinRequestId, approve, rejectReason, blacklist)
+            val action = if (approve) "已通过" else "已拒绝"
+            ToolResult(aiText = "入群申请 $action: $memberOpenId", displayTitle = "入群审批", displayContent = "$action $memberOpenId")
+        } catch (e: Exception) {
+            ToolResult("审批入群申请失败: ${e.message}")
+        }
+    }
+
+    fun getMuteStatus(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+        if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
+        return try {
+            val info = GroupManagementApi.getMuteStatus(starter, groupOpenId)
+            val globalRule = info.getJSONObject("global_rule")
+            val mode = globalRule?.getString("mode") ?: "none"
+            val members = info.getJSONArray("members")
+            val sb = StringBuilder("全员禁言模式: $mode\n")
+            if (members != null && members.isNotEmpty()) {
+                sb.appendLine("被禁言成员（${members.size} 人）：")
+                for (i in members.indices) {
+                    val m = members.getJSONObject(i)
+                    sb.appendLine("- ${m.getString("username")} (${m.getString("member_openid")}) 到期: ${m.getString("mute_expire_at")}")
+                }
+            } else {
+                sb.appendLine("当前无成员被禁言。")
+            }
+            ToolResult(aiText = sb.toString(), displayTitle = "禁言状态", displayContent = sb.toString())
+        } catch (e: Exception) {
+            ToolResult("获取禁言状态失败: ${e.message}")
+        }
+    }
+
+    fun setMemberMute(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+        val memberOpenId = query.getString("member_openid")?.trim().orEmpty()
+        val op = query.getString("op")?.trim().orEmpty()
+        val muteExpireAt = query.getString("mute_expire_at")?.trim().orEmpty()
+        if (groupOpenId.isEmpty() || memberOpenId.isEmpty()) return ToolResult("请指定 group_openid 和 member_openid。")
+        if (op !in listOf("add", "del")) return ToolResult("op 必须为 add 或 del。")
+        return try {
+            GroupManagementApi.setMemberMute(starter, groupOpenId, memberOpenId, op, muteExpireAt)
+            val action = if (op == "add") "已禁言" else "已解除禁言"
+            ToolResult(aiText = "$action: $memberOpenId", displayTitle = "禁言操作", displayContent = "$action $memberOpenId")
+        } catch (e: Exception) {
+            ToolResult("设置禁言失败: ${e.message}")
+        }
+    }
+
+    fun listAutoApprovePolicies(starter: Starter, query: JSONObject): ToolResult {
+        return try {
+            val resp = GroupManagementApi.listAutoApprovePolicies(starter)
+            val strategies = resp.getJSONArray("strategies")
+            if (strategies == null || strategies.isEmpty()) {
+                return ToolResult("当前没有自动审批策略。")
+            }
+            val sb = StringBuilder("自动审批策略列表（${strategies.size} 条）：\n")
+            for (i in strategies.indices) {
+                val s = strategies.getJSONObject(i)
+                sb.appendLine("${i + 1}. ID: ${s.getString("strategy_id")} 状态: ${s.getString("is_enable")} " +
+                    "白名单数: ${s.getIntValue("whitelist_user_count")} 备注: ${s.getString("remark")}")
+            }
+            ToolResult(aiText = sb.toString(), displayTitle = "自动审批策略", displayContent = sb.toString())
+        } catch (e: Exception) {
+            ToolResult("获取策略列表失败: ${e.message}")
+        }
+    }
+
+    fun createAutoApprovePolicy(starter: Starter, query: JSONObject): ToolResult {
+        val groupOpenIds = query.getJSONArray("group_openids")?.map { it.toString() } ?: emptyList()
+        val groupIds = query.getJSONArray("group_ids")?.map { it.toString() } ?: emptyList()
+        val enable = query.getBoolean("enable") ?: true
+        val remark = query.getString("remark")?.trim().orEmpty()
+        if (groupOpenIds.isEmpty() && groupIds.isEmpty()) return ToolResult("请指定 group_openids 或 group_ids。")
+        return try {
+            val resp = GroupManagementApi.createAutoApprovePolicy(starter, groupOpenIds, groupIds, enable, remark)
+            val id = resp.getString("strategy_id")
+            ToolResult(aiText = "策略已创建: $id", displayTitle = "创建策略", displayContent = "策略 ID: $id")
+        } catch (e: Exception) {
+            ToolResult("创建策略失败: ${e.message}")
+        }
+    }
+
+    fun updateAutoApprovePolicy(starter: Starter, query: JSONObject): ToolResult {
+        val strategyId = query.getString("strategy_id")?.trim().orEmpty()
+        if (strategyId.isEmpty()) return ToolResult("请指定 strategy_id。")
+        val enable = if (query.containsKey("enable")) query.getBooleanValue("enable") else null
+        val remark = if (query.containsKey("remark")) query.getString("remark")?.trim() else null
+        val groupAction = if (query.containsKey("group_action")) query.getJSONObject("group_action") else null
+        return try {
+            GroupManagementApi.updateAutoApprovePolicy(starter, strategyId, enable, remark, groupAction)
+            ToolResult(aiText = "策略 $strategyId 已更新", displayTitle = "更新策略", displayContent = "策略 $strategyId 已更新")
+        } catch (e: Exception) {
+            ToolResult("更新策略失败: ${e.message}")
+        }
+    }
+
+    fun deleteAutoApprovePolicy(starter: Starter, query: JSONObject): ToolResult {
+        val strategyId = query.getString("strategy_id")?.trim().orEmpty()
+        if (strategyId.isEmpty()) return ToolResult("请指定 strategy_id。")
+        return try {
+            GroupManagementApi.deleteAutoApprovePolicy(starter, strategyId)
+            ToolResult(aiText = "策略 $strategyId 已删除", displayTitle = "删除策略", displayContent = "策略 $strategyId 已删除")
+        } catch (e: Exception) {
+            ToolResult("删除策略失败: ${e.message}")
+        }
+    }
+
+    fun executeAutoApprovePolicy(starter: Starter, query: JSONObject): ToolResult {
+        val strategyId = query.getString("strategy_id")?.trim().orEmpty()
+        if (strategyId.isEmpty()) return ToolResult("请指定 strategy_id。")
+        return try {
+            GroupManagementApi.executeAutoApprovePolicy(starter, strategyId)
+            ToolResult(aiText = "策略 $strategyId 已开始执行（约10分钟完成）",
+                displayTitle = "执行策略", displayContent = "策略 $strategyId 已开始执行，约10分钟完成。")
+        } catch (e: Exception) {
+            ToolResult("执行策略失败: ${e.message}")
+        }
+    }
+
+    fun updateWhitelistUsers(starter: Starter, query: JSONObject): ToolResult {
+        val strategyId = query.getString("strategy_id")?.trim().orEmpty()
+        val op = query.getString("op")?.trim().orEmpty()
+        val users = query.getJSONArray("users")?.map { it.toString() } ?: emptyList()
+        if (strategyId.isEmpty()) return ToolResult("请指定 strategy_id。")
+        if (op !in listOf("add", "del")) return ToolResult("op 必须为 add 或 del。")
+        if (users.isEmpty()) return ToolResult("请指定 users 列表。")
+        return try {
+            val resp = GroupManagementApi.updateWhitelistUsers(starter, strategyId, op, users)
+            val count = resp.getIntValue("whitelist_user_count")
+            ToolResult(aiText = "白名单已更新，当前 ${count} 个号码",
+                displayTitle = "白名单更新", displayContent = "当前白名单号码数: $count")
+        } catch (e: Exception) {
+            ToolResult("更新白名单失败: ${e.message}")
+        }
+    }
+
+    private fun toolDef(name: String, desc: String, params: Map<String, String>): JSONObject {
+        return JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", name)
+                put("description", desc)
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        params.forEach { (k, v) ->
+                            put(k, JSONObject().apply {
+                                put("type", "string")
+                                put("description", v)
+                            })
+                        }
+                    })
+                })
+            })
         }
     }
 }
