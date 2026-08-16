@@ -5,6 +5,8 @@ import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.SensitiveFilter
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.state.CommandRepositories
+import cn.huohuas001.bot.web.WebUiServer
+import com.alibaba.fastjson.JSONObject
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 import io.github.kloping.qqbot.entities.ex.Keyboard
 import io.github.kloping.qqbot.utils.LoggerImpl
@@ -85,6 +87,7 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         CommandRepositories.initialize(getConfigFile()?.parentFile)
         reloadRuntimeConfig()
         launchQqClient()
+        WebUiServer.start()
     }
 
     /** 平台停止时调用，释放 SDK 日志桥接和公共运行时资源。 */
@@ -92,6 +95,7 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         try {
             QClient.shutdown()
         } finally {
+            WebUiServer.stop()
             LoggerImpl.clearLogSink()
         }
     }
@@ -154,6 +158,20 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
             commandMode = getAgentCommandMode()
         )
     }
+
+    // ---------------------------------------------------------------- WebUI 配置桥接
+
+    /**
+     * WebUI 读取当前配置（嵌套 Map，键与 config.yml 的层级一致）。
+     * 由各平台实现；未实现时返回空 Map。
+     */
+    fun getWebUiConfigValues(): Map<String, Any?> = emptyMap()
+
+    /**
+     * WebUI 保存配置：应用扁平 dotted-path 变更并持久化 + 重载。
+     * 由各平台实现；未实现时返回 false。
+     */
+    fun applyWebUiConfigChanges(changes: JSONObject): Boolean = false
 
     /** 异步启动 QQ 客户端，避免阻塞各服务端平台的主线程。 */
     fun launchQqClient() {

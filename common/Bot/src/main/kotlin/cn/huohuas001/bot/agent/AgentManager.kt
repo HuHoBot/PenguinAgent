@@ -50,6 +50,14 @@ object AgentManager {
             ?: event.groupId
         val requestUserId = event.sender?.openid ?: event.sender?.id ?: ""
 
+        // 提取 @提及的 member_openid → 用户名映射：喂给 AI 用 openid，显示用用户名
+        val mentionMap = buildMentionMap(event)
+        val fullTask = if (mentionMap.isNotEmpty()) {
+            "[提及用户映射 - 直接使用下面的 member_openid 调用工具，不要调用 get_group_members]\n$mentionMap\n任务：$task"
+        } else {
+            task
+        }.trim()
+
         // 查找同一用户现有的会话，复用上下文（包括已完成的会话，直到用户手动 /newsession 清除）
         val existing = sessions.values.firstOrNull {
             it.requestUserId == requestUserId && it.awaitingApproval == null
@@ -62,9 +70,11 @@ object AgentManager {
             session = existing
             isNewSession = false
             session.finished = false
-            session.messages.add(userMessage("请帮我：$task"))
+            session.memberNames.putAll(mentionMapValues(event))
+            session.messages.add(userMessage("请帮我：$fullTask"))
         } else {
-            session = AgentSession(UUID.randomUUID().toString(), groupOpenId, requestUserId, task)
+            session = AgentSession(UUID.randomUUID().toString(), groupOpenId, requestUserId, fullTask)
+            session.memberNames.putAll(mentionMapValues(event))
             sessions[session.sessionId] = session
             isNewSession = true
 
@@ -83,13 +93,46 @@ object AgentManager {
                     "   - 生成物品相关命令时，先加载 components（数据组件参考）+ 对应命令的 SKILL（give/item/summon/data/loot/clear）\n" +
                     "   - 例如：用户要给一把附魔钻石剑 → 先调用 load_skill(components) → 再调用 load_skill(give) → 再生成命令\n" +
                     "5. 命令帮助中的权限名（如 minecraft.command.give）仅用于说明，命令中无需使用。\n" +
-                    "6. 所有回复使用中文，简洁友好。" +
+                    "6. 所有回复使用中文，简洁友好。\n" +
+                    "7. QQ 群管理操作（禁言、审批、查询等）：所有工具已自动绑定当前群的 group_openid，无需用户提供。\n" +
+                    "   - 任务开头如果有 [提及用户映射]，你必须直接使用其中给出的 member_openid 调用对应工具，绝对不要调用 get_group_members。\n" +
+                    "   - 例如任务说禁言某人，映射里有某人->member_openid: XXX，直接用XXX调用set_member_mute。\n" +
+                    "   - 禁言前先调用 get_bot_state 确认机器人是否为群管理员（member_role 必须是 admin 或 owner），否则禁言会失败。\n" +
+                    "   - 禁止询问用户 group_openid 或 member_openid。" +
                     (if (guide.isNotEmpty()) "\n\n以下是 Minecraft 命令语法速查（完整内容通过 load_skill 获取）：\n$guide" else "")
             ))
-            session.messages.add(userMessage("请帮我：$task"))
+            session.messages.add(userMessage("请帮我：$fullTask"))
         }
 
         plugin.submitAsync { runLoop(plugin, session, config) }
+    }
+
+    /** 从事件原始 JSON 提取 @提及的 openid→用户名 映射（跳过机器人自己），返回多行文本。 */
+    private fun buildMentionMap(event: GroupMessageEvent): String {
+        val sb = StringBuilder()
+        val mentions = event.metadata?.getJSONArray("mentions") ?: return ""
+        for (i in mentions.indices) {
+            val m = mentions.getJSONObject(i) ?: continue
+            if (m.getBoolean("is_you") == true) continue
+            val name = m.getString("username") ?: continue
+            val openId = m.getString("member_openid") ?: continue
+            sb.appendLine("$name → member_openid: $openId")
+        }
+        return sb.toString().trim()
+    }
+
+    /** 返回 openid → 用户名 的映射（跳过机器人自己）。 */
+    private fun mentionMapValues(event: GroupMessageEvent): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val mentions = event.metadata?.getJSONArray("mentions") ?: return result
+        for (i in mentions.indices) {
+            val m = mentions.getJSONObject(i) ?: continue
+            if (m.getBoolean("is_you") == true) continue
+            val name = m.getString("username") ?: continue
+            val openId = m.getString("member_openid") ?: continue
+            result[openId] = name
+        }
+        return result
     }
 
     // ---------------------------------------------------------------- AI 循环
@@ -204,30 +247,21 @@ object AgentManager {
                     AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY,
                     AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY,
                     AgentTools.TOOL_UPDATE_WHITELIST_USERS -> {
-                        val starter = QClient.getStarter()
-                        if (starter == null) {
-                            session.messages.add(toolMessage(toolCallId, "QQ Bot 未启动，无法调用群管理 API。"))
-                            continue
+                        // 危险操作（禁言、审批、改策略）需要审批；查询类直接执行
+                        val needsApproval = functionName in setOf(
+                            AgentTools.TOOL_SET_MEMBER_MUTE,
+                            AgentTools.TOOL_APPROVE_JOIN_REQUEST,
+                            AgentTools.TOOL_CREATE_AUTO_APPROVE_POLICY,
+                            AgentTools.TOOL_UPDATE_AUTO_APPROVE_POLICY,
+                            AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY,
+                            AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY,
+                            AgentTools.TOOL_UPDATE_WHITELIST_USERS
+                        )
+                        if (needsApproval && config.commandMode == AgentCommandMode.MANUAL) {
+                            requestToolApproval(plugin, session, toolCallId, functionName, query)
+                            return  // 等待审批
                         }
-                        val result0 = when (functionName) {
-                            AgentTools.TOOL_GET_GROUP_INFO -> AgentTools.getGroupInfo(starter, query)
-                            AgentTools.TOOL_GET_BOT_STATE -> AgentTools.getBotState(starter, query)
-                            AgentTools.TOOL_GET_JOIN_REQUESTS -> AgentTools.getJoinRequests(starter, query)
-                            AgentTools.TOOL_APPROVE_JOIN_REQUEST -> AgentTools.approveJoinRequest(starter, query)
-                            AgentTools.TOOL_GET_MUTE_STATUS -> AgentTools.getMuteStatus(starter, query)
-                            AgentTools.TOOL_SET_MEMBER_MUTE -> AgentTools.setMemberMute(starter, query)
-                            AgentTools.TOOL_LIST_AUTO_APPROVE_POLICIES -> AgentTools.listAutoApprovePolicies(starter, query)
-                            AgentTools.TOOL_CREATE_AUTO_APPROVE_POLICY -> AgentTools.createAutoApprovePolicy(starter, query)
-                            AgentTools.TOOL_UPDATE_AUTO_APPROVE_POLICY -> AgentTools.updateAutoApprovePolicy(starter, query)
-                            AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY -> AgentTools.deleteAutoApprovePolicy(starter, query)
-                            AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY -> AgentTools.executeAutoApprovePolicy(starter, query)
-                            AgentTools.TOOL_UPDATE_WHITELIST_USERS -> AgentTools.updateWhitelistUsers(starter, query)
-                            else -> AgentTools.ToolResult("未知工具: $functionName")
-                        }
-                        session.messages.add(toolMessage(toolCallId, result0.aiText))
-                        if (result0.displayTitle.isNotEmpty()) {
-                            sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result0.displayTitle, result0.displayContent))
-                        }
+                        executeGroupTool(plugin, session, toolCallId, functionName, query)
                     }
 
                     else -> {
@@ -247,6 +281,92 @@ object AgentManager {
             AgentMessageFormatter.approvalCard(command),
             buildApprovalKeyboard(approvalId)
         )
+    }
+
+    /** 发送 QQ 群管理工具审批卡片并挂起会话。 */
+    private fun requestToolApproval(
+        plugin: HuHoBot,
+        session: AgentSession,
+        toolCallId: String,
+        toolName: String,
+        query: JSONObject
+    ) {
+        val approvalId = UUID.randomUUID().toString()
+        val description = describeToolAction(session, toolName, query)
+        session.awaitingApproval = AgentSession.PendingApproval(approvalId, toolCallId, description, toolName, query)
+        plugin.sendMarkdownToGroup(
+            session.groupOpenId,
+            AgentMessageFormatter.approvalCard(description),
+            buildApprovalKeyboard(approvalId)
+        )
+    }
+
+    /** 生成群管理工具的审批描述文本（用用户名显示，openid 仅给 AI）。 */
+    private fun describeToolAction(session: AgentSession, toolName: String, query: JSONObject): String {
+        return when (toolName) {
+            AgentTools.TOOL_SET_MEMBER_MUTE -> {
+                val op = query.getString("op") ?: ""
+                val minutes = query.getInteger("minutes") ?: 1
+                val member = session.displayName(query.getString("member_openid") ?: "?")
+                if (op == "add") "禁言成员 ${member}（${minutes} 分钟）" else "解除禁言 $member"
+            }
+            AgentTools.TOOL_APPROVE_JOIN_REQUEST -> "审批入群申请：${session.displayName(query.getString("member_openid") ?: "?")}"
+            AgentTools.TOOL_CREATE_AUTO_APPROVE_POLICY -> "创建入群自动审批策略"
+            AgentTools.TOOL_UPDATE_AUTO_APPROVE_POLICY -> "修改入群自动审批策略 ${query.getString("strategy_id") ?: "?"}"
+            AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY -> "删除入群自动审批策略 ${query.getString("strategy_id") ?: "?"}"
+            AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY -> "执行入群自动审批策略 ${query.getString("strategy_id") ?: "?"}"
+            AgentTools.TOOL_UPDATE_WHITELIST_USERS -> "修改自动审批白名单"
+            else -> "执行群管理操作 $toolName"
+        }
+    }
+
+    /** 执行 QQ 群管理工具并回填结果。 */
+    private fun executeGroupTool(
+        plugin: HuHoBot,
+        session: AgentSession,
+        toolCallId: String,
+        functionName: String,
+        query: JSONObject
+    ) {
+        val starter = QClient.getStarter()
+        if (starter == null) {
+            session.messages.add(toolMessage(toolCallId, "QQ Bot 未启动，无法调用群管理 API。"))
+            return
+        }
+        val defaultGroupOpenId = session.groupOpenId
+        // 强制使用会话所在群：防止 AI 传入伪造/占位的 group_openid，导致 API 请求失败
+        query.put("group_openid", defaultGroupOpenId)
+        val result0 = when (functionName) {
+            AgentTools.TOOL_GET_GROUP_INFO -> AgentTools.getGroupInfo(starter, query, defaultGroupOpenId)
+            AgentTools.TOOL_GET_BOT_STATE -> AgentTools.getBotState(starter, query, defaultGroupOpenId)
+            AgentTools.TOOL_GET_JOIN_REQUESTS -> AgentTools.getJoinRequests(starter, query, defaultGroupOpenId)
+            AgentTools.TOOL_APPROVE_JOIN_REQUEST -> AgentTools.approveJoinRequest(starter, query, defaultGroupOpenId)
+            AgentTools.TOOL_GET_MUTE_STATUS -> AgentTools.getMuteStatus(starter, query, defaultGroupOpenId)
+            AgentTools.TOOL_SET_MEMBER_MUTE -> AgentTools.setMemberMute(starter, query, defaultGroupOpenId)
+            AgentTools.TOOL_LIST_AUTO_APPROVE_POLICIES -> AgentTools.listAutoApprovePolicies(starter, query)
+            AgentTools.TOOL_CREATE_AUTO_APPROVE_POLICY -> AgentTools.createAutoApprovePolicy(starter, query)
+            AgentTools.TOOL_UPDATE_AUTO_APPROVE_POLICY -> AgentTools.updateAutoApprovePolicy(starter, query)
+            AgentTools.TOOL_DELETE_AUTO_APPROVE_POLICY -> AgentTools.deleteAutoApprovePolicy(starter, query)
+            AgentTools.TOOL_EXECUTE_AUTO_APPROVE_POLICY -> AgentTools.executeAutoApprovePolicy(starter, query)
+            AgentTools.TOOL_UPDATE_WHITELIST_USERS -> AgentTools.updateWhitelistUsers(starter, query)
+            else -> AgentTools.ToolResult("未知工具: $functionName")
+        }
+        session.messages.add(toolMessage(toolCallId, result0.aiText))
+        if (result0.displayTitle.isNotEmpty()) {
+            // 展示给 QQ 的内容：把已知 member_openid 替换为用户名（aiText 保持 openid 供 AI 使用）
+            val displayContent = replaceOpenIdsWithNames(session, result0.displayContent)
+            sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result0.displayTitle, displayContent))
+        }
+    }
+
+    /** 把展示文本中的已知 member_openid 替换为用户名。 */
+    private fun replaceOpenIdsWithNames(session: AgentSession, text: String): String {
+        if (session.memberNames.isEmpty()) return text
+        var result = text
+        for ((openId, name) in session.memberNames) {
+            result = result.replace(openId, name)
+        }
+        return result
     }
 
     /** 执行服务器命令并返回输出文本。 */
@@ -327,13 +447,19 @@ object AgentManager {
         session.awaitingApproval = null
 
         if (decision == "yes") {
-            sendToGroup(plugin, session, AgentMessageFormatter.approvedNotice(memberOpenId))
-            val output = executeCommand(plugin, pending.command)
-            session.messages.add(toolMessage(pending.toolCallId, "命令已由管理员批准执行，输出：\n$output"))
-            sendToGroup(plugin, session, AgentMessageFormatter.executedCard(pending.command, output))
+            sendToGroup(plugin, session, AgentMessageFormatter.approvedNotice(session.displayName(memberOpenId)))
+            if (pending.isTool) {
+                // QQ 群管理工具：批准后执行
+                executeGroupTool(plugin, session, pending.toolCallId, pending.toolName, pending.query ?: JSONObject())
+                session.messages.add(toolMessage(pending.toolCallId, "操作已由管理员批准执行。"))
+            } else {
+                val output = executeCommand(plugin, pending.command)
+                session.messages.add(toolMessage(pending.toolCallId, "命令已由管理员批准执行，输出：\n$output"))
+                sendToGroup(plugin, session, AgentMessageFormatter.executedCard(pending.command, output))
+            }
         } else {
-            sendToGroup(plugin, session, AgentMessageFormatter.rejectedNotice(memberOpenId))
-            session.messages.add(toolMessage(pending.toolCallId, "命令执行被管理员拒绝，请向用户说明无需执行。"))
+            sendToGroup(plugin, session, AgentMessageFormatter.rejectedNotice(session.displayName(memberOpenId)))
+            session.messages.add(toolMessage(pending.toolCallId, "操作被管理员拒绝，请向用户说明无需执行。"))
         }
 
         val config = plugin.getAgentConfig()

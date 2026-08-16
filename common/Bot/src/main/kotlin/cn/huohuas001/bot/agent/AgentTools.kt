@@ -178,33 +178,33 @@ object AgentTools {
             })
         })
         // ── QQ 群管理工具 ──
-        add(toolDef(TOOL_GET_GROUP_INFO, "获取 QQ 群基本信息（群名、人数、标签等）。", mapOf(
-            "group_openid" to "群 OpenID"
+        add(toolDef(TOOL_GET_GROUP_INFO, "获取当前 QQ 群基本信息（群名、人数、标签等）。group_openid 已自动绑定当前群，无需提供。", mapOf(
+            "group_openid" to "群 OpenID（可选，已自动绑定当前群）"
         )))
-        add(toolDef(TOOL_GET_BOT_STATE, "获取机器人在指定群中的状态（角色、入群时间等）。", mapOf(
-            "group_openid" to "群 OpenID"
+        add(toolDef(TOOL_GET_BOT_STATE, "获取机器人在当前群中的状态（角色、入群时间等）。group_openid 已自动绑定当前群，无需提供。", mapOf(
+            "group_openid" to "群 OpenID（可选，已自动绑定当前群）"
         )))
-        add(toolDef(TOOL_GET_JOIN_REQUESTS, "拉取入群申请列表。机器人需为群管理员。", mapOf(
-            "group_openid" to "群 OpenID",
+        add(toolDef(TOOL_GET_JOIN_REQUESTS, "拉取入群申请列表。机器人需为群管理员。group_openid 已自动绑定当前群，无需提供。", mapOf(
+            "group_openid" to "群 OpenID（可选，已自动绑定当前群）",
             "cursor" to "分页游标（可选）",
             "limit" to "每页数量（可选，默认20）"
         )))
-        add(toolDef(TOOL_APPROVE_JOIN_REQUEST, "审批入群申请。approve=通过，decline=拒绝。机器人需为群管理员。", mapOf(
-            "group_openid" to "群 OpenID",
+        add(toolDef(TOOL_APPROVE_JOIN_REQUEST, "审批入群申请。approve=通过，decline=拒绝。机器人需为群管理员。group_openid 已自动绑定当前群，无需提供。", mapOf(
+            "group_openid" to "群 OpenID（可选，已自动绑定当前群）",
             "member_openid" to "申请人 OpenID",
             "join_request_id" to "申请 ID",
             "approve" to "true=通过，false=拒绝",
             "reject_reason" to "拒绝理由（仅 decline 时，可选）",
             "blacklist" to "是否同时拉黑（仅 decline 时，可选）"
         )))
-        add(toolDef(TOOL_GET_MUTE_STATUS, "查询群禁言状态（全员禁言配置、被禁言成员列表）。", mapOf(
-            "group_openid" to "群 OpenID"
+        add(toolDef(TOOL_GET_MUTE_STATUS, "查询当前群禁言状态（全员禁言配置、被禁言成员列表）。group_openid 已自动绑定当前群，无需提供。", mapOf(
+            "group_openid" to "群 OpenID（可选，已自动绑定当前群）"
         )))
-        add(toolDef(TOOL_SET_MEMBER_MUTE, "设置群成员禁言。add=禁言，del=解除禁言。最大禁言30天。", mapOf(
-            "group_openid" to "群 OpenID",
+        add(toolDef(TOOL_SET_MEMBER_MUTE, "设置群成员禁言。add=禁言，del=解除禁言。最大禁言30天。到期时间由服务端计算，禁言时长用 minutes 参数指定。group_openid 已自动绑定当前群，无需提供。", mapOf(
+            "group_openid" to "群 OpenID（可选，已自动绑定当前群）",
             "member_openid" to "成员 OpenID",
             "op" to "操作：add=禁言，del=解除",
-            "mute_expire_at" to "禁言到期时间 RFC3339（仅 add，可选）"
+            "minutes" to "禁言时长（分钟，1-43200，仅 add，默认1）"
         )))
         add(toolDef(TOOL_LIST_AUTO_APPROVE_POLICIES, "查询入群自动审批策略列表。", mapOf(
             "cursor" to "分页游标（可选）",
@@ -337,8 +337,9 @@ object AgentTools {
 
     // ── QQ 群管理工具执行方法 ──
 
-    fun getGroupInfo(starter: Starter, query: JSONObject): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+    fun getGroupInfo(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
         if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
         return try {
             val info = GroupManagementApi.getGroupInfo(starter, groupOpenId)
@@ -353,8 +354,9 @@ object AgentTools {
         }
     }
 
-    fun getBotState(starter: Starter, query: JSONObject): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+    fun getBotState(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
         if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
         return try {
             val info = GroupManagementApi.getBotState(starter, groupOpenId)
@@ -368,8 +370,9 @@ object AgentTools {
         }
     }
 
-    fun getJoinRequests(starter: Starter, query: JSONObject): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+    fun getJoinRequests(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
         if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
         val cursor = query.getString("cursor")?.trim().orEmpty()
         val limit = query.getInteger("limit") ?: 20
@@ -393,8 +396,9 @@ object AgentTools {
         }
     }
 
-    fun approveJoinRequest(starter: Starter, query: JSONObject): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+    fun approveJoinRequest(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
         val memberOpenId = query.getString("member_openid")?.trim().orEmpty()
         val joinRequestId = query.getString("join_request_id")?.trim().orEmpty()
         val approve = query.getBoolean("approve") ?: true
@@ -410,8 +414,9 @@ object AgentTools {
         }
     }
 
-    fun getMuteStatus(starter: Starter, query: JSONObject): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+    fun getMuteStatus(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
         if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
         return try {
             val info = GroupManagementApi.getMuteStatus(starter, groupOpenId)
@@ -434,16 +439,17 @@ object AgentTools {
         }
     }
 
-    fun setMemberMute(starter: Starter, query: JSONObject): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim().orEmpty()
+    fun setMemberMute(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
         val memberOpenId = query.getString("member_openid")?.trim().orEmpty()
         val op = query.getString("op")?.trim().orEmpty()
-        val muteExpireAt = query.getString("mute_expire_at")?.trim().orEmpty()
+        val minutes = query.getInteger("minutes") ?: 1
         if (groupOpenId.isEmpty() || memberOpenId.isEmpty()) return ToolResult("请指定 group_openid 和 member_openid。")
         if (op !in listOf("add", "del")) return ToolResult("op 必须为 add 或 del。")
         return try {
-            GroupManagementApi.setMemberMute(starter, groupOpenId, memberOpenId, op, muteExpireAt)
-            val action = if (op == "add") "已禁言" else "已解除禁言"
+            GroupManagementApi.setMemberMute(starter, groupOpenId, memberOpenId, op, minutes)
+            val action = if (op == "add") "已禁言 ${minutes} 分钟" else "已解除禁言"
             ToolResult(aiText = "$action: $memberOpenId", displayTitle = "禁言操作", displayContent = "$action $memberOpenId")
         } catch (e: Exception) {
             ToolResult("设置禁言失败: ${e.message}")
@@ -535,6 +541,37 @@ object AgentTools {
                 displayTitle = "白名单更新", displayContent = "当前白名单号码数: $count")
         } catch (e: Exception) {
             ToolResult("更新白名单失败: ${e.message}")
+        }
+    }
+
+    fun getGroupMembers(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
+        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: defaultGroupOpenId
+        if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
+        val cursor = query.getString("cursor")?.trim().orEmpty()
+        val limit = query.getInteger("limit") ?: 50
+        return try {
+            val resp = GroupManagementApi.getGroupMembers(starter, groupOpenId, cursor, limit)
+            val members = resp.getJSONArray("members")
+            if (members == null || members.isEmpty()) {
+                return ToolResult("群内无成员或无法获取成员列表。")
+            }
+            val sb = StringBuilder("群成员列表（${members.size} 人）：\n")
+            for (i in members.indices) {
+                val m = members.getJSONObject(i)
+                val role = m.getString("member_role") ?: "member"
+                val roleLabel = when (role) {
+                    "owner" -> "[群主]"
+                    "admin" -> "[管理员]"
+                    else -> ""
+                }
+                sb.appendLine("${m.getString("username")} (${m.getString("member_openid")}) $roleLabel")
+            }
+            val nextCursor = resp.getString("next_cursor")
+            if (nextCursor.isNotEmpty()) sb.appendLine("下一页游标: $nextCursor")
+            ToolResult(aiText = sb.toString(), displayTitle = "群成员列表", displayContent = sb.toString())
+        } catch (e: Exception) {
+            ToolResult("获取群成员列表失败: ${e.message}")
         }
     }
 

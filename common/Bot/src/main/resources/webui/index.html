@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HuHoBot 配置中心</title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+</head>
+<body>
+    <div id="app">
+        <!-- 登录界面 -->
+        <div id="login-view" class="login-view hidden">
+            <div class="login-card">
+                <div class="login-logo">🤖</div>
+                <h1 class="login-title">HuHoBot 配置中心</h1>
+                <p class="login-subtitle">管理 QQ 机器人、聊天格式、AI Agent 等全部配置</p>
+                <input id="login-password" type="password" class="input" placeholder="请输入管理密码" autocomplete="current-password">
+                <button id="login-btn" class="btn btn-primary btn-block">登 录</button>
+                <p id="login-error" class="login-error hidden"></p>
+                <p class="login-tip">密码由服务器启动时自动生成并打印在日志中<br>可通过游戏内 /hb password 修改</p>
+            </div>
+        </div>
+
+        <!-- 主界面 -->
+        <div id="main-view" class="main-view hidden">
+            <aside class="sidebar">
+                <div class="sidebar-brand">
+                    <span class="brand-icon">🤖</span>
+                    <span class="brand-name">HuHoBot</span>
+                </div>
+                <nav id="sidebar-nav" class="sidebar-nav"></nav>
+                <div class="sidebar-footer">
+                    <button id="status-btn" class="btn btn-ghost btn-block">状态</button>
+                    <button id="logout-btn" class="btn btn-ghost btn-block">退出登录</button>
+                </div>
+            </aside>
+
+            <main class="content">
+                <!-- 状态面板 -->
+                <section id="status-panel" class="panel hidden">
+                    <h2 class="panel-title">系统状态</h2>
+                    <div id="status-cards" class="status-grid"></div>
+                </section>
+
+                <!-- 配置面板 -->
+                <section id="config-panel" class="panel hidden">
+                    <div class="config-header">
+                        <h2 id="config-section-title" class="panel-title">配置</h2>
+                        <button id="save-btn" class="btn btn-primary">💾 保存全部</button>
+                    </div>
+                    <p id="config-section-desc" class="panel-desc"></p>
+                    <form id="config-form" class="config-form"></form>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

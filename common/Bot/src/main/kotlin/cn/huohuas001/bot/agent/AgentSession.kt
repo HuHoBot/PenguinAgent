@@ -28,10 +28,21 @@ class AgentSession(
     /** 创建时间戳，用于超时清理。 */
     val createdAt: Long = System.currentTimeMillis()
 
-    /** 一次待管理员审批的命令执行请求。 */
+    /** 群成员映射：member_openid → 用户名。给 AI 喂 openid，但 QQ 显示用户名。 */
+    val memberNames: MutableMap<String, String> = mutableMapOf()
+
+    /** 根据 member_openid 返回用户名；未知时原样返回 openid。 */
+    fun displayName(openId: String): String = memberNames[openId] ?: openId
+
+    /** 一次待管理员审批的执行请求。支持服务器命令和 QQ 群管理工具。 */
     class PendingApproval(
         val approvalId: String,
         val toolCallId: String,
-        val command: String
-    )
+        val command: String,
+        val toolName: String = "",
+        val query: JSONObject? = null
+    ) {
+        /** 是否为 QQ 群管理工具调用（而非服务器命令）。 */
+        val isTool: Boolean get() = toolName.isNotEmpty()
+    }
 }

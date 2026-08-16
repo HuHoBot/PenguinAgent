@@ -10,6 +10,8 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
+import com.alibaba.fastjson.JSONArray
+import com.alibaba.fastjson.JSONObject
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandMap
@@ -110,6 +112,30 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getAgentApiKey(): String? = configManager.agentApiKey()
     override fun getAgentModel(): String? = configManager.agentModel()
     override fun getAgentCommandMode(): AgentCommandMode = configManager.agentCommandMode()
+
+    override fun getWebUiConfigValues(): Map<String, Any?> =
+        config.getValues(true)
+
+    override fun applyWebUiConfigChanges(changes: JSONObject): Boolean {
+        return try {
+            changes.forEach { (path, value) ->
+                config.set(path, convertJsonValue(value))
+            }
+            saveConfig()
+            reloadPluginConfig()
+            true
+        } catch (error: Exception) {
+            log_error("WebUI 保存配置失败: ${error.message}")
+            false
+        }
+    }
+
+    /** 将 fastjson 值转换为 Bukkit 配置可接受的 Java 类型。 */
+    private fun convertJsonValue(value: Any?): Any? = when (value) {
+        is JSONObject -> value.entries.associate { (k, v) -> k to convertJsonValue(v) }
+        is JSONArray -> value.map { convertJsonValue(it) }
+        else -> value
+    }
 
     override fun getServerPluginList(): List<String> =
         server.pluginManager.plugins.map { it.name }.sorted()

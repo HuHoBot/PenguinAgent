@@ -22,19 +22,30 @@ object GroupManagementApi {
         return "QQBot $token"
     }
 
+    private fun getAppId(starter: Starter): String {
+        val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
+        return start0.headers["X-Union-Appid"] ?: ""
+    }
+
     private fun request(starter: Starter, method: String, path: String, body: JSONObject? = null): JSONObject {
         val url = URL("$API_BASE$path")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = method
-        conn.setRequestProperty("Authorization", getAuthHeader(starter))
+        // 统一使用 SDK 的 getHeaders()，确保 Authorization 和 X-Union-Appid 都正确
+        val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
+        val headers = start0.getHeaders()
+        headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
         conn.setRequestProperty("Content-Type", "application/json")
         conn.doOutput = body != null
         body?.let {
-            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { w -> w.write(it.toJSONString()) }
+            val bodyStr = it.toJSONString()
+            println("[GroupApi] $method $path body=$bodyStr")
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { w -> w.write(bodyStr) }
         }
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader()?.readText() ?: "{}"
         conn.disconnect()
+        println("[GroupApi] <- ${conn.responseCode} $text")
         val resp = JSON.parseObject(text)
         if (resp == null || resp.containsKey("code")) {
             val msg = resp?.getString("message") ?: "未知错误"
@@ -92,18 +103,34 @@ object GroupManagementApi {
         groupOpenId: String,
         memberOpenId: String,
         op: String,
-        muteExpireAt: String = ""
+        minutes: Int = 1
     ): JSONObject {
         val body = JSONObject().apply {
             put("members", com.alibaba.fastjson.JSONArray().apply {
                 add(JSONObject().apply {
                     put("op", op)
                     put("member_openid", memberOpenId)
-                    if (muteExpireAt.isNotEmpty()) put("mute_expire_at", muteExpireAt)
+                    if (op == "add") {
+                        // 服务端计算到期时间，避免 AI 生成错误的过去时间
+                        val cal = java.util.Calendar.getInstance()
+                        cal.add(java.util.Calendar.MINUTE, minutes.coerceIn(1, 43200))
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX")
+                        put("mute_expire_at", sdf.format(cal.time))
+                    }
                 })
             })
         }
         return request(starter, "POST", "/v2/groups/$groupOpenId/restrict_chat_setting", body)
+    }
+
+    // ── 群成员 ──
+
+    fun getGroupMembers(starter: Starter, groupOpenId: String, cursor: String = "", limit: Int = 50): JSONObject {
+        val params = mutableListOf<String>()
+        if (cursor.isNotEmpty()) params.add("cursor=$cursor")
+        if (limit != 50) params.add("limit=$limit")
+        val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
+        return request(starter, "GET", "/v2/groups/$groupOpenId/members$query")
     }
 
     // ── 自动审批策略 ──
