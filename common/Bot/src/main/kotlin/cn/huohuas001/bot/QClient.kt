@@ -1,5 +1,6 @@
 package cn.huohuas001.bot
 
+import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.agent.AgentInteractionListener
 import cn.huohuas001.bot.events.GroupMessageHandler
 import cn.huohuas001.bot.events.commands.BaseCommand
@@ -51,6 +52,8 @@ object QClient {
             starter.APPLICATION.logger.setLogLevel(1)
             starter.APPLICATION.logger.setOutFile(logFilePattern)
             MenuManager.syncGroupPanels(starter, plugin.getGroupOpenIdList())
+            // 加载本地昵称缓存
+            NicknameManager.load()
         } catch (error: Exception) {
             if (suppressConsoleOutput) {
                 QqBotConsoleOutputFilter.uninstall()
@@ -69,7 +72,11 @@ object QClient {
 
         val messageWithoutPrefix = message.removePrefix(format.startWith)
         val filtered = plugin.auditText(messageWithoutPrefix)
-        val content = plugin.formatGameMessage(playerName, filtered)
+
+        // 检测 @昵称 并转换为 QQ @格式 <@openid>
+        val processed = resolveAtMentions(filtered)
+
+        val content = plugin.formatGameMessage(playerName, processed)
         val payload = V2MsgData().setContent(content)
         plugin.getGroupOpenIdList().forEach { groupId ->
             try {
@@ -78,6 +85,34 @@ object QClient {
                 plugin.log_error("向QQ群 $groupId 转发游戏聊天失败: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 将消息中的 @昵称 转换为 QQ 的 <@openid> 格式。
+     * 支持：@张三、@张三 你好、@张三@李四
+     * 也处理直接输入的 @openid（转为昵称显示）。
+     */
+    private fun resolveAtMentions(text: String): String {
+        val allMembers = NicknameManager.all()
+        if (allMembers.isEmpty()) return text
+
+        // 按昵称长度降序匹配，避免短昵称抢先
+        val sorted = allMembers.sortedByDescending { it.first.length }
+        var result = text
+        for ((nickname, openId) in sorted) {
+            // 匹配 @昵称 后面是空格、标点或字符串结尾
+            val pattern = Regex("@${Regex.escape(nickname)}(?=\\s|[，。！？、；：,.!?;:]|\$)")
+            result = result.replace(pattern) { match ->
+                "<@$openId>"
+            }
+        }
+        // 处理直接输入的 @openid：尝试转为昵称，找不到就去掉
+        result = result.replace(Regex("@([0-9A-Fa-f]{20,})(?=\\s|\$)")) { match ->
+            val oid = match.groupValues[1]
+            val nick = NicknameManager.getNickname(oid)
+            if (nick != null) "@$nick" else ""
+        }
+        return result
     }
 
     /** 按配置向所有 QQ 群发送玩家进服通知。 */
@@ -225,6 +260,56 @@ object QClient {
         } catch (error: Exception) {
             plugin.log_error("回复图片消息失败: ${error.message}")
         }
+    }
+
+    /**
+     * /at 命令专用：以 markdown 格式发送 @消息到 QQ 群，跳过 startWith 前缀检查。
+     * markdown 格式的 <@openid> 才会触发 QQ 的 @ 通知。
+     */
+    fun sendAtToGroups(playerName: String, message: String) {
+        if (!::starter.isInitialized) return
+        val plugin = BotShared.getPlugin()
+        val format = plugin.getChatFormat()
+        if (!format.postChat) return
+
+        val filtered = plugin.auditText(message)
+        // markdown 下需转义玩家名中的 _ 等特殊字符，避免被识别为斜体
+        val safeName = escapeMarkdown(playerName)
+        val content = plugin.formatGameMessage(safeName, filtered)
+        val markdown = Markdown().setContent(content)
+        val payload = V2MsgData()
+            .setContent(content)
+            .setMsg_type(2)
+            .setMarkdown(markdown)
+        plugin.getGroupOpenIdList().forEach { groupId ->
+            try {
+                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+            } catch (e: Exception) {
+                plugin.log_error("向QQ群 $groupId 转发@消息失败: ${e.message}")
+            }
+        }
+    }
+
+    /** 转义 Markdown 特殊字符，防止玩家名被渲染为格式符号。 */
+    private fun escapeMarkdown(text: String): String {
+        return text.replace("\\", "\\\\")
+            .replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("~", "\\~")
+            .replace("`", "\\`")
+            .replace(">", "\\>")
+            .replace("#", "\\#")
+            .replace("+", "\\+")
+            .replace("-", "\\-")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+            .replace("|", "\\|")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
     }
 
     fun shutdown() {

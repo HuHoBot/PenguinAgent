@@ -72,7 +72,7 @@ class PublicCommands : CommandSupport() {
             return
         }
 
-        val formattedPlayerList = onlineList.mapIndexed { index, name -> "${index + 1}. **$name**" }.joinToString("\n")
+        val formattedPlayerList = onlineList.mapIndexed { index, name -> "${index + 1}. **${escapeMarkdown(name)}**" }.joinToString("\n")
 
         //替换文本内容
         markdown = markdown
@@ -124,5 +124,26 @@ class PublicCommands : CommandSupport() {
             return
         }
         executeCustomCommand(plugin, event, params, admin = false)
+    }
+
+    private fun escapeMarkdown(text: String): String {
+        return text.replace("\\", "\\\\")
+            .replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("~", "\\~")
+            .replace("`", "\\`")
+            .replace(">", "\\>")
+            .replace("#", "\\#")
+            .replace("+", "\\+")
+            .replace("-", "\\-")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+            .replace("|", "\\|")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
     }
 }

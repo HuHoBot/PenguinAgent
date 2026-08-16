@@ -123,16 +123,6 @@ object GroupManagementApi {
         return request(starter, "POST", "/v2/groups/$groupOpenId/restrict_chat_setting", body)
     }
 
-    // ── 群成员 ──
-
-    fun getGroupMembers(starter: Starter, groupOpenId: String, cursor: String = "", limit: Int = 50): JSONObject {
-        val params = mutableListOf<String>()
-        if (cursor.isNotEmpty()) params.add("cursor=$cursor")
-        if (limit != 50) params.add("limit=$limit")
-        val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
-        return request(starter, "GET", "/v2/groups/$groupOpenId/members$query")
-    }
-
     // ── 自动审批策略 ──
 
     fun listAutoApprovePolicies(starter: Starter, cursor: String = "", limit: Int = 20): JSONObject {

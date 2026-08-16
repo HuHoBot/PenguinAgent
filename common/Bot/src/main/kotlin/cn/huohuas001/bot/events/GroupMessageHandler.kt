@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.events
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.agent.AgentCommands
 import cn.huohuas001.bot.events.commands.AdministrationCommands
 import cn.huohuas001.bot.events.commands.AuthenticationCommands
@@ -37,6 +38,15 @@ class GroupMessageHandler(
         val groupId = event.groupOpenId ?: event.groupId
         val content = event.rawMessage.content ?: return
 
+        // 缓存发送者昵称（每次收到消息都更新）
+        val senderName = event.sender?.username
+        val senderOpenId = event.sender?.openid ?: event.sender?.id
+        if (!senderName.isNullOrBlank() && !senderOpenId.isNullOrBlank()) {
+            val isNew = NicknameManager.getOpenId(senderName) != senderOpenId
+            NicknameManager.put(senderName, senderOpenId)
+            if (isNew) NicknameManager.save()
+        }
+
         if(!content.contains("查信息")){
             if (!isAllowedGroup(groupId)) return
         }
@@ -65,7 +75,18 @@ class GroupMessageHandler(
             .fullForwarding(groupId, plugin.getFullAmount())
         if (!enabled || !plugin.getChatFormat().postChat) return
 
-        val senderName = event.sender?.username ?: "unknown"
+        val rawSenderName = event.sender?.username ?: "unknown"
+        val senderOpenId = event.sender?.openid ?: event.sender?.id ?: ""
+        // 缓存发送者昵称 → openid（仅当 username 不是 openid 时缓存）
+        if (rawSenderName != "unknown" && senderOpenId.isNotEmpty()) {
+            NicknameManager.put(rawSenderName, senderOpenId)
+        }
+        // 解析显示名：如果 username 是 openid，尝试从 NicknameManager 获取真实昵称
+        val senderName = if (rawSenderName.matches(Regex("[0-9A-Fa-f]{20,}")) && senderOpenId.isNotEmpty()) {
+            NicknameManager.getNickname(senderOpenId) ?: "QQ用户"
+        } else {
+            rawSenderName
+        }
 
         // 从原始 JSON 提取附件信息（SDK 未映射 asr_refer_text 等新字段）
         val metadata = (event as? BaseMessageEvent<*>)?.metadata
@@ -115,14 +136,34 @@ class GroupMessageHandler(
             for (mention in mentions) {
                 val mentionId = mention.id ?: continue
                 val mentionName = mention.username ?: continue
+                // 缓存被 @ 的成员昵称（拒绝 openid 作为昵称）
+                if (mentionName != "unknown" && mentionId.isNotEmpty()) {
+                    NicknameManager.put(mentionName, mentionId)
+                }
+                // 解析显示名：如果 username 是 openid，尝试获取真实昵称
+                val displayName = if (mentionName.matches(Regex("[0-9A-Fa-f]{20,}")) && mentionId.isNotEmpty()) {
+                    NicknameManager.getNickname(mentionId) ?: "QQ用户"
+                } else {
+                    mentionName
+                }
                 message = message
-                    .replace("<@!$mentionId>", "@$mentionName")
-                    .replace("<@$mentionId>", "@$mentionName")
-                    .replace("<$mentionId>", "@$mentionName")
-                    .replace(mentionId, "@$mentionName")
+                    .replace("<@!$mentionId>", "@$displayName")
+                    .replace("<@$mentionId>", "@$displayName")
+                    .replace("<$mentionId>", "@$displayName")
+                    .replace(mentionId, "@$displayName")
             }
         }
 
-        plugin.broadcastMessage(plugin.formatGroupMessage(senderName, plugin.auditText(message)))
+        val filtered = plugin.auditText(message)
+
+        // 检测在线玩家名，用 §9（蓝色）包裹，前面加 @
+        val onlinePlayers = plugin.getOnlineList()
+        var highlighted = filtered
+        for (playerName in onlinePlayers) {
+            if (playerName.length < 2) continue
+            highlighted = highlighted.replace(playerName, "§9@$playerName§r")
+        }
+
+        plugin.broadcastMessage(plugin.formatGroupMessage(senderName, highlighted), onlinePlayers)
     }
 }

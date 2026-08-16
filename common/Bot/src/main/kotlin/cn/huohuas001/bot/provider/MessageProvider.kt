@@ -6,6 +6,9 @@ import io.github.kloping.qqbot.entities.ex.Keyboard
 interface MessageProvider {
     fun broadcastMessage(msg: String)
 
+    /** 广播消息，同时对 highlightedPlayers 中的在线玩家播放提示音。 */
+    fun broadcastMessage(msg: String, highlightedPlayers: List<String>) = broadcastMessage(msg)
+
     /** 向配置中的所有 QQ 群发送自定义 Markdown，可选附带消息键盘。 */
     fun sendMarkdown(markdownContent: String, keyboard: Keyboard? = null)
 

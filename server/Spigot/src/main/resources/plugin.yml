@@ -7,8 +7,12 @@ api-version: '1.18'
 commands:
   huhobot:
     description: HuHoBot control command
-    usage: "/huhobot reload|info"
+    usage: "/huhobot reload|info|password|webui"
     aliases: [hb]
+    permission: huhobot.command
+  at:
+    description: Send an @mention message to QQ group
+    usage: "/at <nickname> <message>"
     permission: huhobot.command
 
 permissions:

@@ -1,29 +1,31 @@
-# HuHoBot Penguin v1.1.0-alpha.3
+# HuHoBot Penguin v1.2.0-alpha.2
 
 ## 新功能
 
-- feat(menu): 启动时自动同步指令面板到 QQ 群，包含全部 20 条命令
-- feat(motd): 新增 `/motd <服务器地址>` 命令，查询 MC 服务器状态（图片 + Markdown）
-- feat(stop): 新增 `/stop` 命令，紧急停止所有 AI 任务输出和处理
-- feat(message): 添加消息提及用户解析和格式化功能
-- feat(agent): 新增 AI Agent 系统，管理员通过 `@机器人 /agent 任务描述` 触发 AI 执行服务器管理任务
-- feat(agent): AI 通过 function call 获取插件列表、命令帮助、执行命令、读取日志
-- feat(agent): 命令执行支持手动审批模式（按钮卡片同意/拒绝，仅管理员与群主可审批）
-- feat(agent): 新增 SKILL 按需加载系统（components/give/item/summon/data/loot/clear）
-- feat(agent): 新增 `/newsession` 命令手动清除 AI 会话上下文
-- feat(agent): AI 推理模型支持（reasoning_content 思考过程输出）
-- feat(command): 原版命令帮助通过反射 CraftServer commandMap 获取
-- feat(spigot): 新增 `read_server_logs` 工具读取服务端日志
+- feat(at): 新增 `/at <昵称> <消息>` Minecraft 命令，游戏内发送 QQ @消息，支持 Tab 补全
+- feat(at): QQ→游戏 @提及蓝色高亮（`§9@玩家名`）+ 叮音效提醒
+- feat(nickname): NicknameManager 昵称 ↔ openid 双向映射，持久化到 nicknames.dat，重启不丢失
+- feat(nickname): resolveAtMentions 自动将 `@昵称` 转为 QQ `<@openid>` 格式
+- feat(nickname): escapeMarkdown 转义玩家名中 `_` 等特殊字符，防止被识别为斜体
+- feat(webui): 暗色简约风格 WebUI，14 个配置分组，覆盖所有配置项
+- feat(webui): 启动时自动生成 24 位随机密码，日志打印一次
+- feat(agent): 禁言到期时间服务端计算，不依赖 AI
+- feat(agent): @提及识别 —— AI 可直接使用 @成员的用户名进行操作
+- feat(agent): 用户名显示 —— Agent 操作结果显示管理员/成员真实用户名
+- feat(agent): 审批/拒绝通知显示操作管理员用户名
+- feat(readme): 全面重写 README，补充所有功能、配置、命令、项目结构说明
 
 ## 改进
 
-- refactor(agent): 会话上下文复用，同一用户连续对话保留历史
-- refactor(agent): 错误输出清理，只显示根本原因（Brigadier CommandSyntaxException）
-- refactor(agent): 消息无截断，超长内容分块发送
-- refactor(agent): 上下文窗口管理（MAX_CONTEXT_MESSAGES=40）
-- fix(agent): 命令输出剥离 Minecraft 格式化代码（§x），避免 QQ 群显示乱码
-- fix(agent): 修复 interaction 回调 405 错误日志噪音
-- fix(spigot): BukkitConsoleSender 改用真实 console sender 执行命令
+- fix: openid 被当作昵称存储导致 Tab 补全显示 openid（NicknameManager.put 拒绝 openid 作为昵称）
+- fix: QQ→游戏转发时 openid 被当作发送者显示名（forwardFullGroupMessage 解析真实昵称）
+- fix: NicknameManager.load() 自动跳过昵称是 openid 的脏数据
+- fix: plugin.yml `/at` 命令描述修正
+- fix: WebUI 侧边栏空 bug（renderNav 移到 schema 加载后调用）
+- fix: WebUI 保存后值丢失 bug（保存后重新读取配置刷新 UI）
+- fix: resolveAtMentions 处理直接输入的 @openid（转为昵称或去掉）
+- fix: get_group_members API 移除（无权限 11253）
+- fix: 禁言、审批等工具 group_openid 标注"可选，已自动绑定当前群"
 
 ## 依赖
 

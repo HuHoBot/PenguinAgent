@@ -544,37 +544,6 @@ object AgentTools {
         }
     }
 
-    fun getGroupMembers(starter: Starter, query: JSONObject, defaultGroupOpenId: String = ""): ToolResult {
-        val groupOpenId = query.getString("group_openid")?.trim()?.takeIf { it.isNotEmpty() }
-            ?: defaultGroupOpenId
-        if (groupOpenId.isEmpty()) return ToolResult("请指定 group_openid。")
-        val cursor = query.getString("cursor")?.trim().orEmpty()
-        val limit = query.getInteger("limit") ?: 50
-        return try {
-            val resp = GroupManagementApi.getGroupMembers(starter, groupOpenId, cursor, limit)
-            val members = resp.getJSONArray("members")
-            if (members == null || members.isEmpty()) {
-                return ToolResult("群内无成员或无法获取成员列表。")
-            }
-            val sb = StringBuilder("群成员列表（${members.size} 人）：\n")
-            for (i in members.indices) {
-                val m = members.getJSONObject(i)
-                val role = m.getString("member_role") ?: "member"
-                val roleLabel = when (role) {
-                    "owner" -> "[群主]"
-                    "admin" -> "[管理员]"
-                    else -> ""
-                }
-                sb.appendLine("${m.getString("username")} (${m.getString("member_openid")}) $roleLabel")
-            }
-            val nextCursor = resp.getString("next_cursor")
-            if (nextCursor.isNotEmpty()) sb.appendLine("下一页游标: $nextCursor")
-            ToolResult(aiText = sb.toString(), displayTitle = "群成员列表", displayContent = sb.toString())
-        } catch (e: Exception) {
-            ToolResult("获取群成员列表失败: ${e.message}")
-        }
-    }
-
     private fun toolDef(name: String, desc: String, params: Map<String, String>): JSONObject {
         return JSONObject().apply {
             put("type", "function")

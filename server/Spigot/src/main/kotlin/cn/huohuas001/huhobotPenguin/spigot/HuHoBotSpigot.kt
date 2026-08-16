@@ -4,6 +4,7 @@ import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.agent.AgentCommandMode
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.tools.Cancelable
+import cn.huohuas001.huhobotPenguin.spigot.commands.AtCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.BukkitConsoleSender
 import cn.huohuas001.huhobotPenguin.spigot.commands.CommandOutputAppender
 import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
@@ -33,6 +34,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             tabCompleter = command
         } ?: log_error("无法注册 /huhobot 命令，请检查 plugin.yml")
         server.pluginManager.registerEvents(GameChat(), this)
+        val atCommand = AtCommand()
+        getCommand("at")?.apply {
+            setExecutor(atCommand)
+            tabCompleter = atCommand
+        }
         log_info("HuHoBot Penguin 已加载")
     }
 
@@ -65,6 +71,26 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun broadcastMessage(msg: String) {
         server.scheduler.runTask(this, Runnable { Bukkit.broadcastMessage(msg) })
+    }
+
+    override fun broadcastMessage(msg: String, highlightedPlayers: List<String>) {
+        server.scheduler.runTask(this, Runnable {
+            Bukkit.broadcastMessage(msg)
+            // 对被提到的在线玩家播放 "叮" 音效
+            if (highlightedPlayers.isNotEmpty()) {
+                for (playerName in highlightedPlayers) {
+                    val player = server.getPlayer(playerName) ?: continue
+                    if (player.isOnline) {
+                        player.playSound(
+                            player.location,
+                            org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING,
+                            1.0f,
+                            1.0f
+                        )
+                    }
+                }
+            }
+        })
     }
 
     override fun submit(task: Runnable): Cancelable =
