@@ -5,6 +5,7 @@ import cn.huohuas001.bot.agent.AgentInteractionListener
 import cn.huohuas001.bot.events.GroupMessageHandler
 import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.provider.BotShared
+import cn.huohuas001.bot.state.CommandRepositories
 import cn.huohuas001.bot.tools.QqBotConsoleOutputFilter
 import com.alibaba.fastjson.JSON
 import io.github.kloping.qqbot.Starter
@@ -76,21 +77,77 @@ object QClient {
         // 检测 @昵称 并转换为 QQ @格式 <@openid>
         val processed = resolveAtMentions(filtered)
 
-        val content = plugin.formatGameMessage(playerName, processed)
-        val payload = V2MsgData().setContent(content)
-        plugin.getGroupOpenIdList().forEach { groupId ->
-            try {
-                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
-            } catch (e: Exception) {
-                plugin.log_error("向QQ群 $groupId 转发游戏聊天失败: ${e.message}")
+        // 绑定：查找发送者是否绑定到某个 QQ 用户
+        val binding = findBindingByPlayerName(playerName)
+        val qqSenderName = if (binding != null) {
+            when (binding.binding.qqDisplayNameMode) {
+                "MC" -> binding.qqName
+                else -> playerName
+            }
+        } else {
+            playerName
+        }
+
+        val content = plugin.formatGameMessage(qqSenderName, processed)
+        val hasMention = processed.contains(Regex("<@[0-9A-Fa-f]{20,}>"))
+        val payload = if (hasMention) {
+            val markdown = Markdown().setContent(content)
+            V2MsgData()
+                .setContent(content)
+                .setMsg_type(2)
+                .setMarkdown(markdown)
+        } else {
+            V2MsgData().setContent(content)
+        }
+        Thread {
+            plugin.getGroupOpenIdList().forEach { groupId ->
+                try {
+                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                } catch (e: Exception) {
+                    plugin.log_error("向QQ群 $groupId 转发游戏聊天失败: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * 根据 Minecraft 玩家名查找绑定信息（跨群搜索）。
+     * 返回 BindingInfo + QQ 昵称。
+     */
+    private fun findBindingByPlayerName(playerName: String): BindingLookupResult? {
+        val plugin = BotShared.getPlugin()
+        for (groupId in plugin.getGroupOpenIdList()) {
+            val entry = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
+            if (entry != null) {
+                val qqName = NicknameManager.getNickname(entry.key)
+                    ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
+                    ?: "QQ用户"
+                return BindingLookupResult(entry.value, qqName)
             }
         }
+        // 也搜索所有群（包括未配置的群）
+        for (groupId in CommandRepositories.bindings.allBindings().keys) {
+            val entry = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
+            if (entry != null) {
+                val qqName = NicknameManager.getNickname(entry.key)
+                    ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
+                    ?: "QQ用户"
+                return BindingLookupResult(entry.value, qqName)
+            }
+        }
+        return null
     }
+
+    private data class BindingLookupResult(
+        val binding: cn.huohuas001.bot.datapack.BindingInfo,
+        val qqName: String
+    )
 
     /**
      * 将消息中的 @昵称 转换为 QQ 的 <@openid> 格式。
      * 支持：@张三、@张三 你好、@张三@李四
      * 也处理直接输入的 @openid（转为昵称显示）。
+     * 如果 @的是绑定的 MC 玩家名，也会解析为对应的 QQ @。
      */
     private fun resolveAtMentions(text: String): String {
         val allMembers = NicknameManager.all()
@@ -104,6 +161,19 @@ object QClient {
             val pattern = Regex("@${Regex.escape(nickname)}(?=\\s|[，。！？、；：,.!?;:]|\$)")
             result = result.replace(pattern) { match ->
                 "<@$openId>"
+            }
+        }
+        // 匹配绑定的 MC 玩家名：@PlayerName 或 PlayerName → <@openid>
+        val plugin = BotShared.getPlugin()
+        for (groupId in plugin.getGroupOpenIdList()) {
+            val bindings = CommandRepositories.bindings.allInGroup(groupId)
+            for ((_, info) in bindings) {
+                val mcName = info.playerName
+                val pattern = Regex("(?<![<\\w])@?${Regex.escape(mcName)}(?![>\\w])")
+                result = result.replace(pattern) { _ ->
+                    val entry = CommandRepositories.bindings.findByPlayerName(groupId, mcName)
+                    if (entry != null) "<@${entry.key}>" else mcName
+                }
             }
         }
         // 处理直接输入的 @openid：尝试转为昵称，找不到就去掉
@@ -135,13 +205,15 @@ object QClient {
         if (content.isBlank()) return
         val plugin = BotShared.getPlugin()
         val payload = V2MsgData().setContent(content)
-        plugin.getGroupOpenIdList().forEach { groupId ->
-            try {
-                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
-            } catch (e: Exception) {
-                plugin.log_error("向QQ群 $groupId ${action}失败: ${e.message}")
+        Thread {
+            plugin.getGroupOpenIdList().forEach { groupId ->
+                try {
+                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                } catch (e: Exception) {
+                    plugin.log_error("向QQ群 $groupId ${action}失败: ${e.message}")
+                }
             }
-        }
+        }.start()
     }
 
     /** 向 bot.groups 中配置的所有 QQ 群发送自定义 Markdown。 */

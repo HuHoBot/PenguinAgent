@@ -6,6 +6,7 @@ import cn.huohuas001.bot.agent.AgentCommands
 import cn.huohuas001.bot.events.commands.AdministrationCommands
 import cn.huohuas001.bot.events.commands.AuthenticationCommands
 import cn.huohuas001.bot.events.commands.BaseCommand
+import cn.huohuas001.bot.events.commands.BindingCommands
 import cn.huohuas001.bot.events.commands.MotdCommands
 import cn.huohuas001.bot.events.commands.PublicCommands
 import cn.huohuas001.bot.state.CommandRepositories
@@ -26,6 +27,7 @@ class GroupMessageHandler(
         registerCommand(AuthenticationCommands())
         registerCommand(AgentCommands())
         registerCommand(MotdCommands())
+        registerCommand(BindingCommands())
     }
 
     fun registerCommand(command: BaseCommand) {
@@ -42,8 +44,9 @@ class GroupMessageHandler(
         val senderName = event.sender?.username
         val senderOpenId = event.sender?.openid ?: event.sender?.id
         if (!senderName.isNullOrBlank() && !senderOpenId.isNullOrBlank()) {
-            val isNew = NicknameManager.getOpenId(senderName) != senderOpenId
+            // 即使 username 是 openid 也缓存，用于反查
             NicknameManager.put(senderName, senderOpenId)
+            val isNew = NicknameManager.getOpenId(senderName) != senderOpenId
             if (isNew) NicknameManager.save()
         }
 
@@ -82,10 +85,23 @@ class GroupMessageHandler(
             NicknameManager.put(rawSenderName, senderOpenId)
         }
         // 解析显示名：如果 username 是 openid，尝试从 NicknameManager 获取真实昵称
-        val senderName = if (rawSenderName.matches(Regex("[0-9A-Fa-f]{20,}")) && senderOpenId.isNotEmpty()) {
+        val senderNickName = if (rawSenderName.matches(Regex("[0-9A-Fa-f]{20,}")) && senderOpenId.isNotEmpty()) {
             NicknameManager.getNickname(senderOpenId) ?: "QQ用户"
         } else {
             rawSenderName
+        }
+
+        // 绑定：根据用户设置决定显示名
+        val binding = if (senderOpenId.isNotEmpty()) {
+            CommandRepositories.bindings.getBinding(groupId, senderOpenId)
+        } else null
+        val senderName = if (binding != null) {
+            when (binding.mcDisplayNameMode) {
+                "QQ" -> binding.playerName
+                else -> senderNickName
+            }
+        } else {
+            senderNickName
         }
 
         // 从原始 JSON 提取附件信息（SDK 未映射 asr_refer_text 等新字段）
@@ -94,8 +110,11 @@ class GroupMessageHandler(
 
         val parts = mutableListOf<String>()
 
-        // 文本内容
+        // 文本内容（清理 SDK 原始图片/表情标签）
         val textContent = event.rawMessage.content?.trim().orEmpty()
+            .replace(Regex("<faceType=[^>]*>"), "")
+            .replace(Regex("<image[^>]*>"), "")
+            .trim()
         if (textContent.isNotEmpty()) {
             parts.add(textContent)
         }
@@ -140,11 +159,25 @@ class GroupMessageHandler(
                 if (mentionName != "unknown" && mentionId.isNotEmpty()) {
                     NicknameManager.put(mentionName, mentionId)
                 }
-                // 解析显示名：如果 username 是 openid，尝试获取真实昵称
-                val displayName = if (mentionName.matches(Regex("[0-9A-Fa-f]{20,}")) && mentionId.isNotEmpty()) {
-                    NicknameManager.getNickname(mentionId) ?: "QQ用户"
+                // 解析显示名：优先使用绑定的游戏ID
+                val mentionBinding = CommandRepositories.bindings.getBinding(groupId, mentionId)
+                val displayName = if (mentionBinding != null) {
+                    when (mentionBinding.mcDisplayNameMode) {
+                        "QQ" -> mentionBinding.playerName
+                        else -> {
+                            if (mentionName.matches(Regex("[0-9A-Fa-f]{20,}")) && mentionId.isNotEmpty()) {
+                                NicknameManager.getNickname(mentionId) ?: "QQ用户"
+                            } else {
+                                mentionName
+                            }
+                        }
+                    }
                 } else {
-                    mentionName
+                    if (mentionName.matches(Regex("[0-9A-Fa-f]{20,}")) && mentionId.isNotEmpty()) {
+                        NicknameManager.getNickname(mentionId) ?: "QQ用户"
+                    } else {
+                        mentionName
+                    }
                 }
                 message = message
                     .replace("<@!$mentionId>", "@$displayName")
@@ -153,6 +186,9 @@ class GroupMessageHandler(
                     .replace(mentionId, "@$displayName")
             }
         }
+
+        // 清理消息中残留的 raw openid 文本（SDK 可能在文本中包含 openid 字面量）
+        message = message.replace(Regex("[0-9A-Fa-f]{20,}"), "")
 
         val filtered = plugin.auditText(message)
 

@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.events.commands
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 
@@ -35,7 +36,18 @@ class PublicCommands : CommandSupport() {
 
         val filtered = plugin.auditText(params)
         if (plugin.getChatFormat().postChat) {
-            plugin.broadcastMessage(plugin.formatGroupMessage(userId(event), filtered))
+            // 绑定：如果发送者绑定了角色，使用游戏ID作为发送者名
+            val senderId = userId(event)
+            val binding = CommandRepositories.bindings.getBinding(groupId(event), senderId)
+            val senderName = if (binding != null) {
+                when (binding.mcDisplayNameMode) {
+                    "QQ" -> binding.playerName
+                    else -> NicknameManager.getNickname(senderId) ?: senderId
+                }
+            } else {
+                NicknameManager.getNickname(senderId) ?: senderId
+            }
+            plugin.broadcastMessage(plugin.formatGroupMessage(senderName, filtered))
         } else {
             event.sendMessage("群聊转发功能已关闭")
         }
@@ -113,6 +125,11 @@ class PublicCommands : CommandSupport() {
             |  agent <任务> —— AI 执行管理任务
             |  stop —— 紧急停止 AI 任务
             |  newsession —— 清除 AI 会话上下文
+            |  绑定 <游戏ID> —— 绑定 Minecraft 角色
+            |  解除绑定 —— 解除角色绑定
+            |  MC显示名称 MC/QQ —— 切换游戏→QQ显示名称
+            |  QQ显示名称 MC/QQ —— 切换QQ→游戏显示名称
+            |  版本 —— 查看版本信息
         """.trimMargin()
         event.sendMessage(help)
     }

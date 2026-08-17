@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.state
 
 import cn.huohuas001.bot.datapack.AdministratorAccessMode
+import cn.huohuas001.bot.datapack.BindingInfo
 import cn.huohuas001.bot.datapack.StoredCommandSettings
 import java.io.File
 import java.io.FileInputStream
@@ -50,6 +51,8 @@ internal class HumanReadableStateFile {
             writeUserSection(writer, "authenticated-users", snapshot.authenticatedUsers)
             writeValueSection(writer, "administrator-modes", snapshot.administratorModes.mapValues { it.value.name })
             writeValueSection(writer, "full-forwarding", snapshot.fullForwarding.mapValues { it.value.toString() })
+            writeBindingsSection(writer, snapshot.bindings)
+            writeBindingSettingsSection(writer, snapshot.bindings)
         }
 
         try {
@@ -69,6 +72,8 @@ internal class HumanReadableStateFile {
         val authenticatedUsers = linkedMapOf<String, Set<String>>()
         val administratorModes = linkedMapOf<String, AdministratorAccessMode>()
         val fullForwarding = linkedMapOf<String, Boolean>()
+        val bindings = linkedMapOf<String, MutableMap<String, BindingInfo>>()
+        val bindingSettings = linkedMapOf<String, MutableMap<String, Pair<String, String>>>()
         var section = ""
 
         file.readLines(Charsets.UTF_8).forEach { rawLine ->
@@ -79,21 +84,55 @@ internal class HumanReadableStateFile {
                 return@forEach
             }
 
-            val (groupId, rawValue) = line.split('=', limit = 2).takeIf { it.size == 2 }
+            val (key, rawValue) = line.split('=', limit = 2).takeIf { it.size == 2 }
                 ?: return@forEach
             val value = rawValue.trim()
             when (section) {
-                "administrators" -> administrators[groupId.trim()] = parseUsers(value)
-                "authenticated-users" -> authenticatedUsers[groupId.trim()] = parseUsers(value)
+                "administrators" -> administrators[key.trim()] = parseUsers(value)
+                "authenticated-users" -> authenticatedUsers[key.trim()] = parseUsers(value)
                 "administrator-modes" -> AdministratorAccessMode.entries
                     .firstOrNull { it.name.equals(value, ignoreCase = true) }
-                    ?.let { administratorModes[groupId.trim()] = it }
+                    ?.let { administratorModes[key.trim()] = it }
                 "full-forwarding" -> value.toBooleanStrictOrNull()
-                    ?.let { fullForwarding[groupId.trim()] = it }
+                    ?.let { fullForwarding[key.trim()] = it }
+                "bindings" -> {
+                    // groupId = openId:playerName,openId:playerName
+                    val groupBindings = bindings.getOrPut(key.trim()) { mutableMapOf() }
+                    value.split(',').filter { it.isNotBlank() }.forEach { entry ->
+                        val parts = entry.split(':', limit = 2)
+                        if (parts.size == 2) {
+                            groupBindings[parts[0].trim()] = BindingInfo(parts[1].trim())
+                        }
+                    }
+                }
+                "binding-settings" -> {
+                    // groupId = openId:qqMode:mcMode,openId:qqMode:mcMode
+                    val groupSettings = bindingSettings.getOrPut(key.trim()) { mutableMapOf() }
+                    value.split(',').filter { it.isNotBlank() }.forEach { entry ->
+                        val parts = entry.split(':', limit = 3)
+                        if (parts.size == 3) {
+                            groupSettings[parts[0].trim()] = parts[1].trim() to parts[2].trim()
+                        }
+                    }
+                }
             }
         }
 
-        return StoredCommandSettings(administrators, authenticatedUsers, administratorModes, fullForwarding)
+        // Merge bindings with settings
+        bindingSettings.forEach { (groupId, settings) ->
+            val groupBindings = bindings.getOrPut(groupId) { mutableMapOf() }
+            settings.forEach { (openId, modes) ->
+                val info = groupBindings[openId]
+                if (info != null) {
+                    groupBindings[openId] = info.copy(
+                        qqDisplayNameMode = modes.first,
+                        mcDisplayNameMode = modes.second
+                    )
+                }
+            }
+        }
+
+        return StoredCommandSettings(administrators, authenticatedUsers, administratorModes, fullForwarding, bindings)
     }
 
     private fun readLegacyProperties(file: File): StoredCommandSettings {
@@ -141,6 +180,39 @@ internal class HumanReadableStateFile {
     ) {
         writer.appendLine("[$name]")
         values.toSortedMap().forEach { (groupId, value) -> writer.appendLine("$groupId = $value") }
+        writer.appendLine()
+    }
+
+    private fun writeBindingsSection(
+        writer: java.io.BufferedWriter,
+        bindings: Map<String, Map<String, BindingInfo>>
+    ) {
+        writer.appendLine("[bindings]")
+        bindings.toSortedMap().forEach { (groupId, groupBindings) ->
+            val entries = groupBindings.entries.joinToString(",") { (oid, info) -> "$oid:${info.playerName}" }
+            writer.appendLine("$groupId = $entries")
+        }
+        writer.appendLine()
+    }
+
+    private fun writeBindingSettingsSection(
+        writer: java.io.BufferedWriter,
+        bindings: Map<String, Map<String, BindingInfo>>
+    ) {
+        val hasSettings = bindings.values.any { group ->
+            group.values.any { it.qqDisplayNameMode != "QQ" || it.mcDisplayNameMode != "MC" }
+        }
+        if (!hasSettings) return
+
+        writer.appendLine("[binding-settings]")
+        bindings.toSortedMap().forEach { (groupId, groupBindings) ->
+            val entries = groupBindings.entries
+                .filter { it.value.qqDisplayNameMode != "QQ" || it.value.mcDisplayNameMode != "MC" }
+                .joinToString(",") { (oid, info) -> "$oid:${info.qqDisplayNameMode}:${info.mcDisplayNameMode}" }
+            if (entries.isNotBlank()) {
+                writer.appendLine("$groupId = $entries")
+            }
+        }
         writer.appendLine()
     }
 }

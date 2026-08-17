@@ -52,7 +52,6 @@ object NicknameManager {
 
     fun put(nickname: String, openId: String) {
         if (nickname.isBlank() || openId.isBlank()) return
-        if (isOpenId(nickname) && nickname.equals(openId, ignoreCase = true)) return
         nicknameToOpenId[nickname.lowercase()] = openId
         openIdToNickname[openId] = nickname
     }
@@ -66,11 +65,13 @@ object NicknameManager {
         return nicknameToOpenId.entries
             .filter { it.key.startsWith(lower) }
             .map { (nick, oid) -> (openIdToNickname[oid] ?: nick) to oid }
+            .filter { (nick, oid) -> !isOpenId(nick) }
             .sortedBy { it.first }
     }
 
     fun all(): List<Pair<String, String>> {
         return openIdToNickname.entries
+            .filter { (oid, nick) -> !isOpenId(nick) }
             .map { (oid, nick) -> nick to oid }
             .sortedBy { it.first }
     }
