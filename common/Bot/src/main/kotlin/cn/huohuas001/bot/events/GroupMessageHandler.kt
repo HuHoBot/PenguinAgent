@@ -192,14 +192,18 @@ class GroupMessageHandler(
 
         val filtered = plugin.auditText(message)
 
-        // 检测在线玩家名，用 §9（蓝色）包裹，前面加 @
+        // 检测在线玩家名，用 §9（蓝色）包裹，前面加 @；只保留消息中实际出现的玩家
         val onlinePlayers = plugin.getOnlineList()
         var highlighted = filtered
+        val mentionedPlayers = mutableListOf<String>()
         for (playerName in onlinePlayers) {
             if (playerName.length < 2) continue
-            highlighted = highlighted.replace(playerName, "§9@$playerName§r")
+            if (filtered.contains(playerName)) {
+                mentionedPlayers.add(playerName)
+                highlighted = highlighted.replace(playerName, "§9@$playerName§r")
+            }
         }
 
-        plugin.broadcastMessage(plugin.formatGroupMessage(senderName, highlighted), onlinePlayers)
+        plugin.broadcastMessage(plugin.formatGroupMessage(senderName, highlighted), mentionedPlayers)
     }
 }
