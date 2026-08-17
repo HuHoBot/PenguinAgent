@@ -2,7 +2,7 @@
 
 将 QQ 群机器人接入 Minecraft 服务器：游戏聊天与 QQ 群双向转发、白名单管理、在线查询、命令执行、敏感词审核、**AI Agent 智能管理**与 **WebUI 图形化配置**。
 
-[HuHoBot-Penguin](https://github.com/HuHoBot/PenguinClient)的更新最激进，功能最齐全的分支
+[HuHoBot-Penguin](https://github.com/HuHoBot/PenguinClient)的更新最激进与快速，功能最齐全的分支
 
 基于 [qqpd-bot-java](https://github.com/Kloping/qqpd-bot-java)（HuHoBot fork，以 git submodule 引入）。
 
