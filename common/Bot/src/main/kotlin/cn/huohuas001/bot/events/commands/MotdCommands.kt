@@ -70,9 +70,8 @@ class MotdCommands : CommandSupport() {
                 }
             }
 
-            plugin.replyWithImg(event, "", imgUrl)
-
             val groupOpenId = groupId(event)
+            plugin.replyWithImg(event, "", imgUrl)
             plugin.sendMarkdownToGroup(groupOpenId, markdown)
         } catch (e: Exception) {
             plugin.log_error("MOTD 查询异常: ${e.message}")

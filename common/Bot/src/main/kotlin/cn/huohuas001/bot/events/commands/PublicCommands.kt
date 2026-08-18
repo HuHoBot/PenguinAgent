@@ -140,7 +140,7 @@ class PublicCommands : CommandSupport() {
             event.sendMessage("参数不正确")
             return
         }
-        executeCustomCommand(plugin, event, params, admin = false)
+        executeCustomCommand(plugin, event, params, admin = isAdmin(plugin, event))
     }
 
     private fun escapeMarkdown(text: String): String {

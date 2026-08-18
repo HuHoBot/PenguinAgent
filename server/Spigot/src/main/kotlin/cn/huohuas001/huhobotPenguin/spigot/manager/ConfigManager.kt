@@ -126,7 +126,8 @@ class ConfigManager(
     fun motd(): Motd = Motd(
         serverIP = plugin.config.getString("motd.server-ip", "127.0.0.1")!!,
         serverPort = plugin.config.getInt("motd.server-port", plugin.server.port),
-        api = plugin.config.getString("motd.api", "")!!,
+        api = plugin.config.getString("motd.api")?.takeIf(String::isNotBlank)
+            ?: "https://motd.minebbs.com/api/status?ip={ip}&stype=auto",
         text = plugin.config.getString("motd.text", "")!!,
         postImg = plugin.config.getBoolean("motd.post-img", false),
         useMarkdown = plugin.config.getBoolean("motd.use-markdown", false)
@@ -228,7 +229,6 @@ class ConfigManager(
 
             put("motd.server-ip", "127.0.0.1")
             put("motd.server-port", 25565)
-            put("motd.api", "")
             put("motd.text", "")
             put("motd.post-img", false)
             put("motd.use-markdown", false)

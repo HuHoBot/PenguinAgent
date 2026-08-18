@@ -192,8 +192,11 @@ class GroupMessageHandler(
 
         val filtered = plugin.auditText(message)
 
-        // 清理 Minecraft 颜色/格式代码（§x），避免在聊天框显示为乱码
-        val cleaned = filtered.replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
+        // 清理终端格式化代码（§x、ANSI 转义码），避免在游戏聊天框显示为乱码
+        val cleaned = filtered
+            .replace(Regex("\u001B\\[[0-9;]*m"), "")
+            .replace(Regex("\\[[0-9;]*m"), "")
+            .replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
 
         // 检测在线玩家名，用 §9（蓝色）包裹，前面加 @；只保留消息中实际出现的玩家
         val onlinePlayers = plugin.getOnlineList()

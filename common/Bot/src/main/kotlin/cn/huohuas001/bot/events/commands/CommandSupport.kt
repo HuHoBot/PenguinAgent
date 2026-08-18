@@ -27,6 +27,22 @@ abstract class CommandSupport : BaseCommand() {
         plugin.replyWithImg(event,message,imgUrl)
     }
 
+    /** 检查用户是否为管理员（不发送错误消息）。 */
+    protected fun isAdmin(plugin: HuHoBot, event: GroupMessageEvent): Boolean {
+        val groupId = groupId(event)
+        val userId = userId(event)
+        val qqAdmin = memberRole(event) in setOf("owner", "admin")
+        val manualAdmin = userId in plugin.getAdminList() ||
+            CommandRepositories.administrators.contains(groupId, userId)
+        val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
+        val configuredMode = CommandRepositories.groupSettings.administratorMode(groupId, defaultMode)
+        return when (configuredMode) {
+            AdministratorAccessMode.QQ -> qqAdmin
+            AdministratorAccessMode.MANUAL -> manualAdmin
+            AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin
+        }
+    }
+
     protected fun requireAdmin(plugin: HuHoBot, event: GroupMessageEvent): Boolean {
         val groupId = groupId(event)
         val userId = userId(event)
@@ -63,11 +79,13 @@ abstract class CommandSupport : BaseCommand() {
         plugin.sendCommand(outgoingCommand).whenComplete { result, error ->
             when {
                 error != null || result == null -> event.sendMessage("游戏桥接未配置或执行失败")
-                else -> reply(
-                    plugin,
-                    event,
-                    result.getRawString().ifBlank { "已发送执行请求" }
-                )
+                else -> {
+                    val raw = result.getRawString()
+                        .replace(Regex("\u001B\\[[0-9;]*m"), "")
+                        .replace(Regex("\\[[0-9;]*m"), "")
+                        .replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
+                    reply(plugin, event, raw.ifBlank { "已发送执行请求" })
+                }
             }
         }
     }

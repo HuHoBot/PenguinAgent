@@ -323,7 +323,7 @@ object QClient {
         }
 
         val message = MessageChain()
-            .text(text.ifBlank { "[图片]" })
+            .apply { if (text.isNotBlank()) text(text) }
             .image(imgUrl)
 
         try {
