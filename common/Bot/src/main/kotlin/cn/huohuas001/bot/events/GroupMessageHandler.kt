@@ -119,7 +119,7 @@ class GroupMessageHandler(
             parts.add(textContent)
         }
 
-        // 附件内容
+        // 附件内容（图片已在 SDK 卡片中渲染，不再重复添加 [图片]）
         if (attachmentsJson != null) {
             for (i in attachmentsJson.indices) {
                 val att = attachmentsJson.getJSONObject(i) ?: continue
@@ -129,14 +129,14 @@ class GroupMessageHandler(
                         val asrText = att.getString("asr_refer_text")?.trim()
                         parts.add(if (!asrText.isNullOrEmpty()) "[语音消息] [$asrText]" else "[语音消息]")
                     }
-                    contentType.startsWith("image/") -> {
-                        parts.add("[图片]")
-                    }
                     contentType == "image/gif" -> {
                         parts.add("[表情包]")
                     }
                     contentType.startsWith("video/") -> {
                         parts.add("[视频]")
+                    }
+                    contentType.startsWith("image/") -> {
+                        // 图片已在卡片内渲染，跳过
                     }
                     else -> {
                         val filename = att.getString("filename") ?: "文件"
@@ -192,13 +192,16 @@ class GroupMessageHandler(
 
         val filtered = plugin.auditText(message)
 
+        // 清理 Minecraft 颜色/格式代码（§x），避免在聊天框显示为乱码
+        val cleaned = filtered.replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
+
         // 检测在线玩家名，用 §9（蓝色）包裹，前面加 @；只保留消息中实际出现的玩家
         val onlinePlayers = plugin.getOnlineList()
-        var highlighted = filtered
+        var highlighted = cleaned
         val mentionedPlayers = mutableListOf<String>()
         for (playerName in onlinePlayers) {
             if (playerName.length < 2) continue
-            if (filtered.contains(playerName)) {
+            if (cleaned.contains(playerName)) {
                 mentionedPlayers.add(playerName)
                 highlighted = highlighted.replace(playerName, "§9@$playerName§r")
             }
