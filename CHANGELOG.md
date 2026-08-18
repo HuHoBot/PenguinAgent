@@ -8,7 +8,6 @@
 - fix: 清理 `/执行命令` 等游戏命令输出中的 ANSI 转义码
 - fix: `/执行` 命令现在正确传递 QQ 管理员身份给游戏端，管理员可执行 `permission > 0` 的自定义命令
 - fix: 配置升级器不再写入 `motd.api` 默认值，避免 `hb reload` 时生成无效 YAML 导致配置损坏
-- fix: `motd.api` 为空时自动 fallback 到 `https://motd.minebbs.com/api/status?ip={ip}&stype=auto`
 
 ## 依赖
 
