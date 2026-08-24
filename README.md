@@ -452,7 +452,19 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.3.0-beta.1（最新）
+### v1.3.0-beta.2（最新）
+
+**Bug 修复：**
+- fix: 游戏命令执行结果以纯文本发送，不再被 QQ 渲染为 Markdown 格式
+- fix: SDK `InterAction.getEnvType()` NPE 修复 — `chat_type` 空值检查
+
+**新功能：**
+- feat: QQ→游戏消息支持 `&` 颜色符号转换（如 `&a绿色` → 绿色文字）
+
+**文档：**
+- docs: 文档全面改版适配 HuHoBotPenguin 分支
+
+### v1.3.0-beta.1
 
 **上游同步（PenguinClient 功能合入）：**
 - feat: `FaceEmojiParser` —— QQ 表情标签转可读文本

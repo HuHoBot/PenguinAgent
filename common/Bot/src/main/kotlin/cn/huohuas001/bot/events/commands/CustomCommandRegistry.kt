@@ -1,7 +1,9 @@
 package cn.huohuas001.bot.events.commands
 
+import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.datapack.ResolvedCommand
 import cn.huohuas001.bot.provider.CustomCommandDetail
+import cn.huohuas001.bot.state.CommandRepositories
 import java.util.concurrent.ConcurrentHashMap
 
 /** 平台无关的自定义命令加载与解析器。 */
@@ -74,6 +76,15 @@ object CustomCommandRegistry {
             .replace("{params}", params)
             .replace("{group}", groupId)
             .replace("{user}", userId)
+        // {name} = 绑定的 MC 玩家名，未绑定则返回 QQ 用户名
+        val binding = CommandRepositories.bindings.getBinding(groupId, userId)
+        val mcName = binding?.playerName
+            ?: NicknameManager.getNickname(userId)
+            ?: userId
+        command = command.replace("{name}", mcName)
+        // {nickname} = 使用者的 QQ 用户名
+        val qqNickname = NicknameManager.getNickname(userId) ?: userId
+        command = command.replace("{nickname}", qqNickname)
         val arguments = params.split(Regex("\\s+")).filter(String::isNotEmpty)
         arguments.forEachIndexed { index, value ->
             command = command

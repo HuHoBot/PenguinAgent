@@ -106,19 +106,21 @@ interface ConfigProvider {
 
     fun formatGroupMessage(name: String, message: String): String {
         val filtered = filterText(message)
-        return getChatFormat().fromGroup
+        val result = getChatFormat().fromGroup
             .replace("{name}", name)
             .replace("{nick}", name)
             .replace("{message}", filtered)
             .replace("{msg}", filtered)
+        return convertAmpersandColors(result)
     }
 
     fun formatGameMessage(name: String, message: String): String {
         val filtered = filterText(message)
-        return getChatFormat().fromGame
+        val result = getChatFormat().fromGame
             .replace("{name}", name)
             .replace("{message}", filtered)
             .replace("{msg}", filtered)
+        return convertAmpersandColors(result)
     }
 
     fun formatPlayerJoinMessage(name: String): String =
@@ -127,11 +129,19 @@ interface ConfigProvider {
     fun formatPlayerQuitMessage(name: String): String =
         formatPlayerEventMessage(getPlayerEventFormat().quitFormat, name)
 
-    fun formatPlayerEventMessage(format: String, name: String): String = format
-        .replace("{name}", name)
-        .replace("{player}", name)
-        .replace("{server}", getServerName())
-        .replace("{platform}", getPlatform())
+    fun formatPlayerEventMessage(format: String, name: String): String {
+        val result = format
+            .replace("{name}", name)
+            .replace("{player}", name)
+            .replace("{server}", getServerName())
+            .replace("{platform}", getPlatform())
+        return convertAmpersandColors(result)
+    }
+
+    /** 将 & 颜色符号转换为 Minecraft § 颜色代码。 */
+    fun convertAmpersandColors(text: String): String {
+        return text.replace(Regex("&(\\da-fk-orA-FK-OR)")) { "§${it.groupValues[1].lowercase()}" }
+    }
 
     /** Markdown 配置键到 Markdown 目录内文件名的映射。 */
     fun getMarkdownFiles(): Map<String, String> = DEFAULT_MARKDOWN_FILES

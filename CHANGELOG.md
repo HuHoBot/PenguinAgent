@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.3.0-beta.2（2026-08-24）
+
+### Bug 修复
+
+- fix: 游戏命令执行结果以纯文本（msg_type=0）发送，不再被 QQ 渲染为 Markdown 格式
+- fix: SDK `InterAction.getEnvType()` NPE 修复 — `chat_type` 空值检查防止交互事件崩溃
+
+### 新功能
+
+- feat: QQ→游戏消息支持 `&` 颜色符号转换（如 `&a绿色` → 绿色文字）
+- feat: `ConfigProvider.convertAmpersandColors()` — `&0-9`、`&a-f`、`&k-r` 自动转为 `§` 颜色码
+- feat: `GroupMessageHandler` 和 `PublicCommands.sendGameMessage` 内联颜色转换
+
+### 文档
+
+- docs: 文档全面改版适配 HuHoBotPenguin 分支（绑定系统、AI Agent、WebUI）
+- docs: 新增 `Binding/index.md` 绑定系统文档
+- docs: 新增 `Agent/index.md` AI Agent 文档
+- docs: 命令列表补全所有 fork 新增命令
+- docs: 非 Spigot 适配器标记为上游仅供参考
+
+---
+
 ## v1.3.0-beta.1（2026-08-24）
 
 ### 上游同步（PenguinClient 功能合入）

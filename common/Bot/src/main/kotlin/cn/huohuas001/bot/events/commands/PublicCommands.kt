@@ -48,7 +48,9 @@ class PublicCommands : CommandSupport() {
             } else {
                 NicknameManager.getNickname(senderId) ?: senderId
             }
-            plugin.broadcastMessage(plugin.formatGroupMessage(senderName, filtered))
+            val formatted = plugin.formatGroupMessage(senderName, filtered)
+            val colored = formatted.replace(Regex("&([0-9a-fk-orA-FK-OR])")) { "§${it.groupValues[1].lowercase()}" }
+            plugin.broadcastMessage(colored)
         } else {
             sendMessage(event, "群聊转发功能已关闭")
         }

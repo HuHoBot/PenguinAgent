@@ -252,6 +252,8 @@ class GroupMessageHandler(
             }
         }
 
-        plugin.broadcastMessage(plugin.formatGroupMessage(senderName, highlighted), mentionedPlayers)
+        val formatted = plugin.formatGroupMessage(senderName, highlighted)
+        val colored = formatted.replace(Regex("&([0-9a-fk-orA-FK-OR])")) { "§${it.groupValues[1].lowercase()}" }
+        plugin.broadcastMessage(colored, mentionedPlayers)
     }
 }

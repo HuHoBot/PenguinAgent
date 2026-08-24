@@ -90,8 +90,7 @@ abstract class CommandSupport : BaseCommand() {
                         .replace(Regex("\u001B\\[[0-9;]*m"), "")
                         .replace(Regex("\\[[0-9;]*m"), "")
                         .replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
-                    val safe = QClient.escapeMarkdown(raw)
-                    reply(plugin, event, safe.ifBlank { "已发送执行请求" })
+                    QClient.replyText(event, raw.ifBlank { "已发送执行请求" })
                 }
             }
         }
