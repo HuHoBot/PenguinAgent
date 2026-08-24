@@ -128,7 +128,8 @@ class BindingCommands : CommandSupport() {
             plugin, event,
             "您正在使用 HuHoBot-Penguin $version 版本\n" +
                 "开发者：Shabby-666（${QClient.escapeMarkdown("_Chinese_Player_")}）\n" +
-                "Github：https://github.com/HuHoBot/PenguinAgent"
+                "Github：https://github.com/HuHoBot/PenguinAgent\n" +
+                "文档：https://shabby-666.github.io/PenguinAgent-Docs/"
         )
     }
 
