@@ -1,7 +1,6 @@
 package cn.huohuas001.bot.events
 
 import cn.huohuas001.bot.HuHoBot
-import cn.huohuas001.bot.MessageIdCache
 import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.agent.AgentCommands
 import cn.huohuas001.bot.events.commands.AdministrationCommands
@@ -49,9 +48,6 @@ class GroupMessageHandler(
     fun onGroupMessage(event: GroupMessageEvent) {
         val groupId = event.groupOpenId ?: event.groupId
         val content = event.rawMessage.content ?: return
-
-        // 缓存 msg_id，用于主动发送时携带被动回复字段
-        MessageIdCache.update(groupId, event.rawMessage.id, event.msgSeq)
 
         // 缓存发送者昵称（每次收到消息都更新）
         val senderName = event.sender?.username
