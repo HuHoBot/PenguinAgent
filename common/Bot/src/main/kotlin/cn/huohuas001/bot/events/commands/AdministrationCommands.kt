@@ -8,11 +8,11 @@ import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 /** 需要群管理员权限的命令。 */
 class AdministrationCommands : CommandSupport() {
 
-    @Commands("查管理")
+    @Commands(command = "查管理", describe = "查询管理员状态", onlyAdmin = true)
     fun queryAdmin(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("请指定要查询的管理员OpenId")
+            sendMessage(event, "请指定要查询的管理员OpenId")
             return
         }
 
@@ -20,11 +20,11 @@ class AdministrationCommands : CommandSupport() {
         reply(plugin, event, if (isAdmin) "此人是管理员" else "此人不是管理员")
     }
 
-    @Commands("加管理")
+    @Commands(command = "加管理", describe = "添加管理员", onlyAdmin = true)
     fun addAdmin(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("请指定要添加的管理员OpenId")
+            sendMessage(event, "请指定要添加的管理员OpenId")
             return
         }
 
@@ -33,11 +33,11 @@ class AdministrationCommands : CommandSupport() {
         reply(plugin, event, "已为本群添加管理员:$target")
     }
 
-    @Commands("删管理")
+    @Commands(command = "删管理", describe = "删除管理员", onlyAdmin = true)
     fun removeAdmin(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("请指定要删除的管理员OpenId")
+            sendMessage(event, "请指定要删除的管理员OpenId")
             return
         }
 
@@ -46,7 +46,7 @@ class AdministrationCommands : CommandSupport() {
         reply(plugin, event, "已为本群删除管理员:$target")
     }
 
-    @Commands("管理方式")
+    @Commands(command = "管理方式", describe = "设置管理员判定方式", onlyAdmin = true)
     fun adminMode(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
 
@@ -67,7 +67,7 @@ class AdministrationCommands : CommandSupport() {
             else -> null
         }
         if (mode == null) {
-            event.sendMessage("无效的判定方式。可选：QQ / 手动 / 双重")
+            sendMessage(event, "无效的判定方式。可选：QQ / 手动 / 双重")
             return
         }
 
@@ -75,56 +75,56 @@ class AdministrationCommands : CommandSupport() {
         reply(plugin, event, "已将本群管理员判定方式设置为：${modeName(mode)}")
     }
 
-    @Commands("添加白名单")
+    @Commands(command = "添加白名单", describe = "添加玩家白名单", onlyAdmin = true)
     fun addWhitelist(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("参数不正确")
+            sendMessage(event, "参数不正确")
             return
         }
         val command = plugin.getWhiteList().addCommand.replace("{name}", params)
         executeGameCommand(plugin, event, command, direct = true)
     }
 
-    @Commands("删除白名单")
+    @Commands(command = "删除白名单", describe = "删除玩家白名单", onlyAdmin = true)
     fun removeWhitelist(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("参数不正确")
+            sendMessage(event, "参数不正确")
             return
         }
         val command = plugin.getWhiteList().delCommand.replace("{name}", params)
         executeGameCommand(plugin, event, command, direct = true)
     }
 
-    @Commands("查白名单")
+    @Commands(command = "查白名单", describe = "查看白名单列表", onlyAdmin = true)
     fun queryWhitelist(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         val suffix = params.trim().takeIf { it.isNotEmpty() }?.let { " $it" }.orEmpty()
         executeGameCommand(plugin, event, "whitelist list$suffix", direct = true)
     }
 
-    @Commands("执行命令")
+    @Commands(command = "执行命令", describe = "执行服务器命令", onlyAdmin = true)
     fun runServerCommand(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("参数不正确")
+            sendMessage(event, "参数不正确")
             return
         }
         executeGameCommand(plugin, event, params, direct = true)
     }
 
-    @Commands("管理员执行")
+    @Commands(command = "管理员执行", describe = "管理员执行自定义命令", onlyAdmin = true)
     fun runAdminCustomCommand(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
         if (params.isBlank()) {
-            event.sendMessage("参数不正确")
+            sendMessage(event, "参数不正确")
             return
         }
         executeCustomCommand(plugin, event, params, admin = true)
     }
 
-    @Commands("全量")
+    @Commands(command = "全量", describe = "切换全量聊天转发", onlyAdmin = true)
     fun fullAmount(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (!requireAdmin(plugin, event)) return
 
@@ -139,6 +139,20 @@ class AdministrationCommands : CommandSupport() {
         }
 
         reply(plugin, event, "本群全量转发：${if (enabled) "已开启" else "已关闭"}")
+    }
+
+    @Commands(command = "blockMotd", describe = "屏蔽本群 MOTD 查询", onlyAdmin = true)
+    fun blockMotd(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+        CommandRepositories.groupSettings.setMotdBlocked(groupId(event), true)
+        reply(plugin, event, "本群已设置为：屏蔽 MOTD 查询")
+    }
+
+    @Commands(command = "unblockMotd", describe = "解除本群 MOTD 屏蔽", onlyAdmin = true)
+    fun unblockMotd(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+        CommandRepositories.groupSettings.setMotdBlocked(groupId(event), false)
+        reply(plugin, event, "本群已设置为：解除屏蔽 MOTD 查询")
     }
 
     private fun modeName(mode: AdministratorAccessMode): String = when (mode) {

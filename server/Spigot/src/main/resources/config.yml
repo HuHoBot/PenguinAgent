@@ -1,4 +1,4 @@
-config-version: 4
+config-version: 5
 
 # 服务器显示名称，可在进服/退服格式中通过 {server} 使用。
 serverName: "HuHoBot"
@@ -12,7 +12,7 @@ bot:
   suppress-console-output: true
 
 chat-format:
-  from-game: "[游戏] {message}"
+  from-game: "[游戏] {name}: {message}"
   from-group: "[QQ] {name}: {message}"
   post-chat: true
   # 只有以该内容开头的游戏消息才会转发；转发时会移除该内容。留空表示全部转发。
@@ -56,6 +56,10 @@ admin:
 
 features:
   full-amount: false
+
+binding:
+  # 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作
+  require-game-verification: false
 
 commands:
   查信息: true

@@ -2,13 +2,14 @@ package cn.huohuas001.bot.events.commands
 
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.NicknameManager
+import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 
 /** 普通群成员可使用的命令。 */
 class PublicCommands : CommandSupport() {
 
-    @Commands("查信息")
+    @Commands(command = "查信息", describe = "查询 OpenId 信息")
     fun queryInfo(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (params.isBlank()) {
             reply(
@@ -30,7 +31,7 @@ class PublicCommands : CommandSupport() {
         reply(plugin, event, status)
     }
 
-    @Commands("发信息")
+    @Commands(command = "发信息", describe = "发送消息到游戏服务器")
     fun sendGameMessage(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (params.isBlank()) return
 
@@ -41,19 +42,19 @@ class PublicCommands : CommandSupport() {
             val binding = CommandRepositories.bindings.getBinding(groupId(event), senderId)
             val senderName = if (binding != null) {
                 when (binding.mcDisplayNameMode) {
-                    "QQ" -> binding.playerName
-                    else -> NicknameManager.getNickname(senderId) ?: senderId
+                    "MC" -> binding.playerName
+                    else -> binding.qqUsername.ifEmpty { NicknameManager.getNickname(senderId) } ?: senderId
                 }
             } else {
                 NicknameManager.getNickname(senderId) ?: senderId
             }
             plugin.broadcastMessage(plugin.formatGroupMessage(senderName, filtered))
         } else {
-            event.sendMessage("群聊转发功能已关闭")
+            sendMessage(event, "群聊转发功能已关闭")
         }
     }
 
-    @Commands("查在线")
+    @Commands(command = "查在线", describe = "查询在线玩家列表")
     fun queryOnline(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val onlineList = plugin.getOnlineList()
 
@@ -80,11 +81,11 @@ class PublicCommands : CommandSupport() {
         //开启Markdown
         var markdown = plugin.getMarkdown("queryOnline")
         if (markdown == null) {
-            event.sendMessage("未找到 Markdown 模板：queryOnline")
+            sendMessage(event, "未找到 Markdown 模板：queryOnline")
             return
         }
 
-        val formattedPlayerList = onlineList.mapIndexed { index, name -> "${index + 1}. **${escapeMarkdown(name)}**" }.joinToString("\n")
+        val formattedPlayerList = onlineList.mapIndexed { index, name -> "${index + 1}. **${QClient.escapeMarkdown(name)}**" }.joinToString("\n")
 
         //替换文本内容
         markdown = markdown
@@ -96,71 +97,36 @@ class PublicCommands : CommandSupport() {
         plugin.replyMarkdown(event, markdown)
     }
 
-    @Commands("在线服务器")
+    @Commands(command = "在线服务器", describe = "查看已连接服务器")
     fun queryServers(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         reply(plugin, event, "当前已连接服务器：${plugin.getBotName()}")
     }
 
-    @Commands("帮助")
+    @Commands(command = "帮助", describe = "查看所有命令帮助")
     fun help(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
-        val help = """
-            |可用命令列表：
-            |  帮助 —— 查看所有命令
-            |  查信息 [OpenId] —— 查询 OpenId
-            |  查管理 <OpenId> —— 查询管理员状态
-            |  加管理 <OpenId> —— 添加管理员
-            |  删管理 <OpenId> —— 删除管理员
-            |  管理方式 [QQ/手动/双重] —— 设置管理员判定方式
-            |  添加白名单 <玩家名> —— 添加玩家白名单
-            |  删除白名单 <玩家名> —— 删除玩家白名单
-            |  查白名单 —— 查看白名单列表
-            |  查在线 —— 查询在线玩家
-            |  在线服务器 —— 查看已连接服务器
-            |  发信息 <内容> —— 发送消息到游戏
-            |  执行命令 <命令> —— 执行服务器命令
-            |  执行 <命令> —— 执行自定义命令
-            |  管理员执行 <命令> —— 管理员执行自定义命令
-            |  全量 —— 切换全量聊天转发
-            |  motd <地址> —— 查询服务器状态
-            |  agent <任务> —— AI 执行管理任务
-            |  stop —— 紧急停止 AI 任务
-            |  newsession —— 清除 AI 会话上下文
-            |  绑定 <游戏ID> —— 绑定 Minecraft 角色
-            |  解除绑定 —— 解除角色绑定
-            |  MC显示名称 MC/QQ —— 切换游戏→QQ显示名称
-            |  QQ显示名称 MC/QQ —— 切换QQ→游戏显示名称
-            |  版本 —— 查看版本信息
-        """.trimMargin()
-        event.sendMessage(help)
+        val lines = mutableListOf("可用命令列表：")
+        val commands = BaseCommand.allCommands().sortedBy { it.command }
+        for (cmd in commands) {
+            lines.add("  ${cmd.command} —— ${cmd.describe}")
+        }
+        val customs = CustomCommandRegistry.snapshot()
+        if (customs.isNotEmpty()) {
+            lines.add("  --- 自定义命令 ---")
+            for (c in customs.sortedBy { it.key }) {
+                val perm = if (c.permission > 0) " (管理员)" else ""
+                lines.add("  ${c.key}${perm}")
+            }
+        }
+        reply(plugin, event, lines.joinToString("\n"))
     }
 
-    @Commands("执行")
+    @Commands(command = "执行", describe = "执行自定义命令")
     fun runCustomCommand(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         if (params.isBlank()) {
-            event.sendMessage("参数不正确")
+            sendMessage(event, "参数不正确")
             return
         }
         executeCustomCommand(plugin, event, params, admin = isAdmin(plugin, event))
     }
 
-    private fun escapeMarkdown(text: String): String {
-        return text.replace("\\", "\\\\")
-            .replace("_", "\\_")
-            .replace("*", "\\*")
-            .replace("~", "\\~")
-            .replace("`", "\\`")
-            .replace(">", "\\>")
-            .replace("#", "\\#")
-            .replace("+", "\\+")
-            .replace("-", "\\-")
-            .replace(".", "\\.")
-            .replace("!", "\\!")
-            .replace("|", "\\|")
-            .replace("[", "\\[")
-            .replace("]", "\\]")
-            .replace("(", "\\(")
-            .replace(")", "\\)")
-            .replace("{", "\\{")
-            .replace("}", "\\}")
-    }
 }

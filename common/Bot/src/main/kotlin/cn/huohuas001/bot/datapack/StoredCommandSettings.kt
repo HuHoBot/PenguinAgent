@@ -3,7 +3,8 @@ package cn.huohuas001.bot.datapack
 data class BindingInfo(
     val playerName: String,
     val qqDisplayNameMode: String = "QQ",
-    val mcDisplayNameMode: String = "MC"
+    val mcDisplayNameMode: String = "MC",
+    val qqUsername: String = ""
 )
 
 internal data class StoredCommandSettings(

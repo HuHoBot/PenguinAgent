@@ -36,14 +36,14 @@ object AgentManager {
     fun startAgent(plugin: HuHoBot, event: GroupMessageEvent, task: String) {
         val config = plugin.getAgentConfig()
         if (config == null || !config.usable) {
-            event.sendMessage("AI Agent 未启用或未配置，请检查配置中的 agent 部分（enabled、base-url、api-key、model）")
+            sendGroupMessage(event, "AI Agent 未启用或未配置，请检查配置中的 agent 部分（enabled、base-url、api-key、model）")
             return
         }
         if (task.isBlank()) {
-            event.sendMessage("用法：/agent <任务描述>")
+            sendGroupMessage(event, "用法：/agent <任务描述>")
             return
         }
-        event.sendMessage("已收到任务，AI 助手开始处理…")
+        sendGroupMessage(event, "已收到任务，AI 助手开始处理…")
 
         val groupOpenId = event.metadata?.getString("group_openid")
             ?: event.groupOpenId
@@ -515,6 +515,13 @@ object AgentManager {
 
         row.build()
         return builder.build()
+    }
+
+    private fun sendGroupMessage(event: GroupMessageEvent, message: String) {
+        val groupOpenId = event.metadata?.getString("group_openid")
+            ?: event.groupOpenId
+            ?: event.groupId
+        QClient.sendTextToGroup(groupOpenId, message)
     }
 
     private fun sendToGroup(plugin: HuHoBot, session: AgentSession, content: String) {

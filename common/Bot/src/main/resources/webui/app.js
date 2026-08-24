@@ -318,6 +318,7 @@ function buildListControl(field, value) {
     input.className = "input";
     input.placeholder = field.placeholder || "输入后回车添加";
     const addBtn = document.createElement("button");
+    addBtn.type = "button";
     addBtn.className = "btn btn-ghost btn-sm";
     addBtn.textContent = "添加";
     addBtn.addEventListener("click", () => {
@@ -421,6 +422,7 @@ function buildObjectListControl(field, value) {
             const actions = document.createElement("div");
             actions.className = "row-actions";
             const delBtn = document.createElement("button");
+            delBtn.type = "button";
             delBtn.className = "btn btn-danger-ghost btn-sm";
             delBtn.textContent = "删除";
             delBtn.addEventListener("click", () => {
@@ -437,6 +439,7 @@ function buildObjectListControl(field, value) {
     const addWrap = document.createElement("div");
     addWrap.className = "add-row-wrap";
     const addBtn = document.createElement("button");
+    addBtn.type = "button";
     addBtn.className = "btn btn-ghost btn-sm";
     addBtn.textContent = "＋ 添加一行";
     addBtn.addEventListener("click", () => {
@@ -565,6 +568,9 @@ async function loadStatus() {
 /* ───────────────────────── 初始化 ───────────────────────── */
 
 function init() {
+    // 阻止配置表单的默认提交（防止任何 button/input 回车触发页面跳转）
+    $("#config-form").addEventListener("submit", (e) => e.preventDefault());
+
     // 登录
     $("#login-btn").addEventListener("click", doLogin);
     $("#login-password").addEventListener("keydown", (e) => {

@@ -8,7 +8,7 @@ import java.net.URL
 
 class MotdCommands : CommandSupport() {
 
-    @Commands("motd")
+    @Commands(command = "motd", describe = "查询 MC 服务器状态")
     fun motd(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val host = params.trim()
         if (host.isBlank()) {

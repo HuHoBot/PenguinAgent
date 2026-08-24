@@ -34,6 +34,11 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     /** 重读当前适配器配置，并刷新公共运行时配置。 */
     fun reloadPluginConfig()
 
+    /** 向配置中的所有 QQ 群发送普通文本。 */
+    override fun sendText(text: String) {
+        QClient.sendTextToGroups(text, "发送文本")
+    }
+
     /** 向配置中的所有 QQ 群发送自定义 Markdown。 */
     override fun sendMarkdown(markdownContent: String, keyboard: Keyboard?) {
         QClient.sendMarkdown(markdownContent, keyboard)
@@ -44,23 +49,23 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         QClient.sendMarkdownToGroup(groupOpenId, markdownContent, keyboard)
     }
 
+    /** 回复触发消息所在的 QQ 群，发送普通文本。 */
+    override fun replyText(event: GroupMessageEvent, text: String): Boolean =
+        QClient.replyText(event, text)
+
     /** 回复触发消息所在的 QQ 群，发送自定义 Markdown。 */
     override fun replyMarkdown(
         event: GroupMessageEvent,
         markdownContent: String,
         keyboard: Keyboard?
-    ) {
-        QClient.replyMarkdown(event, markdownContent, keyboard)
-    }
+    ): Boolean = QClient.replyMarkdown(event, markdownContent, keyboard)
 
     /** 回复触发消息所在的 QQ 群，同时发送文本和网络图片。 */
     override fun replyWithImg(
         event: GroupMessageEvent,
         text: String,
         imgUrl: String
-    ) {
-        QClient.replyWithImg(event, text, imgUrl)
-    }
+    ): Boolean = QClient.replyWithImg(event, text, imgUrl)
 
     /**
      * QQ SDK 的按日日志文件格式。
@@ -104,6 +109,7 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     fun reloadRuntimeConfig() {
         initializeMarkdownTemplates()
         CustomCommandRegistry.replace(getCustomCommands())
+        QClient.syncGroupPanels()
     }
 
     /** 创建 Markdown 目录，并补充不存在的内置模板；不会覆盖用户已经编辑的文件。 */
@@ -218,7 +224,8 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
 }
 
 private val DEFAULT_MARKDOWN_TEMPLATES = mapOf(
-    "online.md" to "Markdown/online.md"
+    "online.md" to "Markdown/online.md",
+    "motd.md" to "Markdown/motd.md"
 )
 
 private class TextExecution(

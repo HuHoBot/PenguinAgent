@@ -1,5 +1,6 @@
 package cn.huohuas001.bot.agent
 
+import cn.huohuas001.bot.NicknameManager
 import com.alibaba.fastjson.JSONObject
 
 /**
@@ -31,8 +32,9 @@ class AgentSession(
     /** 群成员映射：member_openid → 用户名。给 AI 喂 openid，但 QQ 显示用户名。 */
     val memberNames: MutableMap<String, String> = mutableMapOf()
 
-    /** 根据 member_openid 返回用户名；未知时原样返回 openid。 */
-    fun displayName(openId: String): String = memberNames[openId] ?: openId
+    /** 根据 member_openid 返回用户名；优先从 NicknameManager 查找，未知时原样返回 openid。 */
+    fun displayName(openId: String): String =
+        memberNames[openId] ?: NicknameManager.getNickname(openId) ?: openId
 
     /** 一次待管理员审批的执行请求。支持服务器命令和 QQ 群管理工具。 */
     class PendingApproval(

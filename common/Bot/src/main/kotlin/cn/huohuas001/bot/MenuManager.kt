@@ -1,5 +1,6 @@
 package cn.huohuas001.bot
 
+import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.BotShared
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
@@ -17,33 +18,14 @@ import java.net.URL
 object MenuManager {
     private const val API_BASE = "https://api.sgroup.qq.com"
 
-    private val PANEL_ITEMS = listOf(
-        PanelItem("帮助", "查看所有命令", "帮助"),
-        PanelItem("查信息", "查询 OpenId", "查信息 "),
-        PanelItem("查管理", "查询管理员状态", "查管理 "),
-        PanelItem("加管理", "添加管理员", "加管理 "),
-        PanelItem("删管理", "删除管理员", "删管理 "),
-        PanelItem("管理方式", "设置管理员判定方式", "管理方式 "),
-        PanelItem("添加白名单", "添加玩家白名单", "添加白名单 "),
-        PanelItem("删除白名单", "删除玩家白名单", "删除白名单 "),
-        PanelItem("查白名单", "查看白名单列表", "查白名单"),
-        PanelItem("查在线", "查询在线玩家", "查在线"),
-        PanelItem("在线服务器", "查看已连接服务器", "在线服务器"),
-        PanelItem("发信息", "发送消息到游戏", "发信息 "),
-        PanelItem("执行命令", "执行服务器命令", "执行命令 "),
-        PanelItem("执行", "执行自定义命令", "执行 "),
-        PanelItem("管理员执行", "管理员执行自定义命令", "管理员执行 "),
-        PanelItem("全量", "切换全量聊天转发", "全量"),
-        PanelItem("motd", "查询服务器状态", "motd "),
-        PanelItem("agent", "AI 执行管理任务", "agent "),
-        PanelItem("stop", "紧急停止 AI 任务", "stop"),
-        PanelItem("newsession", "清除 AI 会话上下文", "newsession"),
-    )
-
-    private data class PanelItem(val name: String, val desc: String, val command: String)
-
-    fun syncGroupPanels(starter: Starter, groupOpenIds: List<String>) {
+    fun syncGroupPanels(
+        starter: Starter,
+        groupOpenIds: List<String>,
+        builtInCommands: Collection<RegisteredCommand>,
+        customCommands: Collection<RegisteredCommand> = emptyList()
+    ) {
         if (groupOpenIds.isEmpty()) return
+        val plugin = BotShared.getPlugin()
         try {
             val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
             val token = start0.accessToken ?: return
@@ -56,7 +38,41 @@ object MenuManager {
                 deletePanel(authHeader, panelId)
             }
 
-            // 创建新面板（对指定群生效）
+            // 构建面板项：内置命令 + 自定义命令
+            val allItems = mutableListOf<JSONObject>()
+            val seen = mutableSetOf<String>()
+
+            for (cmd in builtInCommands) {
+                if (cmd.command in seen) continue
+                seen.add(cmd.command)
+                allItems.add(JSONObject().apply {
+                    put("type", "command")
+                    put("name", cmd.command)
+                    put("desc", cmd.describe)
+                })
+            }
+            for (cmd in customCommands) {
+                if (cmd.command in seen) continue
+                seen.add(cmd.command)
+                allItems.add(JSONObject().apply {
+                    put("type", "command")
+                    put("name", cmd.command)
+                    put("desc", cmd.describe)
+                })
+            }
+
+            if (allItems.isEmpty()) {
+                plugin?.log_warning("没有已注册的 QQ 命令，跳过指令面板同步")
+                return
+            }
+
+            // QQ 面板最多支持 20 个命令，超出部分仅在 /帮助 中显示
+            val limitedItems = if (allItems.size > 20) {
+                plugin?.log_warning("已注册命令数 ${allItems.size} 超过面板上限 20，超出部分仅在帮助中显示")
+                allItems.subList(0, 20)
+            } else allItems
+
+            // 创建新面板
             val panelBody = JSONObject().apply {
                 put("scope", "group")
                 put("target_type", "specific")
@@ -66,28 +82,17 @@ object MenuManager {
                 put("panel", JSONObject().apply {
                     put("remark", "HuHoBot Penguin 指令面板")
                     put("items", JSONArray().apply {
-                        PANEL_ITEMS.forEach { item ->
-                            add(JSONObject().apply {
-                                put("type", "command")
-                                put("name", item.name)
-                                put("desc", item.desc)
-                            })
-                        }
+                        limitedItems.forEach { add(it) }
                     })
                 })
             }
             val panelId = createPanel(authHeader, panelBody)
             if (panelId != null) {
-                BotShared.getPlugin()?.log_info("指令面板已同步 (panel_id=$panelId)")
+                plugin?.log_info("指令面板已同步 (panel_id=$panelId, commands=${allItems.size})")
             }
         } catch (e: Exception) {
             BotShared.getPlugin()?.log_error("指令面板同步失败: ${e.message}")
         }
-    }
-
-    /** 获取指定命令的触发文本（供点击面板时使用） */
-    fun getCommandTrigger(name: String): String? {
-        return PANEL_ITEMS.find { it.name == name }?.command
     }
 
     private fun listPanels(authHeader: String, scope: String): List<JSONObject> {

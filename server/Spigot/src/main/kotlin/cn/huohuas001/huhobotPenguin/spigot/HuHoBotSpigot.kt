@@ -1,10 +1,13 @@
 package cn.huohuas001.huhobotPenguin.spigot
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.agent.AgentCommandMode
+import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.huhobotPenguin.spigot.commands.AtCommand
+import cn.huohuas001.huhobotPenguin.spigot.commands.QqBindCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.BukkitConsoleSender
 import cn.huohuas001.huhobotPenguin.spigot.commands.CommandOutputAppender
 import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
@@ -13,6 +16,7 @@ import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
+import io.github.kloping.qqbot.entities.ex.Keyboard
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandMap
@@ -21,9 +25,15 @@ import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 
 class HuHoBotSpigot : JavaPlugin(), HuHoBot {
+    companion object {
+        private var instance: HuHoBotSpigot? = null
+        fun getInstance(): HuHoBotSpigot? = instance
+    }
+
     private lateinit var configManager: ConfigManager
 
     override fun onEnable() {
+        instance = this
         configManager = ConfigManager(this)
         configManager.initialize()
         initializeRuntime()
@@ -39,10 +49,15 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             setExecutor(atCommand)
             tabCompleter = atCommand
         }
+        val qqBindCommand = QqBindCommand()
+        getCommand("qqbind")?.apply {
+            setExecutor(qqBindCommand)
+        } ?: log_error("无法注册 /qqbind 命令，请检查 plugin.yml")
         log_info("HuHoBot Penguin 已加载")
     }
 
     override fun onDisable() {
+        instance = null
         shutdownRuntime()
         CommandOutputAppender.removeInstance()
     }
@@ -76,7 +91,6 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun broadcastMessage(msg: String, highlightedPlayers: List<String>) {
         server.scheduler.runTask(this, Runnable {
             Bukkit.broadcastMessage(msg)
-            // 对被提到的在线玩家播放 "叮" 音效
             if (highlightedPlayers.isNotEmpty()) {
                 for (playerName in highlightedPlayers) {
                     val player = server.getPlayer(playerName) ?: continue
@@ -92,6 +106,48 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             }
         })
     }
+
+    /** 注册运行时自定义命令，并按 pushMenu 更新 QQ 命令面板。 */
+    @JvmOverloads
+    fun registerBotCommand(
+        key: String,
+        command: String,
+        permission: Int = 0,
+        pushMenu: Boolean = true
+    ): Boolean {
+        val registered = CustomCommandRegistry.register(
+            CustomCommandDetail(key, command, permission, pushMenu)
+        )
+        return registered
+    }
+
+    /** 注销运行时自定义命令，并按需刷新 QQ 命令面板。 */
+    fun unregisterBotCommand(key: String): Boolean {
+        val removed = CustomCommandRegistry.unregister(key)
+        return removed
+    }
+
+    /** 向配置中的所有 QQ 群发送普通文本。 */
+    fun sendBotText(text: String) = sendText(text)
+
+    /** 主动向指定 QQ 群发送普通文本。 */
+    fun sendBotText(groupOpenId: String, text: String): Boolean =
+        QClient.sendTextToGroup(groupOpenId, text).let { true }
+
+    /** 向配置中的所有 QQ 群发送 Markdown。 */
+    @JvmOverloads
+    fun sendBotMarkdown(markdown: String, keyboard: Keyboard? = null) = sendMarkdown(markdown, keyboard)
+
+    /** 主动向指定 QQ 群发送 Markdown。 */
+    @JvmOverloads
+    fun sendBotMarkdown(
+        groupOpenId: String,
+        markdown: String,
+        keyboard: Keyboard? = null
+    ): Boolean = QClient.sendMarkdownToGroup(groupOpenId, markdown, keyboard).let { true }
+
+    override fun isAuthenticationEnabled(): Boolean = configManager.isAuthenticationEnabled()
+    override fun getCommandMenuList(): Map<String, Boolean> = configManager.commandMenuSwitches()
 
     override fun submit(task: Runnable): Cancelable =
         HuHoBotTask(server.scheduler.runTask(this, task))
@@ -138,6 +194,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getAgentApiKey(): String? = configManager.agentApiKey()
     override fun getAgentModel(): String? = configManager.agentModel()
     override fun getAgentCommandMode(): AgentCommandMode = configManager.agentCommandMode()
+
+    override fun getBindingRequireGameVerification(): Boolean = configManager.bindingRequireGameVerification()
 
     override fun getWebUiConfigValues(): Map<String, Any?> =
         config.getValues(true)

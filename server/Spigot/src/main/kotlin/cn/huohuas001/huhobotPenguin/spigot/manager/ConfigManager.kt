@@ -41,6 +41,69 @@ class ConfigManager(
             plugin.saveConfig()
             plugin.logger.info("配置文件已升级到版本 $CURRENT_CONFIG_VERSION（旧版本：$previousVersion）")
         }
+
+        // 直接检查文件文本，绕过 Bukkit contains/get 的嵌套路径 bug
+        appendMissingConfigKeys()
+    }
+
+    /**
+     * 读取原始 config.yml 文本，逐项检查 DEFAULT_VALUES 中的 key 是否作为 YAML 键存在。
+     * 缺失的按 section 分组追加到文件末尾并重载。
+     */
+    private fun appendMissingConfigKeys() {
+        val raw = try { configFile.readText(Charsets.UTF_8) } catch (_: Exception) { return }
+        val toAdd = mutableListOf<Pair<String, String>>()
+
+        for ((path, defaultValue) in DEFAULT_VALUES) {
+            val leafKey = path.substringAfterLast('.')
+            if (!raw.contains("$leafKey:") && !raw.contains("$leafKey =")) {
+                val yamlValue = when (defaultValue) {
+                    is Boolean -> defaultValue.toString()
+                    is Int -> defaultValue.toString()
+                    is String -> "\"$defaultValue\""
+                    is List<*> -> "[]"
+                    else -> defaultValue.toString()
+                }
+                toAdd.add(path to yamlValue)
+            }
+        }
+
+        if (toAdd.isEmpty()) return
+
+        try {
+            val appended = buildString {
+                append(raw.trimEnd())
+                append("\n")
+                val grouped = toAdd.groupBy { it.first.substringBeforeLast('.', "") }
+                for ((section, entries) in grouped) {
+                    append("\n")
+                    if (section.isNotEmpty()) {
+                        append("$section:\n")
+                        for ((path, value) in entries) {
+                            val leaf = path.substringAfterLast('.')
+                            val comment = KEY_COMMENTS[path]
+                            if (!comment.isNullOrEmpty()) {
+                                append("  # $comment\n")
+                            }
+                            append("  $leaf: $value\n")
+                        }
+                    } else {
+                        for ((path, value) in entries) {
+                            val comment = KEY_COMMENTS[path]
+                            if (!comment.isNullOrEmpty()) {
+                                append("# $comment\n")
+                            }
+                            append("$path: $value\n")
+                        }
+                    }
+                }
+            }
+            configFile.writeText(appended, Charsets.UTF_8)
+            plugin.reloadConfig()
+            plugin.logger.info("配置文件已追加 ${toAdd.size} 个升级字段")
+        } catch (e: Exception) {
+            plugin.logger.warning("追加配置字段失败: ${e.message}")
+        }
     }
 
     /** 将旧 chat-format.post-prefix 原值迁移到 chat-format.start-with。 */
@@ -143,10 +206,31 @@ class ConfigManager(
     fun fullForwardingByDefault(): Boolean =
         plugin.config.getBoolean("features.full-amount", false)
 
+    fun isAuthenticationEnabled(): Boolean = plugin.config.getBoolean("features.enable-auth", true)
+
     fun commandSwitches(): Map<String, Boolean> {
         val commandSection = plugin.config.getConfigurationSection("commands") ?: return emptyMap()
         return commandSection.getValues(false).mapValues { (_, value) ->
             value as? Boolean ?: true
+        }
+    }
+
+    fun commandMenuSwitches(): Map<String, Boolean> {
+        val commandSection = plugin.config.getConfigurationSection("commands") ?: return emptyMap()
+        return commandSection.getKeys(false).associateWith { commandName ->
+            val path = "commands.$commandName"
+            val default = commandName !in COMMANDS_HIDDEN_FROM_MENU
+            val settings = plugin.config.getConfigurationSection(path)
+            if (settings == null) default
+            else {
+                val pushMenu = settings.get("pushMenu")
+                when (pushMenu) {
+                    is Boolean -> pushMenu
+                    is Number -> pushMenu.toInt() != 0
+                    is String -> pushMenu.toBooleanStrictOrNull() ?: default
+                    else -> default
+                }
+            }
         }
     }
 
@@ -169,6 +253,9 @@ class ConfigManager(
     fun agentCommandMode(): AgentCommandMode =
         AgentCommandMode.from(plugin.config.getString("agent.command-mode")) ?: AgentCommandMode.MANUAL
 
+    fun bindingRequireGameVerification(): Boolean =
+        plugin.config.getBoolean("binding.require-game-verification", false)
+
     private fun parseCustomCommand(values: Map<*, *>): CustomCommandDetail? {
         val key = values["key"]?.toString()?.trim().orEmpty()
         val command = values["command"]?.toString()?.trim().orEmpty()
@@ -182,8 +269,51 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 4
+        private const val CURRENT_CONFIG_VERSION = 5
         private const val CONFIG_VERSION_PATH = "config-version"
+
+        private val COMMANDS_HIDDEN_FROM_MENU = setOf("blockMotd", "unblockMotd")
+
+        /** 每个配置项的注释说明，用于自动追加时生成可读的 YAML。 */
+        private val KEY_COMMENTS: Map<String, String> = mapOf(
+            "bot.app-id" to "",
+            "bot.secret" to "",
+            "bot.name" to "机器人显示名称",
+            "bot.groups" to "允许使用的 QQ 群 OpenId 列表",
+            "bot.suppress-console-output" to "屏蔽 io.github.kloping.qqbot 直接通过 System.out 输出的调试信息",
+            "serverName" to "服务器显示名称，可在进服/退服格式中通过 {server} 使用",
+            "chat-format.from-game" to "游戏→QQ 消息格式，可用占位符：{name}、{message}",
+            "chat-format.from-group" to "QQ→游戏 消息格式，可用占位符：{name}、{message}",
+            "chat-format.post-chat" to "是否开启群聊转发",
+            "chat-format.start-with" to "只有以该内容开头的游戏消息才会转发；留空表示全部转发",
+            "player-events.join.enabled" to "是否转发玩家进服通知",
+            "player-events.join.format" to "进服通知格式，可用占位符：{name}、{player}、{server}、{platform}",
+            "player-events.quit.enabled" to "是否转发玩家退服通知",
+            "player-events.quit.format" to "退服通知格式，可用占位符：{name}、{player}、{server}、{platform}",
+            "markdown.queryOnline" to "查在线命令使用的 Markdown 模板文件名",
+            "motd.server-ip" to "MOTD 查询的服务器地址",
+            "motd.server-port" to "MOTD 查询的服务器端口",
+            "motd.text" to "MOTD 查询结果文本模板",
+            "motd.post-img" to "查在线时是否附带服务器状态图片",
+            "motd.use-markdown" to "查在线是否使用 Markdown 卡片格式",
+            "whitelist.add-command" to "绑定时自动添加白名单的命令，{name} 替换为玩家名",
+            "whitelist.del-command" to "解绑时自动移除白名单的命令，{name} 替换为玩家名",
+            "filter-regex" to "消息过滤正则列表，匹配到的内容会被屏蔽",
+            "admin.mode" to "管理员判定方式：qq / config / both",
+            "admin.openids" to "手动添加的管理员 OpenId 列表",
+            "features.full-amount" to "是否默认开启全量聊天转发",
+            "features.enable-auth" to "是否启用 QQ 头像认证功能",
+            "binding.require-game-verification" to "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作",
+            "audit.base-url" to "OpenAI 兼容审核接口地址，留空则只执行本地敏感词检测",
+            "audit.api-key" to "审核接口密钥",
+            "audit.model" to "审核使用的模型名",
+            "agent.enabled" to "AI Agent 总开关",
+            "agent.base-url" to "AI Agent 的 OpenAI 兼容接口地址",
+            "agent.api-key" to "AI Agent 的接口密钥",
+            "agent.model" to "AI Agent 使用的模型名",
+            "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
+            "command-sender" to "命令执行收集模式：Hybrid 同时收集发送者输出和服务端日志",
+        )
 
         private val COMMAND_NAMES = listOf(
             "查信息",
@@ -239,6 +369,7 @@ class ConfigManager(
             put("admin.mode", "both")
             put("admin.openids", emptyList<String>())
             put("features.full-amount", false)
+            put("features.enable-auth", true)
             put("audit.base-url", "")
             put("audit.api-key", "")
             put("audit.model", "gpt-4o-mini")
@@ -247,6 +378,7 @@ class ConfigManager(
             put("agent.api-key", "")
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
+            put("binding.require-game-verification", false)
             put("custom-commands", emptyList<Map<String, Any>>())
             put("command-sender", "Hybrid")
 

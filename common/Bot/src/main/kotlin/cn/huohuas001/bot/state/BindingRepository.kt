@@ -12,9 +12,9 @@ class BindingRepository internal constructor(
     fun getBinding(groupId: String, openId: String): BindingInfo? =
         bindingsByGroup[groupId]?.get(openId)
 
-    fun setBinding(groupId: String, openId: String, playerName: String): Boolean {
+    fun setBinding(groupId: String, openId: String, playerName: String, qqUsername: String = ""): Boolean {
         val group = bindingsByGroup.computeIfAbsent(groupId) { ConcurrentHashMap() }
-        val old = group.put(openId, BindingInfo(playerName))
+        val old = group.put(openId, BindingInfo(playerName, qqUsername = qqUsername))
         persist()
         return old?.playerName != playerName
     }

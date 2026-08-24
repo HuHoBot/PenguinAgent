@@ -14,6 +14,10 @@ commands:
     description: Send an @mention message to QQ group
     usage: "/at <nickname> <message>"
     permission: huhobot.command
+  qqbind:
+    description: Verify QQ binding with a code from the QQ group
+    usage: "/qqbind <code>"
+    permission: huhobot.command
 
 permissions:
   huhobot.command:

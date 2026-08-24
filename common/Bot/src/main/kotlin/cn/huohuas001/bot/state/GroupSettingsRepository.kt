@@ -9,6 +9,7 @@ class GroupSettingsRepository internal constructor(
 ) {
     private val administratorModes = ConcurrentHashMap<String, AdministratorAccessMode>()
     private val fullForwarding = ConcurrentHashMap<String, Boolean>()
+    private val motdBlocked = ConcurrentHashMap<String, Boolean>()
 
     fun administratorMode(
         groupId: String,
@@ -26,14 +27,23 @@ class GroupSettingsRepository internal constructor(
         if (fullForwarding.put(groupId, enabled) != enabled) persist()
     }
 
+    fun isMotdBlocked(groupId: String): Boolean = motdBlocked[groupId] == true
+
+    fun setMotdBlocked(groupId: String, blocked: Boolean) {
+        if (motdBlocked.put(groupId, blocked) != blocked) persist()
+    }
+
     internal fun replaceAll(
         modes: Map<String, AdministratorAccessMode>,
-        forwarding: Map<String, Boolean>
+        forwarding: Map<String, Boolean>,
+        blocked: Map<String, Boolean> = emptyMap()
     ) {
         administratorModes.clear()
         administratorModes.putAll(modes)
         fullForwarding.clear()
         fullForwarding.putAll(forwarding)
+        motdBlocked.clear()
+        motdBlocked.putAll(blocked)
     }
 
     internal fun administratorModeSnapshot(): Map<String, AdministratorAccessMode> =
@@ -41,4 +51,7 @@ class GroupSettingsRepository internal constructor(
 
     internal fun fullForwardingSnapshot(): Map<String, Boolean> =
         fullForwarding.toMap()
+
+    internal fun motdBlockedSnapshot(): Map<String, Boolean> =
+        motdBlocked.toMap()
 }

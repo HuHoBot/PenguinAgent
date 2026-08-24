@@ -96,12 +96,13 @@ internal class HumanReadableStateFile {
                 "full-forwarding" -> value.toBooleanStrictOrNull()
                     ?.let { fullForwarding[key.trim()] = it }
                 "bindings" -> {
-                    // groupId = openId:playerName,openId:playerName
+                    // groupId = openId:playerName:qqUsername,openId:playerName:qqUsername
                     val groupBindings = bindings.getOrPut(key.trim()) { mutableMapOf() }
                     value.split(',').filter { it.isNotBlank() }.forEach { entry ->
-                        val parts = entry.split(':', limit = 2)
-                        if (parts.size == 2) {
-                            groupBindings[parts[0].trim()] = BindingInfo(parts[1].trim())
+                        val parts = entry.split(':', limit = 3)
+                        if (parts.size >= 2) {
+                            val qqUsername = if (parts.size == 3) parts[2].trim() else ""
+                            groupBindings[parts[0].trim()] = BindingInfo(parts[1].trim(), qqUsername = qqUsername)
                         }
                     }
                 }
@@ -189,7 +190,10 @@ internal class HumanReadableStateFile {
     ) {
         writer.appendLine("[bindings]")
         bindings.toSortedMap().forEach { (groupId, groupBindings) ->
-            val entries = groupBindings.entries.joinToString(",") { (oid, info) -> "$oid:${info.playerName}" }
+            val entries = groupBindings.entries.joinToString(",") { (oid, info) ->
+                if (info.qqUsername.isNotEmpty()) "$oid:${info.playerName}:${info.qqUsername}"
+                else "$oid:${info.playerName}"
+            }
             writer.appendLine("$groupId = $entries")
         }
         writer.appendLine()

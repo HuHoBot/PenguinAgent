@@ -15,7 +15,7 @@
 | 功能 | 说明 |
 |------|------|
 | 双向聊天转发 | 游戏 ↔ QQ 群消息实时互通，支持格式模板与前缀过滤 |
-| QQ 群指令系统 | 20+ 条内置命令，支持权限分级与命令开关 |
+| QQ 群指令系统 | 30+ 条内置命令，支持权限分级、命令开关与动态帮助 |
 | 白名单管理 | 映射到服务器原生命令，支持自定义模板 |
 | 敏感词审核 | 本地正则词库 + 可选 OpenAI 兼容接口 AI 二审 |
 | MOTD 服务器状态 | `/motd` 查询服务器状态，返回图片 + Markdown 卡片 |
@@ -25,7 +25,7 @@
 | **WebUI 图形化配置** | 浏览器访问 `http://127.0.0.1:5678` 管理所有配置项 |
 | **群服互通 @提及** | 游戏内 `/at` 命令发送 QQ @消息，QQ→游戏蓝色高亮+叮音效 |
 | **QQ 群管理** | AI Agent 集成禁言、入群审批、自动审批策略等群管理工具 |
-| **指令面板自动同步** | 启动时自动同步 20 条命令面板到 QQ 群 |
+| **指令面板自动同步** | 启动时自动同步命令面板到 QQ 群（上限 20 条） |
 
 ---
 
@@ -289,6 +289,8 @@ QQ 群中的 @消息会自动解析为 `§9@玩家名§r`（蓝色高亮），�
 | `执行命令` `<命令>` | 执行服务器原生命令 |
 | `管理员执行` `<命令>` | 以管理员权限执行自定义命令 |
 | `全量` | 切换全量聊天转发开关 |
+| `blockMotd` | 屏蔽本群 MOTD 查询 |
+| `unblockMotd` | 解除本群 MOTD 屏蔽 |
 
 ### 认证命令
 
@@ -313,7 +315,7 @@ QQ 群中的 @消息会自动解析为 `§9@玩家名§r`（蓝色高亮），�
 
 ### 命令面板
 
-启动时自动将全部 20 条命令同步到 QQ 群命令面板，群成员可直接点击使用。
+启动时自动将命令同步到 QQ 群命令面板（上限 20 条，超出部分仅在 `/帮助` 中显示）。
 
 ---
 
@@ -450,7 +452,30 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.2.0-alpha.2（最新）
+### v1.3.0-beta.1（最新）
+
+**上游同步（PenguinClient 功能合入）：**
+- feat: `FaceEmojiParser` —— QQ 表情标签转可读文本
+- feat: `MessageAttachmentParser` —— 语音/图片/视频/文件标签转可读文本
+- feat: `@Commands` 注解重构 —— `command`/`describe`/`onlyAdmin` 字段 + `RegisteredCommand` 数据类
+- feat: `BaseCommand.DispatchResult` 枚举（HANDLED/NOT_HANDLED/CUSTOM_COMMAND）
+- feat: `CustomCommandRegistry` 运行时注册/注销 + 面板自动同步
+- feat: `MenuManager` 改为 HTTP API 动态面板（启动时同步，上限 20 条命令）
+- feat: `ConfigProvider` 新增 `isAuthenticationEnabled()`、`commandMenuList()`、motd.md 模板
+- feat: `QClient.syncGroupPanels()` 启动时一次性同步面板，运行时注册不再重复同步
+- feat: `motd.md` Markdown 模板内置，首次启动自动解压
+- feat: 动态 `/帮助` 命令 —— 自动列出所有已注册命令（含自定义命令）
+- feat: `blockMotd` / `unblockMotd` —— 按群屏蔽 MOTD 查询
+- feat: `GroupSettingsRepository` 新增 `motdBlocked` 群级设置
+- feat: `BaseCommand.allCommands()` 全局命令注册表
+
+**Bug 修复：**
+- fix: 绑定游戏账号后自动添加白名单（QQ 直接绑定 + 游戏验证两条路径均已修复）
+- fix: `HuHoBotSpigot.companion` 静态实例，支持 `getInstance()` 调用
+- fix: 命令面板超出上限时日志提示，仅同步前 20 条命令
+
+**已知限制：**
+- 本地 QQ Bot SDK 版本不含 `MsgPack`/`OnBotRecvMsg`/`OnBotCommand` 事件，暂不支持第三方插件监听 QQ 消息事件
 
 **群服互通 @提及：**
 - feat: `/at` 命令 —— 游戏内发送 QQ @消息，支持 Tab 补全昵称

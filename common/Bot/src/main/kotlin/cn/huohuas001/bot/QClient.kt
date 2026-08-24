@@ -4,6 +4,8 @@ import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.agent.AgentInteractionListener
 import cn.huohuas001.bot.events.GroupMessageHandler
 import cn.huohuas001.bot.events.commands.BaseCommand
+import cn.huohuas001.bot.events.commands.CustomCommandRegistry
+import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.BotShared
 import cn.huohuas001.bot.state.CommandRepositories
 import cn.huohuas001.bot.tools.QqBotConsoleOutputFilter
@@ -34,6 +36,26 @@ object QClient {
         groupMessageHandler.registerCommand(command)
     }
 
+    fun syncGroupPanels() {
+        if (!::starter.isInitialized || !::groupMessageHandler.isInitialized) return
+        val plugin = BotShared.getPlugin()
+        val builtInCommands = groupMessageHandler.registeredCommands()
+            .filter { plugin.getCommandMenuList()[it.command] != false }
+        val customCommands = CustomCommandRegistry.snapshot().filter { it.pushMenu }.map {
+            RegisteredCommand(
+                command = it.key,
+                describe = "自定义命令",
+                onlyAdmin = it.permission > 0
+            )
+        }
+        MenuManager.syncGroupPanels(
+            starter = starter,
+            groupOpenIds = plugin.getGroupOpenIdList(),
+            builtInCommands = builtInCommands,
+            customCommands = customCommands
+        )
+    }
+
     fun launchClient(appid: String, secret: String, logFilePattern: String? = null) {
         val plugin = BotShared.getPlugin()
         val suppressConsoleOutput = plugin.shouldSuppressQqBotConsoleOutput()
@@ -52,7 +74,7 @@ object QClient {
             starter.registerListenerHost(AgentInteractionListener())
             starter.APPLICATION.logger.setLogLevel(1)
             starter.APPLICATION.logger.setOutFile(logFilePattern)
-            MenuManager.syncGroupPanels(starter, plugin.getGroupOpenIdList())
+            syncGroupPanels()
             // 加载本地昵称缓存
             NicknameManager.load()
         } catch (error: Exception) {
@@ -81,24 +103,20 @@ object QClient {
         val binding = findBindingByPlayerName(playerName)
         val qqSenderName = if (binding != null) {
             when (binding.binding.qqDisplayNameMode) {
-                "MC" -> binding.qqName
-                else -> playerName
+                "QQ" -> binding.qqName
+                else -> escapeMarkdown(playerName)
             }
         } else {
-            playerName
+            escapeMarkdown(playerName)
         }
 
-        val content = plugin.formatGameMessage(qqSenderName, processed)
-        val hasMention = processed.contains(Regex("<@[0-9A-Fa-f]{20,}>"))
-        val payload = if (hasMention) {
-            val markdown = Markdown().setContent(content)
-            V2MsgData()
-                .setContent(content)
-                .setMsg_type(2)
-                .setMarkdown(markdown)
-        } else {
-            V2MsgData().setContent(content)
-        }
+        val safeProcessed = processed.replace("_", "\\_")
+        val content = plugin.formatGameMessage(qqSenderName, safeProcessed)
+        val markdown = Markdown().setContent(content)
+        val payload = V2MsgData()
+            .setContent(content)
+            .setMsg_type(2)
+            .setMarkdown(markdown)
         Thread {
             plugin.getGroupOpenIdList().forEach { groupId ->
                 try {
@@ -119,9 +137,11 @@ object QClient {
         for (groupId in plugin.getGroupOpenIdList()) {
             val entry = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
             if (entry != null) {
-                val qqName = NicknameManager.getNickname(entry.key)
-                    ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
-                    ?: "QQ用户"
+                val qqName = entry.value.qqUsername.ifEmpty {
+                    NicknameManager.getNickname(entry.key)
+                        ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
+                        ?: "QQ用户"
+                }
                 return BindingLookupResult(entry.value, qqName)
             }
         }
@@ -129,9 +149,11 @@ object QClient {
         for (groupId in CommandRepositories.bindings.allBindings().keys) {
             val entry = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
             if (entry != null) {
-                val qqName = NicknameManager.getNickname(entry.key)
-                    ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
-                    ?: "QQ用户"
+                val qqName = entry.value.qqUsername.ifEmpty {
+                    NicknameManager.getNickname(entry.key)
+                        ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
+                        ?: "QQ用户"
+                }
                 return BindingLookupResult(entry.value, qqName)
             }
         }
@@ -150,26 +172,27 @@ object QClient {
      * 如果 @的是绑定的 MC 玩家名，也会解析为对应的 QQ @。
      */
     private fun resolveAtMentions(text: String): String {
-        val allMembers = NicknameManager.all()
-        if (allMembers.isEmpty()) return text
-
-        // 按昵称长度降序匹配，避免短昵称抢先
-        val sorted = allMembers.sortedByDescending { it.first.length }
         var result = text
-        for ((nickname, openId) in sorted) {
-            // 匹配 @昵称 后面是空格、标点或字符串结尾
-            val pattern = Regex("@${Regex.escape(nickname)}(?=\\s|[，。！？、；：,.!?;:]|\$)")
-            result = result.replace(pattern) { match ->
-                "<@$openId>"
+
+        // 匹配 @昵称 后面是空格、标点或字符串结尾
+        val allMembers = NicknameManager.all()
+        if (allMembers.isNotEmpty()) {
+            val sorted = allMembers.sortedByDescending { it.first.length }
+            for ((nickname, openId) in sorted) {
+                val pattern = Regex("@${Regex.escape(nickname)}(?=\\s|[，。！？、；：,.!?;:]|\$)")
+                result = result.replace(pattern) { match ->
+                    "<@$openId>"
+                }
             }
         }
+
         // 匹配绑定的 MC 玩家名：@PlayerName 或 PlayerName → <@openid>
         val plugin = BotShared.getPlugin()
         for (groupId in plugin.getGroupOpenIdList()) {
             val bindings = CommandRepositories.bindings.allInGroup(groupId)
             for ((_, info) in bindings) {
                 val mcName = info.playerName
-                val pattern = Regex("(?<![<\\w])@?${Regex.escape(mcName)}(?![>\\w])")
+                val pattern = Regex("(?<![<a-zA-Z0-9])@?${Regex.escape(mcName)}(?![>a-zA-Z0-9])")
                 result = result.replace(pattern) { _ ->
                     val entry = CommandRepositories.bindings.findByPlayerName(groupId, mcName)
                     if (entry != null) "<@${entry.key}>" else mcName
@@ -190,7 +213,7 @@ object QClient {
         if (!::starter.isInitialized) return
         val plugin = BotShared.getPlugin()
         if (!plugin.getPlayerEventFormat().joinEnabled) return
-        sendTextToGroups(plugin.formatPlayerJoinMessage(playerName), "发送玩家进服通知")
+        sendTextToGroups(plugin.formatPlayerJoinMessage(escapeMarkdown(playerName)), "发送玩家进服通知")
     }
 
     /** 按配置向所有 QQ 群发送玩家退服通知。 */
@@ -198,13 +221,30 @@ object QClient {
         if (!::starter.isInitialized) return
         val plugin = BotShared.getPlugin()
         if (!plugin.getPlayerEventFormat().quitEnabled) return
-        sendTextToGroups(plugin.formatPlayerQuitMessage(playerName), "发送玩家退服通知")
+        sendTextToGroups(plugin.formatPlayerQuitMessage(escapeMarkdown(playerName)), "发送玩家退服通知")
     }
 
-    private fun sendTextToGroups(content: String, action: String) {
+    /** 向指定 QQ 群发送文本消息（始终使用 markdown 模式）。 */
+    fun sendTextToGroup(groupOpenId: String, content: String) {
+        if (!::starter.isInitialized) return
         if (content.isBlank()) return
         val plugin = BotShared.getPlugin()
-        val payload = V2MsgData().setContent(content)
+        val markdown = Markdown().setContent(content)
+        val payload = V2MsgData().setContent(content).setMsg_type(2).setMarkdown(markdown)
+        Thread {
+            try {
+                starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+            } catch (e: Exception) {
+                plugin.log_error("向QQ群 $groupOpenId 发送消息失败: ${e.message}")
+            }
+        }.start()
+    }
+
+    internal fun sendTextToGroups(content: String, action: String) {
+        if (content.isBlank()) return
+        val plugin = BotShared.getPlugin()
+        val markdown = Markdown().setContent(content)
+        val payload = V2MsgData().setContent(content).setMsg_type(2).setMarkdown(markdown)
         Thread {
             plugin.getGroupOpenIdList().forEach { groupId ->
                 try {
@@ -270,18 +310,119 @@ object QClient {
         }
     }
 
+    /** 回复指定群消息并发送普通文本。 */
+    fun replyText(event: GroupMessageEvent, text: String): Boolean {
+        val plugin = BotShared.getPlugin()
+        if (!::starter.isInitialized) {
+            plugin.log_warning("QQ 机器人未启动，无法回复文本")
+            return false
+        }
+        if (text.isBlank()) return false
+        val groupId = event.groupOpenId ?: event.groupId
+        val messageId = event.rawMessage.id.orEmpty()
+        val messageSequence = event.msgSeq
+        val payload = V2MsgData()
+            .setContent(text)
+            .setMsg_id(messageId)
+            .setMsg_seq(messageSequence)
+        return try {
+            starter.bot.groupBaseV2.send(
+                groupId,
+                JSON.toJSONString(payload),
+                Channel.SEND_MESSAGE_HEADERS
+            )
+            true
+        } catch (error: Exception) {
+            plugin.log_error("回复文本失败: ${error.message}")
+            false
+        }
+    }
+
+    /** 使用消息快照字段回复普通文本。 */
+    fun replyText(
+        groupOpenId: String,
+        messageId: String,
+        messageSequence: Int,
+        text: String
+    ): Boolean {
+        val plugin = BotShared.getPlugin()
+        if (!::starter.isInitialized) {
+            plugin.log_warning("QQ 机器人未启动，无法回复文本")
+            return false
+        }
+        if (text.isBlank()) return false
+        val payload = V2MsgData()
+            .setContent(text)
+            .setMsg_id(messageId)
+            .setMsg_seq(messageSequence)
+        return try {
+            starter.bot.groupBaseV2.send(
+                groupOpenId,
+                JSON.toJSONString(payload),
+                Channel.SEND_MESSAGE_HEADERS
+            )
+            true
+        } catch (error: Exception) {
+            plugin.log_error("回复文本失败: ${error.message}")
+            false
+        }
+    }
+
+    /** 使用消息快照字段回复 Markdown。 */
+    fun replyMarkdown(
+        groupOpenId: String,
+        messageId: String,
+        messageSequence: Int,
+        markdownContent: String,
+        keyboard: Keyboard? = null
+    ): Boolean {
+        val plugin = BotShared.getPlugin()
+        if (!::starter.isInitialized) {
+            plugin.log_warning("QQ 机器人未启动，无法回复 Markdown")
+            return false
+        }
+        if (markdownContent.isBlank()) return false
+
+        val markdown = Markdown().setContent(markdownContent)
+        if (keyboard != null) {
+            markdown.setKeyboard(keyboard)
+        }
+
+        val payload = V2MsgData()
+            .setContent(markdownContent)
+            .setMsg_type(2)
+            .setMarkdown(markdown)
+            .setMsg_id(messageId)
+            .setMsg_seq(messageSequence)
+        if (keyboard != null) {
+            payload.setKeyboard(keyboard)
+        }
+
+        return try {
+            starter.bot.groupBaseV2.send(
+                groupOpenId,
+                JSON.toJSONString(payload),
+                Channel.SEND_MESSAGE_HEADERS
+            )
+            true
+        } catch (error: Exception) {
+            plugin.log_error("回复 Markdown 失败: ${error.message}")
+            false
+        }
+    }
+
     /** 回复指定群消息并发送自定义 Markdown。 */
     fun replyMarkdown(
         event: GroupMessageEvent,
         markdownContent: String,
         keyboard: Keyboard? = null
-    ) {
+    ): Boolean {
         val plugin = BotShared.getPlugin()
         if (!::starter.isInitialized) {
             plugin.log_warning("QQ 机器人未启动，无法回复 Markdown")
-            return
+            return false
         }
-        if (markdownContent.isBlank()) return
+        if (markdownContent.isBlank()) return false
 
         val markdown = Markdown().setContent(markdownContent)
         if (keyboard != null) {
@@ -298,39 +439,42 @@ object QClient {
             payload.setKeyboard(keyboard)
         }
 
-        try {
+        return try {
             val groupId = event.groupOpenId ?: event.groupId
             starter.bot.groupBaseV2.send(
                 groupId,
                 JSON.toJSONString(payload),
                 Channel.SEND_MESSAGE_HEADERS
             )
+            true
         } catch (error: Exception) {
             plugin.log_error("回复 Markdown 失败: ${error.message}")
+            false
         }
     }
 
     /** 回复指定群消息，同时发送文本和网络图片。 */
-    fun replyWithImg(event: GroupMessageEvent, text: String, imgUrl: String) {
+    fun replyWithImg(event: GroupMessageEvent, text: String, imgUrl: String): Boolean {
         val plugin = BotShared.getPlugin()
         if (!::starter.isInitialized) {
             plugin.log_warning("QQ 机器人未启动，无法回复图片消息")
-            return
+            return false
         }
         if (imgUrl.isBlank()) {
             plugin.log_warning("图片 URL 为空，无法回复图片消息")
-            return
+            return false
         }
 
         val message = MessageChain()
             .apply { if (text.isNotBlank()) text(text) }
             .image(imgUrl)
 
-        try {
-            // MessageChain 会先上传网络图片，再携带原消息的 msg_id 发送文本和图片。
+        return try {
             event.sendMessage(message)
+            true
         } catch (error: Exception) {
             plugin.log_error("回复图片消息失败: ${error.message}")
+            false
         }
     }
 
@@ -363,7 +507,7 @@ object QClient {
     }
 
     /** 转义 Markdown 特殊字符，防止玩家名被渲染为格式符号。 */
-    private fun escapeMarkdown(text: String): String {
+    internal fun escapeMarkdown(text: String): String {
         return text.replace("\\", "\\\\")
             .replace("_", "\\_")
             .replace("*", "\\*")

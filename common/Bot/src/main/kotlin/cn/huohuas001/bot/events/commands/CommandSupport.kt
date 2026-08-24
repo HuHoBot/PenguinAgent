@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.events.commands
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.datapack.AdministratorAccessMode
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
@@ -20,7 +21,12 @@ abstract class CommandSupport : BaseCommand() {
         event.sender?.openid ?: event.sender?.id ?: ""
 
     protected fun reply(plugin: HuHoBot, event: GroupMessageEvent, message: String) {
-        event.sendMessage(plugin.auditText(message))
+        val groupId = groupId(event)
+        QClient.sendTextToGroup(groupId, plugin.auditText(message))
+    }
+
+    protected fun sendMessage(event: GroupMessageEvent, message: String) {
+        QClient.sendTextToGroup(groupId(event), message)
     }
 
     protected fun replyWithImg(plugin: HuHoBot, event: GroupMessageEvent, message: String,imgUrl: String) {
@@ -59,7 +65,7 @@ abstract class CommandSupport : BaseCommand() {
         }
 
         if (!allowed) {
-            event.sendMessage("你没有执行此命令的管理员权限")
+            sendMessage(event, "你没有执行此命令的管理员权限")
         }
         return allowed
     }
@@ -78,13 +84,14 @@ abstract class CommandSupport : BaseCommand() {
 
         plugin.sendCommand(outgoingCommand).whenComplete { result, error ->
             when {
-                error != null || result == null -> event.sendMessage("游戏桥接未配置或执行失败")
+                error != null || result == null -> sendMessage(event, "游戏桥接未配置或执行失败")
                 else -> {
                     val raw = result.getRawString()
                         .replace(Regex("\u001B\\[[0-9;]*m"), "")
                         .replace(Regex("\\[[0-9;]*m"), "")
                         .replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
-                    reply(plugin, event, raw.ifBlank { "已发送执行请求" })
+                    val safe = QClient.escapeMarkdown(raw)
+                    reply(plugin, event, safe.ifBlank { "已发送执行请求" })
                 }
             }
         }
