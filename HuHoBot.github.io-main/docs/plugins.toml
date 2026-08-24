@@ -1,5 +1,0 @@
-[GameAuthCode-Spigot]
-description = "HuHoBot 进服绑定验证插件"
-authors = ["HuoHuas001"]
-github = "https://github.com/HuHoBot/ExpansionSpigotPlugins/tree/main/plugins/GameAuthCode"
-adapter = "Spigot"
