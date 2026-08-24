@@ -106,19 +106,21 @@ interface ConfigProvider {
 
     fun formatGroupMessage(name: String, message: String): String {
         val filtered = filterText(message)
-        return getChatFormat().fromGroup
+        val raw = getChatFormat().fromGroup
             .replace("{name}", name)
             .replace("{nick}", name)
             .replace("{message}", filtered)
             .replace("{msg}", filtered)
+        return convertAmpersandColors(raw)
     }
 
     fun formatGameMessage(name: String, message: String): String {
         val filtered = filterText(message)
-        return getChatFormat().fromGame
+        val raw = getChatFormat().fromGame
             .replace("{name}", name)
             .replace("{message}", filtered)
             .replace("{msg}", filtered)
+        return convertAmpersandColors(raw)
     }
 
     fun formatPlayerJoinMessage(name: String): String =
@@ -127,11 +129,23 @@ interface ConfigProvider {
     fun formatPlayerQuitMessage(name: String): String =
         formatPlayerEventMessage(getPlayerEventFormat().quitFormat, name)
 
-    fun formatPlayerEventMessage(format: String, name: String): String = format
-        .replace("{name}", name)
-        .replace("{player}", name)
-        .replace("{server}", getServerName())
-        .replace("{platform}", getPlatform())
+    /**
+     * 将 & 颜色码转换为 Minecraft § 格式码，支持 &0-9, &a-f, &k-o, &r。
+     * 用法示例：from-group 格式中写 "&b[QQ] &f{name}: &7{message}"
+     */
+    fun convertAmpersandColors(text: String): String {
+        return text.replace(Regex("&([0-9a-fk-orA-FK-OR])")) { match ->
+            "§${match.groupValues[1].lowercase()}"
+        }
+    }
+
+    fun formatPlayerEventMessage(format: String, name: String): String = convertAmpersandColors(
+        format
+            .replace("{name}", name)
+            .replace("{player}", name)
+            .replace("{server}", getServerName())
+            .replace("{platform}", getPlatform())
+    )
 
     /** Markdown 配置键到 Markdown 目录内文件名的映射。 */
     fun getMarkdownFiles(): Map<String, String> = DEFAULT_MARKDOWN_FILES

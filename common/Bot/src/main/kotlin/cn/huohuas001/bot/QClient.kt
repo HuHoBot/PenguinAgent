@@ -120,7 +120,12 @@ object QClient {
         Thread {
             plugin.getGroupOpenIdList().forEach { groupId ->
                 try {
-                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                    val groupPayload = V2MsgData()
+                        .setContent(content)
+                        .setMsg_type(2)
+                        .setMarkdown(Markdown().setContent(content))
+                    attachPassiveReply(groupPayload, groupId)
+                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(groupPayload), Channel.SEND_MESSAGE_HEADERS)
                 } catch (e: Exception) {
                     plugin.log_error("向QQ群 $groupId 转发游戏聊天失败: ${e.message}")
                 }
@@ -231,6 +236,7 @@ object QClient {
         val plugin = BotShared.getPlugin()
         val markdown = Markdown().setContent(content)
         val payload = V2MsgData().setContent(content).setMsg_type(2).setMarkdown(markdown)
+        attachPassiveReply(payload, groupOpenId)
         Thread {
             try {
                 starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
@@ -248,7 +254,9 @@ object QClient {
         Thread {
             plugin.getGroupOpenIdList().forEach { groupId ->
                 try {
-                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                    val groupPayload = V2MsgData().setContent(content).setMsg_type(2).setMarkdown(Markdown().setContent(content))
+                    attachPassiveReply(groupPayload, groupId)
+                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(groupPayload), Channel.SEND_MESSAGE_HEADERS)
                 } catch (e: Exception) {
                     plugin.log_error("向QQ群 $groupId ${action}失败: ${e.message}")
                 }
@@ -276,7 +284,15 @@ object QClient {
 
         plugin.getGroupOpenIdList().forEach { groupId ->
             try {
-                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                val groupMarkdown = Markdown().setContent(markdownContent)
+                if (keyboard != null) groupMarkdown.setKeyboard(keyboard)
+                val groupPayload = V2MsgData()
+                    .setContent(markdownContent)
+                    .setMsg_type(2)
+                    .setMarkdown(groupMarkdown)
+                if (keyboard != null) groupPayload.setKeyboard(keyboard)
+                attachPassiveReply(groupPayload, groupId)
+                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(groupPayload), Channel.SEND_MESSAGE_HEADERS)
             } catch (e: Exception) {
                 plugin.log_error("向QQ群 $groupId 发送 Markdown 失败: ${e.message}")
             }
@@ -302,6 +318,7 @@ object QClient {
             markdown.setKeyboard(keyboard)
             payload.setKeyboard(keyboard)
         }
+        attachPassiveReply(payload, groupOpenId)
 
         try {
             starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
@@ -499,11 +516,28 @@ object QClient {
             .setMarkdown(markdown)
         plugin.getGroupOpenIdList().forEach { groupId ->
             try {
-                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                val groupPayload = V2MsgData()
+                    .setContent(content)
+                    .setMsg_type(2)
+                    .setMarkdown(Markdown().setContent(content))
+                attachPassiveReply(groupPayload, groupId)
+                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(groupPayload), Channel.SEND_MESSAGE_HEADERS)
             } catch (e: Exception) {
                 plugin.log_error("向QQ群 $groupId 转发@消息失败: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 为 V2MsgData 附加被动回复字段（msg_id + msg_seq），
+     * 避免 QQ 将消息判定为主动消息导致 40034105。
+     * 若缓存无可用 msg_id 则跳过（仍会作为主动消息发送）。
+     */
+    internal fun attachPassiveReply(payload: V2MsgData, groupOpenId: String) {
+        val msgId = MessageIdCache.getMsgId(groupOpenId) ?: return
+        val msgSeq = MessageIdCache.nextMsgSeq(groupOpenId)
+        payload.setMsg_id(msgId)
+        payload.setMsg_seq(msgSeq)
     }
 
     /** 转义 Markdown 特殊字符，防止玩家名被渲染为格式符号。 */
