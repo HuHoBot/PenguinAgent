@@ -62,9 +62,7 @@ class GroupMessageHandler(
             if (!isAllowedGroup(groupId)) return
         }
         when (dispatchCommand(event)) {
-            BaseCommand.DispatchResult.CUSTOM_COMMAND -> {
-                forwardFullGroupMessage(groupId, event)
-            }
+            BaseCommand.DispatchResult.CUSTOM_COMMAND -> Unit
 
             BaseCommand.DispatchResult.HANDLED -> Unit
             BaseCommand.DispatchResult.NOT_HANDLED -> {
