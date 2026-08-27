@@ -127,7 +127,8 @@ object WebUiSchema {
         key = "features",
         title = "功能",
         fields = listOf(
-            FieldSpec("features.full-amount", "全量转发", "boolean", "默认全量处理所有消息")
+            FieldSpec("features.full-amount", "全量转发", "boolean", "默认全量处理所有消息"),
+            FieldSpec("features.enable-auth", "头像认证", "boolean", "是否启用 QQ 头像认证功能")
         )
     )
 
@@ -175,6 +176,22 @@ object WebUiSchema {
         )
     )
 
+    private val BINDING_SECTION = SectionSpec(
+        key = "binding",
+        title = "绑定",
+        fields = listOf(
+            FieldSpec("binding.require-game-verification", "游戏内验证", "boolean", "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作")
+        )
+    )
+
+    private val COMMAND_BLACKLIST_SECTION = SectionSpec(
+        key = "command-blacklist",
+        title = "命令黑名单",
+        fields = listOf(
+            FieldSpec("command-blacklist", "禁止执行的命令", "list", "禁止通过 /执行 运行的服务器命令（不区分大小写，每行一个，如 op、deop）")
+        )
+    )
+
     /** 全部配置分节，按此顺序渲染。 */
     val SECTIONS: List<SectionSpec> = listOf(
         BOT_SECTION,
@@ -190,7 +207,9 @@ object WebUiSchema {
         AUDIT_SECTION,
         AGENT_SECTION,
         COMMANDS_SECTION,
-        CUSTOM_COMMANDS_SECTION
+        CUSTOM_COMMANDS_SECTION,
+        BINDING_SECTION,
+        COMMAND_BLACKLIST_SECTION
     )
 
     /** 序列化为前端可用的 JSON（sections 数组）。 */

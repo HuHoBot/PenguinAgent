@@ -213,6 +213,9 @@ interface ConfigProvider {
     /** 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定。 */
     fun getBindingRequireGameVerification(): Boolean = false
 
+    /** /执行 命令黑名单：禁止通过 /执行 运行的服务器命令（不区分大小写）。 */
+    fun getCommandBlacklist(): List<String> = emptyList()
+
     fun getServerPluginList(): List<String> = emptyList()
     fun getServerCommandHelp(plugin: String?, command: String?): String = "当前平台不支持查询命令信息"
     fun getServerLogs(lines: Int?, keyword: String?): String = "当前平台不支持读取服务端日志"

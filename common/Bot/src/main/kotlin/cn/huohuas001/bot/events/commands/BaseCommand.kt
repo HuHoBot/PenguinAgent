@@ -91,8 +91,18 @@ abstract class BaseCommand {
                     )
                     return DispatchResult.HANDLED
                 }
+                val handler = commandMap[command]!!
+                if (handler.metadata.onlyAdmin) {
+                    val isAdmin = cn.huohuas001.bot.events.commands.CommandSupport.checkAdmin(plugin, event)
+                    if (!isAdmin) {
+                        cn.huohuas001.bot.QClient.sendTextToGroup(
+                            event.groupOpenId ?: event.groupId, "你没有执行此命令的管理员权限"
+                        )
+                        return DispatchResult.HANDLED
+                    }
+                }
                 val params = cleaned.removePrefix(command).trim()
-                invokeMethod(plugin, event, commandMap[command]!!.method, params)
+                invokeMethod(plugin, event, handler.method, params)
                 return DispatchResult.HANDLED
             }
         }

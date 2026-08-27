@@ -197,6 +197,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun getBindingRequireGameVerification(): Boolean = configManager.bindingRequireGameVerification()
 
+    override fun getCommandBlacklist(): List<String> = configManager.commandBlacklist()
+
     override fun getWebUiConfigValues(): Map<String, Any?> =
         config.getValues(true)
 

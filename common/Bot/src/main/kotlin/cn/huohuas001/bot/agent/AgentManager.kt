@@ -217,6 +217,17 @@ object AgentManager {
                             session.messages.add(toolMessage(toolCallId, "命令为空，无法执行。"))
                             continue
                         }
+                        // 命令黑名单检查
+                        val blacklist = plugin.getCommandBlacklist()
+                        if (blacklist.isNotEmpty()) {
+                            val cmdToCheck = command.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+                                .removePrefix("/").trimStart().lowercase()
+                            if (blacklist.any { blocked -> cmdToCheck == blocked || cmdToCheck.startsWith("$blocked ") }) {
+                                session.messages.add(toolMessage(toolCallId, "此命令已被管理员禁止执行（黑名单）：$cmdToCheck"))
+                                sendToGroup(plugin, session, AgentMessageFormatter.error("命令 $cmdToCheck 在黑名单中，无法执行"))
+                                continue
+                            }
+                        }
                         if (config.commandMode == AgentCommandMode.AUTO) {
                             val output = executeCommand(plugin, command)
                             session.messages.add(toolMessage(toolCallId, "命令已执行，输出：\n$output"))

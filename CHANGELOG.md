@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.3.0（2026-08-27）
+
+### 新功能
+
+- feat: 命令黑名单（`command-blacklist`）— 禁止通过 `/执行` 或 Agent `run_command` 运行指定服务器命令
+- feat: `/版本` 命令输出中显示文档链接
+- feat: WebUI 新增「绑定」和「命令黑名单」配置分区
+- feat: WebUI 新增 `features.enable-auth`（头像认证开关）
+- feat: `ConfigUpgrader.upgradeValues()` 支持版本化升级已有配置字段
+- feat: `BaseCommand.handleMessage()` 实际执行 `onlyAdmin` 拦截（之前仅用于面板显示）
+
+### 变更
+
+- change: motd `post-img` 和 `use-markdown` 默认值改为 `true`
+- change: AI Agent 命令（`/agent`、`/newsession`、`/stop`）标记为仅管理员
+- change: 配置文件版本升级到 v6，旧版自动迁移 motd 默认值
+
+### Bug 修复
+
+- fix: 自定义命令执行时不再转发到游戏（如群内执行 /test，游戏内不再显示 [QQ] xxx：/test）
+- fix: 文档许可证从 GPL v3 更正为 AGPL v3
+- fix: 文档网址从 `huhobot.txssb.cn` 更正为 GitHub Pages
+- fix: LICENSE.txt 替换为 AGPL v3 正文
+
+### 文档
+
+- docs: 文档全面改版适配 HuHoBotPenguin 分支
+- docs: 新增命令黑名单配置说明
+- docs: Agent `run_command` 工具标注受黑名单限制
+- docs: motd 默认值说明更新
+
+---
+
 ## v1.3.0-beta.2（2026-08-24）
 
 ### Bug 修复

@@ -7,6 +7,7 @@ import cn.huohuas001.bot.provider.ConfigUpgrader
 import cn.huohuas001.bot.provider.CustomCommandDetail
 import cn.huohuas001.bot.provider.Motd
 import cn.huohuas001.bot.provider.PlayerEventFormat
+import cn.huohuas001.bot.provider.VersionedUpgrade
 import cn.huohuas001.bot.provider.WhiteList
 import cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
 import java.io.File
@@ -32,6 +33,15 @@ class ConfigManager(
         changed = ConfigUpgrader.fillMissing(DEFAULT_VALUES, plugin.config::contains, plugin.config::set) || changed
 
         val previousVersion = plugin.config.getInt(CONFIG_VERSION_PATH, 0)
+
+        // 版本化升级：根据配置版本号自动更新已有字段的值
+        changed = ConfigUpgrader.upgradeValues(
+            currentVersion = previousVersion,
+            upgrades = VERSIONED_UPGRADES,
+            get = { plugin.config.get(it) },
+            set = { path, value -> plugin.config.set(path, value) }
+        ) || changed
+
         if (previousVersion != CURRENT_CONFIG_VERSION) {
             plugin.config.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION)
             changed = true
@@ -192,8 +202,8 @@ class ConfigManager(
         api = plugin.config.getString("motd.api")?.takeIf(String::isNotBlank)
             ?: "https://motd.minebbs.com/api/status?ip={ip}&stype=auto",
         text = plugin.config.getString("motd.text", "")!!,
-        postImg = plugin.config.getBoolean("motd.post-img", false),
-        useMarkdown = plugin.config.getBoolean("motd.use-markdown", false)
+        postImg = plugin.config.getBoolean("motd.post-img", true),
+        useMarkdown = plugin.config.getBoolean("motd.use-markdown", true)
     )
 
     fun filterRegexList(): List<String> = plugin.config.getStringList("filter-regex")
@@ -256,6 +266,9 @@ class ConfigManager(
     fun bindingRequireGameVerification(): Boolean =
         plugin.config.getBoolean("binding.require-game-verification", false)
 
+    fun commandBlacklist(): List<String> =
+        plugin.config.getStringList("command-blacklist").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+
     private fun parseCustomCommand(values: Map<*, *>): CustomCommandDetail? {
         val key = values["key"]?.toString()?.trim().orEmpty()
         val command = values["command"]?.toString()?.trim().orEmpty()
@@ -269,10 +282,21 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 5
+        private const val CURRENT_CONFIG_VERSION = 6
         private const val CONFIG_VERSION_PATH = "config-version"
 
         private val COMMANDS_HIDDEN_FROM_MENU = setOf("blockMotd", "unblockMotd")
+
+        /** 版本化升级列表：当前配置版本 < toVersion 时自动更新对应字段的值。 */
+        private val VERSIONED_UPGRADES = listOf(
+            VersionedUpgrade(
+                toVersion = 6,
+                values = mapOf(
+                    "motd.post-img" to true,
+                    "motd.use-markdown" to true
+                )
+            )
+        )
 
         /** 每个配置项的注释说明，用于自动追加时生成可读的 YAML。 */
         private val KEY_COMMENTS: Map<String, String> = mapOf(
@@ -313,6 +337,7 @@ class ConfigManager(
             "agent.model" to "AI Agent 使用的模型名",
             "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
             "command-sender" to "命令执行收集模式：Hybrid 同时收集发送者输出和服务端日志",
+            "command-blacklist" to "/执行 命令黑名单，禁止通过 /执行 运行的服务器命令列表",
         )
 
         private val COMMAND_NAMES = listOf(
@@ -360,8 +385,8 @@ class ConfigManager(
             put("motd.server-ip", "127.0.0.1")
             put("motd.server-port", 25565)
             put("motd.text", "")
-            put("motd.post-img", false)
-            put("motd.use-markdown", false)
+            put("motd.post-img", true)
+            put("motd.use-markdown", true)
 
             put("whitelist.add-command", "whitelist add {name}")
             put("whitelist.del-command", "whitelist remove {name}")
@@ -379,6 +404,7 @@ class ConfigManager(
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
             put("binding.require-game-verification", false)
+            put("command-blacklist", emptyList<String>())
             put("custom-commands", emptyList<Map<String, Any>>())
             put("command-sender", "Hybrid")
 

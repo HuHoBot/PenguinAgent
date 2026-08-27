@@ -82,6 +82,17 @@ abstract class CommandSupport : BaseCommand() {
             "huhobot run ${groupId(event)} ${userId(event)} $command"
         }
 
+        // 命令黑名单检查
+        val blacklist = plugin.getCommandBlacklist()
+        if (blacklist.isNotEmpty()) {
+            val cmdToCheck = outgoingCommand.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+                .removePrefix("/").trimStart().lowercase()
+            if (blacklist.any { blocked -> cmdToCheck == blocked || cmdToCheck.startsWith("$blocked ") }) {
+                sendMessage(event, "此命令已被管理员禁止执行")
+                return
+            }
+        }
+
         plugin.sendCommand(outgoingCommand).whenComplete { result, error ->
             when {
                 error != null || result == null -> sendMessage(event, "游戏桥接未配置或执行失败")
@@ -115,5 +126,25 @@ abstract class CommandSupport : BaseCommand() {
         event.sender?.meta?.getString("member_role")?.lowercase() ?: ""
     } catch (_: Exception) {
         ""
+    }
+
+    companion object {
+        /** 静态管理员检查，供 BaseCommand.handleMessage 仅管理员命令拦截使用。 */
+        fun checkAdmin(plugin: HuHoBot, event: GroupMessageEvent): Boolean {
+            val groupId = event.groupOpenId ?: event.groupId
+            val userId = event.sender?.openid ?: event.sender?.id ?: ""
+            val qqAdmin = try {
+                event.sender?.meta?.getString("member_role")?.lowercase() in setOf("owner", "admin")
+            } catch (_: Exception) { false }
+            val manualAdmin = userId in plugin.getAdminList() ||
+                CommandRepositories.administrators.contains(groupId, userId)
+            val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
+            val configuredMode = CommandRepositories.groupSettings.administratorMode(groupId, defaultMode)
+            return when (configuredMode) {
+                AdministratorAccessMode.QQ -> qqAdmin
+                AdministratorAccessMode.MANUAL -> manualAdmin
+                AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin
+            }
+        }
     }
 }
