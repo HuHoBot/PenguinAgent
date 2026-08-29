@@ -26,6 +26,7 @@
 | **群服互通 @提及** | 游戏内 `/at` 命令发送 QQ @消息，QQ→游戏蓝色高亮+叮音效 |
 | **QQ 群管理** | AI Agent 集成禁言、入群审批、自动审批策略等群管理工具 |
 | **指令面板自动同步** | 启动时自动同步命令面板到 QQ 群（上限 20 条） |
+| **背包查看** | `/背包查看 <玩家名>` — PNG 图片渲染玩家背包（Faithful 32x 贴图 + 玩家皮肤） |
 
 ---
 
@@ -291,6 +292,7 @@ QQ 群中的 @消息会自动解析为 `§9@玩家名§r`（蓝色高亮），�
 | `全量` | 切换全量聊天转发开关 |
 | `blockMotd` | 屏蔽本群 MOTD 查询 |
 | `unblockMotd` | 解除本群 MOTD 屏蔽 |
+| `背包查看` `<玩家名>` | 查看指定在线玩家背包内容（PNG 图片，仅管理员） |
 
 ### 认证命令
 
@@ -452,7 +454,25 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.3.0（最新）
+### v1.4.0（最新）
+
+**新功能：**
+- feat: `/背包查看 <玩家名>` — 查看指定在线玩家背包内容（PNG 图片渲染，仅管理员）
+- feat: Faithful 32x 贴图包集成 — 物品图标与方块预览使用 Faithful 32x 纹理
+- feat: 玩家皮肤预览 — 背包图片中显示玩家正面皮肤
+- feat: 等距3D方块预览 — 有面贴图的方块自动合成等距3D效果
+- feat: `/qqbind` 权限改为所有玩家可用（默认 true）
+
+**变更：**
+- change: `/背包查看` 仅管理员可用
+
+**Bug 修复：**
+- fix: 命令方块等动画贴图渲染异常（自动裁剪为第一帧）
+- fix: 铁砧等无面贴图方块使用基础贴图做2D图标
+- fix: 箱子贴图从 overrides 目录正确加载
+- fix: QQ markdown 转义玩家名中 `_` 字符
+
+### v1.3.0
 
 **新功能：**
 - feat: 命令黑名单（`command-blacklist`）— 禁止通过 `/执行` 或 Agent `run_command` 运行指定服务器命令
@@ -554,6 +574,10 @@ ls build/gather-jar/
 ## 许可证
 
 本项目采用 [GNU Affero General Public License v3.0](LICENSE) 许可证。
+
+### 第三方资源
+
+背包查看功能使用 [Faithful 32x](https://faithfulpack.net/) 贴图包（[Faithful License v3](server/Spigot/src/main/resources/inventory/faithful32x/LICENSE.txt)）。
 
 这意味着你可以自由使用、修改和分发本软件，但：
 - 修改后的版本必须以相同许可证发布

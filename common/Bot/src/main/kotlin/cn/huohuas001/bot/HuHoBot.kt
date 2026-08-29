@@ -221,6 +221,12 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     )
 
     fun getOnlineList(): List<String>
+
+    /** 获取指定在线玩家的背包内容（文本格式）；玩家离线返回 null。 */
+    fun getPlayerInventory(playerName: String): String? = null
+
+    /** 获取指定在线玩家的背包 PNG 图片字节数组；玩家离线或渲染失败返回 null。 */
+    fun getPlayerInventoryImage(playerName: String): ByteArray? = null
 }
 
 private val DEFAULT_MARKDOWN_TEMPLATES = mapOf(

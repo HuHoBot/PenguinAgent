@@ -7,6 +7,7 @@ import cn.huohuas001.bot.events.commands.AdministrationCommands
 import cn.huohuas001.bot.events.commands.AuthenticationCommands
 import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.events.commands.BindingCommands
+import cn.huohuas001.bot.events.commands.InventoryCommands
 import cn.huohuas001.bot.events.commands.MotdCommands
 import cn.huohuas001.bot.events.commands.PublicCommands
 import cn.huohuas001.bot.events.commands.RegisteredCommand
@@ -31,6 +32,7 @@ class GroupMessageHandler(
         registerCommand(AgentCommands())
         registerCommand(MotdCommands())
         registerCommand(BindingCommands())
+        registerCommand(InventoryCommands())
     }
 
     fun registerCommand(command: BaseCommand) {

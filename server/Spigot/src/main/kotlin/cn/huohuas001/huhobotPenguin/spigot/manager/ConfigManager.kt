@@ -358,7 +358,8 @@ class ConfigManager(
             "全量",
             "认证",
             "解除认证",
-            "agent"
+            "agent",
+            "背包查看"
         )
 
         private val DEFAULT_VALUES: Map<String, Any> = buildMap {

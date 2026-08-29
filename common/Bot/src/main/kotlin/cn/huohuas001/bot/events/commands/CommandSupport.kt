@@ -5,6 +5,7 @@ import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.datapack.AdministratorAccessMode
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
+import io.github.kloping.qqbot.entities.ex.msg.MessageChain
 
 /**
  * 迁移命令共享的上下文工具。
@@ -31,6 +32,19 @@ abstract class CommandSupport : BaseCommand() {
 
     protected fun replyWithImg(plugin: HuHoBot, event: GroupMessageEvent, message: String,imgUrl: String) {
         plugin.replyWithImg(event,message,imgUrl)
+    }
+
+    /** 发送 PNG 字节数组作为图片消息。 */
+    protected fun replyWithImgBytes(plugin: HuHoBot, event: GroupMessageEvent, text: String, imgBytes: ByteArray) {
+        try {
+            val groupId = groupId(event)
+            val message = MessageChain()
+                .apply { if (text.isNotBlank()) text(plugin.auditText(text)) }
+                .image(imgBytes)
+            event.sendMessage(message)
+        } catch (error: Exception) {
+            plugin.log_error("发送图片消息失败: ${error.message}")
+        }
     }
 
     /** 检查用户是否为管理员（不发送错误消息）。 */

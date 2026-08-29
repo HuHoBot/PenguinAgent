@@ -17,7 +17,15 @@ commands:
   qqbind:
     description: Verify QQ binding with a code from the QQ group
     usage: "/qqbind <code>"
-    permission: huhobot.command
+    permission: huhobot.qqbind
+
+permissions:
+  huhobot.command:
+    description: Allows use of HuHoBot control commands
+    default: op
+  huhobot.qqbind:
+    description: Allows use of QQ bind command
+    default: true
 
 permissions:
   huhobot.command:

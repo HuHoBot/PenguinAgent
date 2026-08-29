@@ -14,6 +14,7 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
+import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import io.github.kloping.qqbot.entities.ex.Keyboard
@@ -53,6 +54,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         getCommand("qqbind")?.apply {
             setExecutor(qqBindCommand)
         } ?: log_error("无法注册 /qqbind 命令，请检查 plugin.yml")
+        InventoryRenderer.init()
         log_info("HuHoBot Penguin 已加载")
     }
 
@@ -162,6 +164,217 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         HuHoBotTask(server.scheduler.runTaskTimer(this, task, delay, period))
 
     override fun getOnlineList(): List<String> = server.onlinePlayers.map { it.name }.toMutableList()
+
+    override fun getPlayerInventory(playerName: String): String? {
+        val player = server.getPlayerExact(playerName) ?: return null
+        if (!player.isOnline) return null
+        val inv = player.inventory
+        val lines = mutableListOf<String>()
+
+        // 护甲
+        val armorNames = mapOf(
+            "头盔" to inv.helmet,
+            "胸甲" to inv.chestplate,
+            "护腿" to inv.leggings,
+            "靴子" to inv.boots
+        )
+        val armorLine = armorNames.map { (slot, item) ->
+            "$slot: ${item?.let { formatItem(it) } ?: "空"}"
+        }.joinToString(" | ")
+        lines.add("=== 护甲 ===")
+        lines.add(armorLine)
+
+        // 副手
+        lines.add("=== 副手 ===")
+        lines.add("副手: ${inv.itemInOffHand.let { formatItem(it) }}")
+
+        // 物品栏（3行9列）
+        lines.add("=== 物品栏 ===")
+        val storage = inv.storageContents
+        for (row in 0 until 3) {
+            val rowItems = (0 until 9).map { col ->
+                val idx = row * 9 + col
+                storage.getOrNull(idx)?.let { formatItem(it) } ?: "---"
+            }
+            lines.add(rowItems.joinToString(" | "))
+        }
+
+        // 快捷栏
+        lines.add("=== 快捷栏 ===")
+        val hotbar = (0 until 9).map { idx ->
+            storage.getOrNull(idx)?.let { formatItem(it) } ?: "---"
+        }
+        lines.add(hotbar.joinToString(" | "))
+
+        return lines.joinToString("\n")
+    }
+
+    override fun getPlayerInventoryImage(playerName: String): ByteArray? {
+        val player = server.getPlayerExact(playerName) ?: return null
+        if (!player.isOnline) return null
+        return try {
+            InventoryRenderer.render(player)
+        } catch (e: Exception) {
+            log_error("背包渲染失败: ${e.message}")
+            null
+        }
+    }
+
+    private fun formatItem(item: org.bukkit.inventory.ItemStack): String {
+        if (item.type.isAir) return "---"
+        val meta = item.itemMeta
+        val rawName = when {
+            meta?.hasDisplayName() == true -> meta.displayName
+            else -> MATERIAL_CN[item.type] ?: item.type.name.replace("_", " ").lowercase()
+                .split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+        }
+        // 去除 Minecraft § 颜色/格式码
+        val name = rawName.replace(Regex("§[0-9a-fk-or]"), "")
+        val amount = item.amount
+        val isDamageable = item.type.maxDurability > 0
+        val durability = if (isDamageable) {
+            val dmg = (meta as? org.bukkit.inventory.meta.Damageable)?.damage ?: 0
+            if (dmg > 0) " (${item.type.maxDurability - dmg}/${item.type.maxDurability})" else ""
+        } else ""
+        val enchant = if (meta?.hasEnchants() == true) " *" else ""
+        return when {
+            amount > 1 && durability.isNotEmpty() -> "$name x$amount$durability$enchant"
+            amount > 1 -> "$name x$amount$enchant"
+            durability.isNotEmpty() -> "$name$durability$enchant"
+            else -> "$name$enchant"
+        }
+    }
+
+    private val MATERIAL_CN = mapOf(
+        org.bukkit.Material.DIAMOND_SWORD to "钻石剑",
+        org.bukkit.Material.DIAMOND_PICKAXE to "钻石镐",
+        org.bukkit.Material.DIAMOND_AXE to "钻石斧",
+        org.bukkit.Material.DIAMOND_SHOVEL to "钻石锹",
+        org.bukkit.Material.DIAMOND_HOE to "钻石锄",
+        org.bukkit.Material.IRON_SWORD to "铁剑",
+        org.bukkit.Material.IRON_PICKAXE to "铁镐",
+        org.bukkit.Material.IRON_AXE to "铁斧",
+        org.bukkit.Material.IRON_SHOVEL to "铁锹",
+        org.bukkit.Material.IRON_HOE to "铁锄",
+        org.bukkit.Material.GOLDEN_SWORD to "金剑",
+        org.bukkit.Material.GOLDEN_PICKAXE to "金镐",
+        org.bukkit.Material.GOLDEN_AXE to "金斧",
+        org.bukkit.Material.GOLDEN_SHOVEL to "金锹",
+        org.bukkit.Material.GOLDEN_HOE to "金锄",
+        org.bukkit.Material.STONE_SWORD to "石剑",
+        org.bukkit.Material.STONE_PICKAXE to "石镐",
+        org.bukkit.Material.STONE_AXE to "石斧",
+        org.bukkit.Material.STONE_SHOVEL to "石锹",
+        org.bukkit.Material.STONE_HOE to "石锄",
+        org.bukkit.Material.WOODEN_SWORD to "木剑",
+        org.bukkit.Material.WOODEN_PICKAXE to "木镐",
+        org.bukkit.Material.WOODEN_AXE to "木斧",
+        org.bukkit.Material.WOODEN_SHOVEL to "木锹",
+        org.bukkit.Material.WOODEN_HOE to "木锄",
+        org.bukkit.Material.NETHERITE_SWORD to "下界合金剑",
+        org.bukkit.Material.NETHERITE_PICKAXE to "下界合金镐",
+        org.bukkit.Material.NETHERITE_AXE to "下界合金斧",
+        org.bukkit.Material.NETHERITE_SHOVEL to "下界合金锹",
+        org.bukkit.Material.NETHERITE_HOE to "下界合金锄",
+        org.bukkit.Material.BOW to "弓",
+        org.bukkit.Material.CROSSBOW to "弩",
+        org.bukkit.Material.TRIDENT to "三叉戟",
+        org.bukkit.Material.SHIELD to "盾牌",
+        org.bukkit.Material.FISHING_ROD to "钓鱼竿",
+        org.bukkit.Material.FLINT_AND_STEEL to "打火石",
+        org.bukkit.Material.SHEARS to "剪刀",
+        org.bukkit.Material.END_ROD to "末地烛",
+        org.bukkit.Material.ARROW to "箭矢",
+        org.bukkit.Material.SPECTRAL_ARROW to "光灵箭",
+        org.bukkit.Material.TIPPED_ARROW to "药水箭",
+        org.bukkit.Material.BONE to "骨头",
+        org.bukkit.Material.BONE_MEAL to "骨粉",
+        org.bukkit.Material.DIAMOND to "钻石",
+        org.bukkit.Material.EMERALD to "绿宝石",
+        org.bukkit.Material.GOLD_INGOT to "金锭",
+        org.bukkit.Material.IRON_INGOT to "铁锭",
+        org.bukkit.Material.NETHERITE_INGOT to "下界合金锭",
+        org.bukkit.Material.NETHERITE_SCRAP to "下界合金碎片",
+        org.bukkit.Material.COAL to "煤炭",
+        org.bukkit.Material.CHARCOAL to "木炭",
+        org.bukkit.Material.REDSTONE to "红石",
+        org.bukkit.Material.LAPIS_LAZULI to "青金石",
+        org.bukkit.Material.DIAMOND_HELMET to "钻石头盔",
+        org.bukkit.Material.DIAMOND_CHESTPLATE to "钻石胸甲",
+        org.bukkit.Material.DIAMOND_LEGGINGS to "钻石护腿",
+        org.bukkit.Material.DIAMOND_BOOTS to "钻石靴子",
+        org.bukkit.Material.IRON_HELMET to "铁头盔",
+        org.bukkit.Material.IRON_CHESTPLATE to "铁胸甲",
+        org.bukkit.Material.IRON_LEGGINGS to "铁护腿",
+        org.bukkit.Material.IRON_BOOTS to "铁靴子",
+        org.bukkit.Material.GOLDEN_HELMET to "金头盔",
+        org.bukkit.Material.GOLDEN_CHESTPLATE to "金胸甲",
+        org.bukkit.Material.GOLDEN_LEGGINGS to "金护腿",
+        org.bukkit.Material.GOLDEN_BOOTS to "金靴子",
+        org.bukkit.Material.LEATHER_HELMET to "皮革头盔",
+        org.bukkit.Material.LEATHER_CHESTPLATE to "皮革胸甲",
+        org.bukkit.Material.LEATHER_LEGGINGS to "皮革护腿",
+        org.bukkit.Material.LEATHER_BOOTS to "皮革靴子",
+        org.bukkit.Material.CHAINMAIL_HELMET to "锁链头盔",
+        org.bukkit.Material.CHAINMAIL_CHESTPLATE to "锁链胸甲",
+        org.bukkit.Material.CHAINMAIL_LEGGINGS to "锁链护腿",
+        org.bukkit.Material.CHAINMAIL_BOOTS to "锁链靴子",
+        org.bukkit.Material.NETHERITE_HELMET to "下界合金头盔",
+        org.bukkit.Material.NETHERITE_CHESTPLATE to "下界合金胸甲",
+        org.bukkit.Material.NETHERITE_LEGGINGS to "下界合金护腿",
+        org.bukkit.Material.NETHERITE_BOOTS to "下界合金靴子",
+        org.bukkit.Material.TURTLE_HELMET to "海龟头盔",
+        org.bukkit.Material.ELYTRA to "鞘翅",
+        org.bukkit.Material.TOTEM_OF_UNDYING to "不死图腾",
+        org.bukkit.Material.EXPERIENCE_BOTTLE to "经验瓶",
+        org.bukkit.Material.ENDER_PEARL to "末影珍珠",
+        org.bukkit.Material.ENDER_EYE to "末影之眼",
+        org.bukkit.Material.ENDER_CHEST to "末影箱",
+        org.bukkit.Material.BREAD to "面包",
+        org.bukkit.Material.COOKED_BEEF to "熟牛排",
+        org.bukkit.Material.COOKED_PORKCHOP to "熟猪排",
+        org.bukkit.Material.COOKED_MUTTON to "熟羊肉",
+        org.bukkit.Material.COOKED_CHICKEN to "熟鸡肉",
+        org.bukkit.Material.COOKED_RABBIT to "熟兔肉",
+        org.bukkit.Material.COOKED_COD to "熟鳕鱼",
+        org.bukkit.Material.COOKED_SALMON to "熟鲑鱼",
+        org.bukkit.Material.GOLDEN_APPLE to "金苹果",
+        org.bukkit.Material.ENCHANTED_GOLDEN_APPLE to "附魔金苹果",
+        org.bukkit.Material.APPLE to "苹果",
+        org.bukkit.Material.CARROT to "胡萝卜",
+        org.bukkit.Material.GOLDEN_CARROT to "金胡萝卜",
+        org.bukkit.Material.POTATO to "土豆",
+        org.bukkit.Material.BAKED_POTATO to "烤土豆",
+        org.bukkit.Material.MUSHROOM_STEW to "蘑菇煲",
+        org.bukkit.Material.BEETROOT to "甜菜根",
+        org.bukkit.Material.BEETROOT_SOUP to "甜菜汤",
+        org.bukkit.Material.MELON_SLICE to "西瓜片",
+        org.bukkit.Material.PUMPKIN_PIE to "南瓜派",
+        org.bukkit.Material.COOKIE to "曲奇",
+        org.bukkit.Material.CAKE to "蛋糕",
+        org.bukkit.Material.WITHER_SKELETON_SPAWN_EGG to "凋灵骷髅刷怪蛋",
+        org.bukkit.Material.ZOMBIE_SPAWN_EGG to "僵尸刷怪蛋",
+        org.bukkit.Material.SKELETON_SPAWN_EGG to "骷髅刷怪蛋",
+        org.bukkit.Material.CREEPER_SPAWN_EGG to "苦力怕刷怪蛋",
+        org.bukkit.Material.SPIDER_SPAWN_EGG to "蜘蛛刷怪蛋",
+        org.bukkit.Material.PIG_SPAWN_EGG to "猪刷怪蛋",
+        org.bukkit.Material.COW_SPAWN_EGG to "牛刷怪蛋",
+        org.bukkit.Material.CHICKEN_SPAWN_EGG to "鸡刷怪蛋",
+        org.bukkit.Material.SHEEP_SPAWN_EGG to "羊刷怪蛋",
+        org.bukkit.Material.PLAYER_HEAD to "玩家头颅",
+        org.bukkit.Material.SKELETON_SKULL to "骷髅头颅",
+        org.bukkit.Material.WITHER_SKELETON_SKULL to "凋灵骷髅头颅",
+        org.bukkit.Material.ZOMBIE_HEAD to "僵尸头颅",
+        org.bukkit.Material.CREEPER_HEAD to "苦力怕头颅",
+        org.bukkit.Material.DRAGON_HEAD to "龙头",
+        org.bukkit.Material.END_CRYSTAL to "末地水晶",
+        org.bukkit.Material.BEDROCK to "基岩",
+        org.bukkit.Material.BARRIER to "屏障",
+        org.bukkit.Material.COMMAND_BLOCK to "命令方块",
+        org.bukkit.Material.KNOWLEDGE_BOOK to "知识之书",
+        org.bukkit.Material.ENCHANTED_BOOK to "附魔书",
+        org.bukkit.Material.WRITTEN_BOOK to "成书"
+    )
     override fun getConfigFile(): File = configManager.configFile
     override fun getBotAppId(): String = configManager.botAppId()
     override fun getBotSecret(): String = configManager.botSecret()
