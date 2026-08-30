@@ -30,5 +30,7 @@ annotation class Commands(
 data class RegisteredCommand(
     val command: String,
     val describe: String,
-    val onlyAdmin: Boolean = false
+    val onlyAdmin: Boolean = false,
+    /** 命令来源：`null` 表示内置命令，非空表示扩展名称。 */
+    val source: String? = null
 )

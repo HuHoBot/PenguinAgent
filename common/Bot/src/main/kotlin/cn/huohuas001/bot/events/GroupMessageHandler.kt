@@ -39,6 +39,39 @@ class GroupMessageHandler(
         commands.add(command)
     }
 
+    /**
+     * 注册指令处理器并标记来源扩展。
+     * 注册后会将该处理器的所有命令标记为 [source] 扩展。
+     */
+    fun registerCommand(command: BaseCommand, source: String) {
+        commands.add(command)
+        // 回溯扫描刚注册的命令，将 source 写入 allRegisteredCommands 中的对应条目
+        val registered = command.registeredCommands()
+        // 先通过反射拿到可变列表并快照，避免多线程下索引偏移
+        val mutableList = getRegisteredCommandsList() ?: return
+        val snapshot = mutableList.toList()
+        for (rc in registered) {
+            val index = snapshot.indexOfFirst { it.command == rc.command }
+            if (index >= 0) {
+                val old = snapshot[index]
+                if (old.source == null) {
+                    mutableList[index] = old.copy(source = source)
+                }
+            }
+        }
+    }
+
+    private fun getRegisteredCommandsList(): MutableList<RegisteredCommand>? {
+        return try {
+            val field = BaseCommand::class.java.getDeclaredField("allRegisteredCommands")
+            field.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            field.get(null) as MutableList<RegisteredCommand>
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /** 汇总所有实际注册的指令，供 QQ 指令面板自动同步。 */
     fun registeredCommands(): List<RegisteredCommand> = commands
         .flatMap { it.registeredCommands() }

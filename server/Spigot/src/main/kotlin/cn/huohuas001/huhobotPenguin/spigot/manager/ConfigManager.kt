@@ -173,7 +173,8 @@ class ConfigManager(
         quitFormat = plugin.config.getString(
             "player-events.quit.format",
             "[游戏] {name} 离开了服务器"
-        )!!
+        )!!,
+        alwaysForward = plugin.config.getBoolean("player-events.always-forward", false)
     )
 
     fun markdownFiles(): Map<String, String> {
@@ -273,12 +274,15 @@ class ConfigManager(
         val key = values["key"]?.toString()?.trim().orEmpty()
         val command = values["command"]?.toString()?.trim().orEmpty()
         val permission = values["permission"]?.toString()?.toIntOrNull() ?: 0
+        val pushMenu = values["pushMenu"]?.toString()?.toBooleanStrictOrNull()
+            ?: values["push-menu"]?.toString()?.toBooleanStrictOrNull()
+            ?: true
 
         if (key.isEmpty() || command.isEmpty()) {
             plugin.logger.warning("忽略缺少 key 或 command 的自定义命令配置: $values")
             return null
         }
-        return CustomCommandDetail(key, command, permission)
+        return CustomCommandDetail(key, command, permission, pushMenu)
     }
 
     companion object {
@@ -314,6 +318,7 @@ class ConfigManager(
             "player-events.join.format" to "进服通知格式，可用占位符：{name}、{player}、{server}、{platform}",
             "player-events.quit.enabled" to "是否转发玩家退服通知",
             "player-events.quit.format" to "退服通知格式，可用占位符：{name}、{player}、{server}、{platform}",
+            "player-events.always-forward" to "是否忽略平台事件的隐藏/取消/登录状态判断，始终转发进退服事件",
             "markdown.queryOnline" to "查在线命令使用的 Markdown 模板文件名",
             "motd.server-ip" to "MOTD 查询的服务器地址",
             "motd.server-port" to "MOTD 查询的服务器端口",
@@ -380,6 +385,7 @@ class ConfigManager(
             put("player-events.join.format", "[游戏] {name} 加入了服务器")
             put("player-events.quit.enabled", true)
             put("player-events.quit.format", "[游戏] {name} 离开了服务器")
+            put("player-events.always-forward", false)
 
             put("markdown.queryOnline", "online.md")
 

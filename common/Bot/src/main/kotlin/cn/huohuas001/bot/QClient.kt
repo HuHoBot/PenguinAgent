@@ -2,6 +2,8 @@ package cn.huohuas001.bot
 
 import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.agent.AgentInteractionListener
+import cn.huohuas001.bot.addon.Addon
+import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.events.GroupMessageHandler
 import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
@@ -34,6 +36,22 @@ object QClient {
             "QQ client has not been launched"
         }
         groupMessageHandler.registerCommand(command)
+    }
+
+    /**
+     * 注册指令处理器并关联扩展元数据。
+     * 命令会标记为该扩展的来源，可通过 [AddonManager] 查询。
+     */
+    fun registerCommand(addon: Addon, command: BaseCommand) {
+        check(::groupMessageHandler.isInitialized) {
+            "QQ client has not been launched"
+        }
+        groupMessageHandler.registerCommand(command, addon.name)
+        // 将该扩展的命令信息注册到 AddonManager
+        val addonCommands = command.registeredCommands().map {
+            it.copy(source = addon.name)
+        }
+        AddonManager.register(addon, addonCommands)
     }
 
     fun syncGroupPanels() {

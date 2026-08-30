@@ -3,6 +3,7 @@ package cn.huohuas001.bot.events.commands
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.QClient
+import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 
@@ -106,20 +107,70 @@ class PublicCommands : CommandSupport() {
 
     @Commands(command = "帮助", describe = "查看所有命令帮助")
     fun help(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
-        val lines = mutableListOf("可用命令列表：")
-        val commands = BaseCommand.allCommands().sortedBy { it.command }
-        for (cmd in commands) {
-            lines.add("  ${cmd.command} —— ${cmd.describe}")
-        }
-        val customs = CustomCommandRegistry.snapshot()
-        if (customs.isNotEmpty()) {
-            lines.add("  --- 自定义命令 ---")
-            for (c in customs.sortedBy { it.key }) {
-                val perm = if (c.permission > 0) " (管理员)" else ""
-                lines.add("  ${c.key}${perm}")
+        val md = StringBuilder()
+        md.appendLine("# HuHoBot 命令帮助")
+        md.appendLine()
+
+        // 收集三处命令，按 key 去重，每个 key 只归一个分类
+        val addonCmdMap = mutableMapOf<String, RegisteredCommand>()
+        for (addon in AddonManager.allAddons()) {
+            for (cmd in AddonManager.commandsOf(addon.name)) {
+                addonCmdMap.putIfAbsent(cmd.command, cmd)
             }
         }
-        reply(plugin, event, lines.joinToString("\n"))
+        val customCmdMap = CustomCommandRegistry.snapshot().associateBy { it.key }
+        val builtInCmdMap = BaseCommand.allCommands().associateBy { it.command }
+
+        // 优先级：扩展 > 内置 > 自定义
+        val addonKeys = addonCmdMap.keys
+        val builtInKeys = builtInCmdMap.keys.filter { it !in addonKeys }.toSet()
+        val customKeys = customCmdMap.keys.filter { it !in addonKeys && it !in builtInKeys }.toSet()
+
+        // 内置命令
+        if (builtInKeys.isNotEmpty()) {
+            md.appendLine("## 内置命令")
+            md.appendLine()
+            md.appendLine("| 命令 | 说明 | 权限 |")
+            md.appendLine("| --- | --- | --- |")
+            for (key in builtInKeys.sorted()) {
+                val cmd = builtInCmdMap[key]!!
+                val perm = if (cmd.onlyAdmin) "管理员" else "公开"
+                md.appendLine("| ${cmd.command} | ${cmd.describe} | $perm |")
+            }
+            md.appendLine()
+        }
+
+        // 自定义命令
+        if (customKeys.isNotEmpty()) {
+            md.appendLine("## 自定义命令")
+            md.appendLine()
+            md.appendLine("| 命令 | 说明 | 权限 |")
+            md.appendLine("| --- | --- | --- |")
+            for (key in customKeys.sorted()) {
+                val c = customCmdMap[key]!!
+                val perm = if (c.permission > 0) "管理员" else "公开"
+                md.appendLine("| ${c.key} | ${c.command} | $perm |")
+            }
+            md.appendLine()
+        }
+
+        // 扩展命令
+        for (addon in AddonManager.allAddons()) {
+            val addonCmds = AddonManager.commandsOf(addon.name)
+            if (addonCmds.isNotEmpty()) {
+                md.appendLine("## 扩展：${addon.name}")
+                md.appendLine()
+                md.appendLine("| 命令 | 说明 | 权限 |")
+                md.appendLine("| --- | --- | --- |")
+                for (cmd in addonCmds.sortedBy { it.command }) {
+                    val perm = if (cmd.onlyAdmin) "管理员" else "公开"
+                    md.appendLine("| ${cmd.command} | ${cmd.describe} | $perm |")
+                }
+                md.appendLine()
+            }
+        }
+
+        plugin.replyMarkdown(event, md.toString().trimEnd())
     }
 
     @Commands(command = "执行", describe = "执行自定义命令")
@@ -129,6 +180,29 @@ class PublicCommands : CommandSupport() {
             return
         }
         executeCustomCommand(plugin, event, params, admin = isAdmin(plugin, event))
+    }
+
+    @Commands(command = "addons", describe = "查看已安装的扩展")
+    fun listAddons(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        val addons = AddonManager.allAddons()
+        if (addons.isEmpty()) {
+            reply(plugin, event, "当前没有已安装的扩展。")
+            return
+        }
+
+        val md = StringBuilder()
+        md.appendLine("# 已安装的扩展")
+        md.appendLine()
+        md.appendLine("| 名称 | 版本 | 说明 | 作者 | 命令数 |")
+        md.appendLine("| --- | --- | --- | --- | --- |")
+        for (addon in addons) {
+            val cmdCount = AddonManager.commandsOf(addon.name).size
+            val desc = addon.description.ifEmpty { "-" }
+            val author = addon.author.ifEmpty { "-" }
+            md.appendLine("| ${addon.name} | ${addon.version} | $desc | $author | $cmdCount |")
+        }
+
+        plugin.replyMarkdown(event, md.toString().trimEnd())
     }
 
 }

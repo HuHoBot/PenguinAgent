@@ -454,7 +454,23 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.4.0（最新）
+### v1.5.0（最新）
+
+**上游同步（扩展 API 合入）：**
+- feat: `MsgPack` / `MsgPackFactory` — MsgPack 消息序列化
+- feat: `OnBotRecvMsg` / `OnBotCommand` 事件 — 第三方插件可监听 QQ 消息与命令事件
+- feat: `AddonManager` 扩展注册中心 — 管理已安装扩展及其命令
+- feat: `registerAddon(name, version, description, author)` — 注册扩展元数据
+- feat: `registerBotCommand(addonName, key, command, permission, pushMenu)` — 注册扩展命令并关联归属
+- feat: `/addons` 命令 — 查看已安装扩展列表
+- feat: `/帮助` 三段式显示（内置命令、自定义命令、扩展命令），按 command key 全局去重
+- feat: `MessageProvider.onBotReceivedGroupMessage()` / `onBotCommand()` 回调
+
+**Bug 修复：**
+- fix: `/帮助` 命令重复显示问题（旧 API 注册的命令不再重复归类）
+- fix: QQ markdown 转义玩家名中 `_text_` 被识别为斜体
+
+### v1.4.0
 
 **新功能：**
 - feat: `/背包查看 <玩家名>` — 查看指定在线玩家背包内容（PNG 图片渲染，仅管理员）

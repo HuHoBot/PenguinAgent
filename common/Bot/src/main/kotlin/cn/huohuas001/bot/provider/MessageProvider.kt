@@ -9,6 +9,12 @@ interface MessageProvider {
     /** 广播消息，同时对 highlightedPlayers 中的在线玩家播放提示音。 */
     fun broadcastMessage(msg: String, highlightedPlayers: List<String>) = broadcastMessage(msg)
 
+    /** QQ 群消息收到后的平台回调，返回 true 表示阻止后续全量聊天转发。 */
+    fun onBotReceivedGroupMessage(event: GroupMessageEvent, messageSequence: Int): Boolean = false
+
+    /** 命中平台注册的自定义命令时回调，返回 true 表示阻止后续全量聊天转发。 */
+    fun onBotCommand(event: GroupMessageEvent, messageSequence: Int): Boolean = false
+
     /** 向配置中的所有 QQ 群发送普通文本。 */
     fun sendText(text: String)
 

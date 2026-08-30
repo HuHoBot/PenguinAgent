@@ -15,7 +15,9 @@ class PlayerEventFormat(
     val joinEnabled: Boolean,
     val joinFormat: String,
     val quitEnabled: Boolean,
-    val quitFormat: String
+    val quitFormat: String,
+    /** 是否忽略平台事件的隐藏、取消或登录状态判断，始终转发进退服事件。 */
+    val alwaysForward: Boolean = false
 )
 
 class Motd(

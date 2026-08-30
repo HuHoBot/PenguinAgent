@@ -2,8 +2,11 @@ package cn.huohuas001.huhobotPenguin.spigot
 
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.QClient
+import cn.huohuas001.bot.addon.Addon
+import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.agent.AgentCommandMode
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
+import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.huhobotPenguin.spigot.commands.AtCommand
@@ -13,11 +16,17 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.CommandOutputAppender
 import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
+import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
+import cn.huohuas001.huhobotPenguin.spigot.events.OnBotRecvMsg
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
+import cn.huohuas001.huhobotPenguin.adapter.api.MsgPack
+import cn.huohuas001.huhobotPenguin.adapter.api.toMsgPack
+import cn.huohuas001.huhobotPenguin.adapter.api.withCommand
+import io.github.kloping.qqbot.api.v2.GroupMessageEvent
+import io.github.kloping.qqbot.entities.ex.Keyboard
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
-import io.github.kloping.qqbot.entities.ex.Keyboard
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandMap
@@ -109,7 +118,70 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         })
     }
 
-    /** 注册运行时自定义命令，并按 pushMenu 更新 QQ 命令面板。 */
+    override fun onBotReceivedGroupMessage(event: GroupMessageEvent, messageSequence: Int): Boolean {
+        val msgPack = event.toMsgPack(messageSequence)
+        val botEvent = OnBotRecvMsg(
+            msgPack = msgPack,
+            replyTextAction = { text ->
+                QClient.replyText(msgPack.groupOpenId, msgPack.messageId, msgPack.messageSequence, text)
+            },
+            replyMarkdownAction = { markdown, keyboard ->
+                QClient.replyMarkdown(
+                    msgPack.groupOpenId,
+                    msgPack.messageId,
+                    msgPack.messageSequence,
+                    markdown,
+                    keyboard
+                )
+            }
+        )
+        callSyncEvent(botEvent)
+        return botEvent.isCancelled
+    }
+
+    override fun onBotCommand(event: GroupMessageEvent, messageSequence: Int): Boolean {
+        val msgPack = event.toMsgPack(messageSequence).withCommand(event.rawMessage.content.orEmpty())
+        val botEvent = OnBotCommand(
+            msgPack = msgPack,
+            replyTextAction = { text ->
+                QClient.replyText(msgPack.groupOpenId, msgPack.messageId, msgPack.messageSequence, text)
+            },
+            replyMarkdownAction = { markdown, keyboard ->
+                QClient.replyMarkdown(
+                    msgPack.groupOpenId,
+                    msgPack.messageId,
+                    msgPack.messageSequence,
+                    markdown,
+                    keyboard
+                )
+            }
+        )
+        callSyncEvent(botEvent)
+        return botEvent.isCancelled
+    }
+
+    private fun <T : org.bukkit.event.Event> callSyncEvent(event: T): T {
+        if (server.isPrimaryThread) {
+            server.pluginManager.callEvent(event)
+            return event
+        }
+        return try {
+            server.scheduler.callSyncMethod(this) {
+                server.pluginManager.callEvent(event)
+                event
+            }.get()
+        } catch (error: Exception) {
+            log_error("同步触发 Bukkit 事件失败: ${error.message}")
+            event
+        }
+    }
+
+    /**
+     * 注册运行时自定义命令，并按 pushMenu 更新 QQ 命令面板。
+     *
+     * **旧规范**：仅传 key/command，命令不会归属到任何扩展。
+     * 新代码应使用 [registerAddon] + [registerBotCommand] 四参数重载。
+     */
     @JvmOverloads
     fun registerBotCommand(
         key: String,
@@ -120,12 +192,78 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         val registered = CustomCommandRegistry.register(
             CustomCommandDetail(key, command, permission, pushMenu)
         )
-        return registered
+        if (!registered) return false
+        QClient.syncGroupPanels()
+        return true
+    }
+
+    /**
+     * 注册运行时自定义命令并关联到指定扩展。
+     *
+     * @param addonName 已通过 [registerAddon] 注册的扩展名称
+     * @param key       命令 key（QQ 群中用 `/执行 <key>` 或 `/ <key>` 触发）
+     * @param command   执行的服务器命令模板
+     * @param permission 权限级别，0 = 公开
+     * @param pushMenu  是否同步到 QQ 命令面板
+     */
+    @JvmOverloads
+    fun registerBotCommand(
+        addonName: String,
+        key: String,
+        command: String,
+        permission: Int = 0,
+        pushMenu: Boolean = true
+    ): Boolean {
+        if (addonName !in AddonManager) {
+            log_error("registerBotCommand 失败：扩展 '$addonName' 未注册，请先调用 registerAddon")
+            return false
+        }
+        val registered = CustomCommandRegistry.register(
+            CustomCommandDetail(key, command, permission, pushMenu)
+        )
+        if (!registered) return false
+        AddonManager.addCommand(
+            addonName,
+            RegisteredCommand(
+                command = key,
+                describe = command,
+                onlyAdmin = permission > 0,
+                source = addonName
+            )
+        )
+        QClient.syncGroupPanels()
+        return true
+    }
+
+    /**
+     * 注册当前插件为 HuHoBot 扩展。
+     * 必须在 [registerBotCommand] 之前调用，否则命令无法归属到该扩展。
+     *
+     * @param name        扩展名称（建议与 plugin.yml 中 name 一致）
+     * @param version     版本号
+     * @param description 描述
+     * @param author      作者
+     * @return true 表示注册成功
+     */
+    @JvmOverloads
+    fun registerAddon(
+        name: String,
+        version: String = "1.0.0",
+        description: String = "",
+        author: String = ""
+    ): Boolean {
+        if (name.isBlank()) {
+            log_error("registerAddon 失败：扩展名称不能为空")
+            return false
+        }
+        AddonManager.register(Addon(name, version, description, author))
+        return true
     }
 
     /** 注销运行时自定义命令，并按需刷新 QQ 命令面板。 */
     fun unregisterBotCommand(key: String): Boolean {
         val removed = CustomCommandRegistry.unregister(key)
+        if (removed) QClient.syncGroupPanels()
         return removed
     }
 
@@ -134,7 +272,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     /** 主动向指定 QQ 群发送普通文本。 */
     fun sendBotText(groupOpenId: String, text: String): Boolean =
-        QClient.sendTextToGroup(groupOpenId, text).let { true }
+        QClient.sendTextToGroup(groupOpenId, text).let { it != null }
 
     /** 向配置中的所有 QQ 群发送 Markdown。 */
     @JvmOverloads
@@ -146,7 +284,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         groupOpenId: String,
         markdown: String,
         keyboard: Keyboard? = null
-    ): Boolean = QClient.sendMarkdownToGroup(groupOpenId, markdown, keyboard).let { true }
+    ): Boolean = QClient.sendMarkdownToGroup(groupOpenId, markdown, keyboard).let { it != null }
 
     override fun isAuthenticationEnabled(): Boolean = configManager.isAuthenticationEnabled()
     override fun getCommandMenuList(): Map<String, Boolean> = configManager.commandMenuSwitches()
