@@ -454,13 +454,13 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.5.0（最新）
+### v1.6.0（最新）
 
 **新功能：**
 - feat: WebUI 端口可通过 `config.yml` 中的 `webui-port` 配置（默认 5678）
 - feat: 配置文件版本升级到 v7，旧版自动迁移添加 `webui-port` 默认值
 
-**上游同步（扩展 API 合入）：**
+### v1.5.0
 - feat: `MsgPack` / `MsgPackFactory` — MsgPack 消息序列化
 - feat: `OnBotRecvMsg` / `OnBotCommand` 事件 — 第三方插件可监听 QQ 消息与命令事件
 - feat: `AddonManager` 扩展注册中心 — 管理已安装扩展及其命令
