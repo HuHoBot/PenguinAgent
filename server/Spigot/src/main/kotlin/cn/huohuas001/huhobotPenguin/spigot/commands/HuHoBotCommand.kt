@@ -26,10 +26,13 @@ class HuHoBotCommand(private val plugin: HuHoBotSpigot) : TabExecutor {
             )
 
             "password" -> handlePassword(sender, args)
-            "webui" -> sender.sendMessage(
-                "WebUI 地址: http://localhost:5678\n" +
-                    "WebUI 密码: ${currentPasswordHint()}"
-            )
+            "webui" -> {
+                val port = plugin.getWebUiPort()
+                sender.sendMessage(
+                    "WebUI 地址: http://localhost:${port}\n" +
+                        "WebUI 密码: ${currentPasswordHint()}"
+                )
+            }
 
             else -> sendHelp(sender, label)
         }

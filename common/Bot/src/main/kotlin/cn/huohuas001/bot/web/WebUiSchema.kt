@@ -50,6 +50,7 @@ object WebUiSchema {
         title = "服务器",
         fields = listOf(
             FieldSpec("serverName", "服务器名称", "text", "用于玩家事件消息中的 {server} 占位符"),
+            FieldSpec("webui-port", "WebUI 端口", "number", "WebUI 管理界面端口，修改后需重启生效"),
             FieldSpec("command-sender", "命令执行器", "select", "Hybrid=混合控制台；其他=模拟控制台", options = listOf("Hybrid", "Console"))
         )
     )

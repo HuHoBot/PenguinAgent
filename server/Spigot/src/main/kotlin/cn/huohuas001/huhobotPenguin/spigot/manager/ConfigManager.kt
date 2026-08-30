@@ -286,7 +286,7 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 6
+        private const val CURRENT_CONFIG_VERSION = 7
         private const val CONFIG_VERSION_PATH = "config-version"
 
         private val COMMANDS_HIDDEN_FROM_MENU = setOf("blockMotd", "unblockMotd")
@@ -299,6 +299,12 @@ class ConfigManager(
                     "motd.post-img" to true,
                     "motd.use-markdown" to true
                 )
+            ),
+            VersionedUpgrade(
+                toVersion = 7,
+                values = mapOf(
+                    "webui-port" to 5678
+                )
             )
         )
 
@@ -310,6 +316,7 @@ class ConfigManager(
             "bot.groups" to "允许使用的 QQ 群 OpenId 列表",
             "bot.suppress-console-output" to "屏蔽 io.github.kloping.qqbot 直接通过 System.out 输出的调试信息",
             "serverName" to "服务器显示名称，可在进服/退服格式中通过 {server} 使用",
+            "webui-port" to "WebUI 管理界面端口，修改后需重启生效",
             "chat-format.from-game" to "游戏→QQ 消息格式，可用占位符：{name}、{message}",
             "chat-format.from-group" to "QQ→游戏 消息格式，可用占位符：{name}、{message}",
             "chat-format.post-chat" to "是否开启群聊转发",
@@ -375,6 +382,7 @@ class ConfigManager(
             put("bot.groups", emptyList<String>())
             put("bot.suppress-console-output", true)
             put("serverName", "HuHoBot")
+            put("webui-port", 5678)
 
             put("chat-format.from-game", "[游戏] {message}")
             put("chat-format.from-group", "[QQ] {name}: {message}")

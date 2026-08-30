@@ -223,6 +223,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         words = getSensitiveWords()
     )
 
+    /** WebUI 服务端口；默认 5678。 */
+    fun getWebUiPort(): Int = 5678
+
     fun getOnlineList(): List<String>
 
     /** 获取指定在线玩家的背包内容（文本格式）；玩家离线返回 null。 */

@@ -1,4 +1,7 @@
-config-version: 5
+config-version: 7
+
+# WebUI 端口，访问 http://127.0.0.1:<port> 管理配置。
+webui-port: 5678
 
 # 服务器显示名称，可在进服/退服格式中通过 {server} 使用。
 serverName: "HuHoBot"

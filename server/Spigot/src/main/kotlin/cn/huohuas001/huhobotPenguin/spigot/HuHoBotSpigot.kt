@@ -550,6 +550,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun getCommandBlacklist(): List<String> = configManager.commandBlacklist()
 
+    override fun getWebUiPort(): Int = config.getInt("webui-port", 5678)
+
     override fun getWebUiConfigValues(): Map<String, Any?> =
         config.getValues(true)
 

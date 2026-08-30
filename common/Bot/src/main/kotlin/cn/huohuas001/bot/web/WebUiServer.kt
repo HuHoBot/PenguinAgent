@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object WebUiServer {
 
-    private const val PORT = 5678
+    private const val DEFAULT_PORT = 5678
     private const val TOKEN_TTL_MILLIS = 24 * 60 * 60 * 1000L
 
     private var httpServer: HttpServer? = null
@@ -38,14 +38,15 @@ object WebUiServer {
     fun start() {
         if (running.get()) return
         try {
-            val server = HttpServer.create(InetSocketAddress(PORT), 0)
+            val plugin = BotShared.getPlugin()
+            val port = plugin.getWebUiPort()
+            val server = HttpServer.create(InetSocketAddress(port), 0)
             server.executor = Executors.newFixedThreadPool(2)
             server.createContext("/", WebUiServer::handle)
             server.start()
             httpServer = server
             running.set(true)
-            val plugin = BotShared.getPlugin()
-            plugin.log_info("网页配置UI已在127.0.0.1:${PORT}启动")
+            plugin.log_info("网页配置UI已在127.0.0.1:${port}启动")
             val generated = WebUiPassword.ensureGenerated()
             if (generated.isNotEmpty()) {
                 plugin.log_info("WebUI 管理密码（仅首次启动自动生成，可用 /hb password 修改）: $generated")
@@ -53,7 +54,7 @@ object WebUiServer {
                 plugin.log_info("WebUI 管理密码: 已设置（可用 /hb password 修改）")
             }
         } catch (error: Exception) {
-            BotShared.getPlugin().log_warning("WebUI 启动失败（端口 $PORT 可能被占用）: ${error.message}")
+            BotShared.getPlugin().log_warning("WebUI 启动失败（端口可能被占用）: ${error.message}")
         }
     }
 
