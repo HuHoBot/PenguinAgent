@@ -26,8 +26,3 @@ permissions:
   huhobot.qqbind:
     description: Allows use of QQ bind command
     default: true
-
-permissions:
-  huhobot.command:
-    description: Allows use of HuHoBot control commands
-    default: op
