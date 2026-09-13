@@ -14,6 +14,7 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.QqBindCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.BukkitConsoleSender
 import cn.huohuas001.huhobotPenguin.spigot.commands.CommandOutputAppender
 import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
+import cn.huohuas001.huhobotPenguin.spigot.commands.SendCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
@@ -63,6 +64,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         getCommand("qqbind")?.apply {
             setExecutor(qqBindCommand)
         } ?: log_error("无法注册 /qqbind 命令，请检查 plugin.yml")
+        val sendCommand = SendCommand(this)
+        getCommand("send")?.apply {
+            setExecutor(sendCommand)
+            tabCompleter = sendCommand
+        } ?: log_error("无法注册 /send 命令，请检查 plugin.yml")
         InventoryRenderer.init()
         log_info("HuHoBot Penguin 已加载")
     }

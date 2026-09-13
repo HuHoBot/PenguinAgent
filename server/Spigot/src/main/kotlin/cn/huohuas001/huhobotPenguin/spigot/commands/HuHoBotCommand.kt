@@ -74,6 +74,7 @@ class HuHoBotCommand(private val plugin: HuHoBotSpigot) : TabExecutor {
         sender.sendMessage("/$label info - 查看适配器信息")
         sender.sendMessage("/$label password <新密码> - 修改 WebUI 登录密码")
         sender.sendMessage("/$label webui - 查看 WebUI 地址")
+        sender.sendMessage("/send <消息> - 向 QQ 群发送消息")
     }
 
     private companion object {

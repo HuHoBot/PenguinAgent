@@ -7,7 +7,7 @@ api-version: '1.18'
 commands:
   huhobot:
     description: HuHoBot control command
-    usage: "/huhobot reload|info|password|webui"
+    usage: "/huhobot reload|info|send|password|webui"
     aliases: [hb]
     permission: huhobot.command
   at:
@@ -18,6 +18,10 @@ commands:
     description: Verify QQ binding with a code from the QQ group
     usage: "/qqbind <code>"
     permission: huhobot.qqbind
+  send:
+    description: Send a message to QQ group
+    usage: "/send <message>"
+    permission: huhobot.send
 
 permissions:
   huhobot.command:
@@ -25,4 +29,7 @@ permissions:
     default: op
   huhobot.qqbind:
     description: Allows use of QQ bind command
+    default: true
+  huhobot.send:
+    description: Allows use of send command to QQ group
     default: true
