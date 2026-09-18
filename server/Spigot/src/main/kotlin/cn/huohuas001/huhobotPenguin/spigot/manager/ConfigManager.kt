@@ -232,8 +232,12 @@ class ConfigManager(
             val path = "commands.$commandName"
             val default = commandName !in COMMANDS_HIDDEN_FROM_MENU
             val settings = plugin.config.getConfigurationSection(path)
-            if (settings == null) default
-            else {
+            if (settings == null) {
+                // 简单布尔值格式：commands.xxx: true/false
+                val enabled = plugin.config.getBoolean(path, true)
+                if (!enabled) false else default
+            } else {
+                // 复杂格式：commands.xxx.pushMenu: true
                 val pushMenu = settings.get("pushMenu")
                 when (pushMenu) {
                     is Boolean -> pushMenu

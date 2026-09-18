@@ -58,6 +58,7 @@ object QClient {
         if (!::starter.isInitialized || !::groupMessageHandler.isInitialized) return
         val plugin = BotShared.getPlugin()
         val builtInCommands = groupMessageHandler.registeredCommands()
+            .filter { plugin.getCommandList()[it.command] != false }
             .filter { plugin.getCommandMenuList()[it.command] != false }
         val customCommands = CustomCommandRegistry.snapshot().filter { it.pushMenu }.map {
             RegisteredCommand(
