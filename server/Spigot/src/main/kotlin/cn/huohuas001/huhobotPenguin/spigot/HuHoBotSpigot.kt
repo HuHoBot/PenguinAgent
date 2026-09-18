@@ -95,26 +95,21 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     /**
-     * 完整重启：关闭 QQ 客户端 → 注销所有 MC 命令 → 重新初始化 → 重新注册命令。
+     * 完整重启：注销 MC 命令 → 重新加载配置 → 重新注册命令 → 重启 QQ 客户端。
      */
     fun fullRestart() {
         log_info("正在完整重启 HuHoBot...")
 
-        // 1. 关闭 QQ 客户端
-        try {
-            QClient.shutdown()
-        } catch (_: Exception) {}
-
-        // 2. 注销所有 MC 命令
+        // 1. 注销所有 MC 命令
         unregisterAllBukkitCommands()
 
-        // 3. 重新加载配置
+        // 2. 重新加载配置
         configManager.reload()
 
-        // 4. 重新注册 MC 命令
+        // 3. 重新注册 MC 命令
         registerBukkitCommands()
 
-        // 5. 重新启动 QQ 客户端（异步，避免阻塞主线程）
+        // 4. 重启 QQ 客户端（异步，直接创建新实例，不 shutdown 旧的）
         server.scheduler.runTaskAsynchronously(this, Runnable {
             try {
                 QClient.launchClient(
@@ -127,7 +122,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             }
         })
 
-        // 6. 重新初始化 WebUI
+        // 5. 重新初始化 WebUI
         try {
             cn.huohuas001.bot.web.WebUiServer.stop()
             cn.huohuas001.bot.web.WebUiServer.start()
