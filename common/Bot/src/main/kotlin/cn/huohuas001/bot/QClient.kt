@@ -57,9 +57,13 @@ object QClient {
     fun syncGroupPanels() {
         if (!::starter.isInitialized || !::groupMessageHandler.isInitialized) return
         val plugin = BotShared.getPlugin()
-        val builtInCommands = groupMessageHandler.registeredCommands()
-            .filter { plugin.getCommandList()[it.command] != false }
-            .filter { plugin.getCommandMenuList()[it.command] != false }
+        val allCommands = groupMessageHandler.registeredCommands()
+        val commandList = plugin.getCommandList()
+        val menuList = plugin.getCommandMenuList()
+        val builtInCommands = allCommands
+            .filter { commandList[it.command] != false }
+            .filter { menuList[it.command] != false }
+        plugin?.log_info("面板同步: 总命令=${allCommands.size}, 启用=${builtInCommands.size}")
         val customCommands = CustomCommandRegistry.snapshot().filter { it.pushMenu }.map {
             RegisteredCommand(
                 command = it.key,

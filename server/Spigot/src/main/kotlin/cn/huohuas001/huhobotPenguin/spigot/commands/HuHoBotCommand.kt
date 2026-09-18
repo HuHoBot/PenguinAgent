@@ -17,8 +17,8 @@ class HuHoBotCommand(private val plugin: HuHoBotSpigot) : TabExecutor {
     ): Boolean {
         when (args.firstOrNull()?.lowercase()) {
             "reload" -> {
-                plugin.reloadPluginConfig()
-                sender.sendMessage(ChatColor.GOLD.toString() + "已重载配置文件。")
+                plugin.fullRestart()
+                sender.sendMessage(ChatColor.GOLD.toString() + "HuHoBot 已完整重启。")
             }
 
             "info" -> sender.sendMessage(

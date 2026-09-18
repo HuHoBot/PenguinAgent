@@ -94,6 +94,82 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         logCommandExecutor()
     }
 
+    /**
+     * 完整重启：关闭 QQ 客户端 → 注销所有 MC 命令 → 重新初始化 → 重新注册命令。
+     */
+    fun fullRestart() {
+        log_info("正在完整重启 HuHoBot...")
+
+        // 1. 关闭 QQ 客户端
+        try {
+            QClient.shutdown()
+        } catch (_: Exception) {}
+
+        // 2. 注销所有 MC 命令
+        unregisterAllBukkitCommands()
+
+        // 3. 重新加载配置
+        configManager.reload()
+
+        // 4. 重新初始化运行时（QQ 客户端 + WebUI）
+        initializeRuntime()
+
+        // 5. 重新注册 MC 命令
+        registerBukkitCommands()
+
+        logCommandExecutor()
+        log_info("HuHoBot 完整重启完成")
+    }
+
+    private fun unregisterAllBukkitCommands() {
+        val commandMap = resolveCommandMapObject() ?: return
+        try {
+            val knownCommandsField = commandMap.javaClass.getDeclaredField("knownCommands")
+            knownCommandsField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val knownCommands = knownCommandsField.get(commandMap) as MutableMap<String, org.bukkit.command.Command>
+            val pluginPrefix = name.lowercase() + ":"
+            val aliases = listOf("huhobot", "hb", "at", "qqbind", "send")
+            val toRemove = mutableListOf<String>()
+            for ((key, cmd) in knownCommands) {
+                if (cmd is PluginCommand && cmd.plugin == this) {
+                    toRemove.add(key)
+                } else if (key.startsWith(pluginPrefix)) {
+                    toRemove.add(key)
+                } else if (aliases.any { key.equals(it, ignoreCase = true) }) {
+                    toRemove.add(key)
+                }
+            }
+            toRemove.forEach { knownCommands.remove(it) }
+            log_debug("已注销 ${toRemove.size} 个 MC 命令")
+        } catch (error: Exception) {
+            log_warning("注销 MC 命令失败: ${error.message}")
+        }
+    }
+
+    private fun registerBukkitCommands() {
+        val command = HuHoBotCommand(this)
+        getCommand("huhobot")?.apply {
+            setExecutor(command)
+            tabCompleter = command
+        }
+        val atCommand = AtCommand()
+        getCommand("at")?.apply {
+            setExecutor(atCommand)
+            tabCompleter = atCommand
+        }
+        val qqBindCommand = QqBindCommand()
+        getCommand("qqbind")?.apply {
+            setExecutor(qqBindCommand)
+        }
+        val sendCommand = SendCommand(this)
+        getCommand("send")?.apply {
+            setExecutor(sendCommand)
+            tabCompleter = sendCommand
+        }
+        log_debug("已重新注册 MC 命令")
+    }
+
     override fun createCommandExecutor(): HExecution =
         if (configManager.commandSender().equals("Hybrid", ignoreCase = true)) {
             HybridCommandExecutor(this)
