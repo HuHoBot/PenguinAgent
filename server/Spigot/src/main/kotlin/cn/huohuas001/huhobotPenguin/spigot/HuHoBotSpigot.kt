@@ -111,11 +111,27 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         // 3. 重新加载配置
         configManager.reload()
 
-        // 4. 重新初始化运行时（QQ 客户端 + WebUI）
-        initializeRuntime()
-
-        // 5. 重新注册 MC 命令
+        // 4. 重新注册 MC 命令
         registerBukkitCommands()
+
+        // 5. 重新启动 QQ 客户端（异步，避免阻塞主线程）
+        server.scheduler.runTaskAsynchronously(this, Runnable {
+            try {
+                QClient.launchClient(
+                    getBotAppId(),
+                    getBotSecret(),
+                    getQqBotLogFilePattern()
+                )
+            } catch (error: Exception) {
+                log_error("QQ 机器人重启失败: ${error.message}")
+            }
+        })
+
+        // 6. 重新初始化 WebUI
+        try {
+            cn.huohuas001.bot.web.WebUiServer.stop()
+            cn.huohuas001.bot.web.WebUiServer.start()
+        } catch (_: Exception) {}
 
         logCommandExecutor()
         log_info("HuHoBot 完整重启完成")
@@ -124,7 +140,16 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     private fun unregisterAllBukkitCommands() {
         val commandMap = resolveCommandMapObject() ?: return
         try {
-            val knownCommandsField = commandMap.javaClass.getDeclaredField("knownCommands")
+            // 尝试不同的字段名
+            val knownCommandsField = try {
+                commandMap.javaClass.getDeclaredField("knownCommands")
+            } catch (_: NoSuchFieldException) {
+                try {
+                    commandMap.javaClass.getDeclaredField("commandMap")
+                } catch (_: NoSuchFieldException) {
+                    commandMap.javaClass.getDeclaredField("commands")
+                }
+            }
             knownCommandsField.isAccessible = true
             @Suppress("UNCHECKED_CAST")
             val knownCommands = knownCommandsField.get(commandMap) as MutableMap<String, org.bukkit.command.Command>

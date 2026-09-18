@@ -24,11 +24,18 @@ object MenuManager {
         builtInCommands: Collection<RegisteredCommand>,
         customCommands: Collection<RegisteredCommand> = emptyList()
     ) {
-        if (groupOpenIds.isEmpty()) return
+        if (groupOpenIds.isEmpty()) {
+            BotShared.getPlugin()?.log_warning("面板同步跳过: 未配置群 OpenId")
+            return
+        }
         val plugin = BotShared.getPlugin()
         try {
             val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
-            val token = start0.accessToken ?: return
+            val token = start0.accessToken
+            if (token == null) {
+                plugin?.log_warning("面板同步跳过: accessToken 为空")
+                return
+            }
             val authHeader = "QQBot $token"
 
             // 查询现有 group 面板
@@ -72,6 +79,8 @@ object MenuManager {
                 allItems.subList(0, 20)
             } else allItems
 
+            plugin?.log_info("面板同步: 准备注册 ${limitedItems.size} 个命令到 ${groupOpenIds.size} 个群")
+
             // 创建新面板
             val panelBody = JSONObject().apply {
                 put("scope", "group")
@@ -88,7 +97,9 @@ object MenuManager {
             }
             val panelId = createPanel(authHeader, panelBody)
             if (panelId != null) {
-                plugin?.log_info("指令面板已同步 (panel_id=$panelId, commands=${allItems.size})")
+                plugin?.log_info("指令面板已同步 (panel_id=$panelId, commands=${limitedItems.size})")
+            } else {
+                plugin?.log_warning("指令面板注册失败: 未获取到 panel_id")
             }
         } catch (e: Exception) {
             BotShared.getPlugin()?.log_error("指令面板同步失败: ${e.message}")
@@ -116,6 +127,8 @@ object MenuManager {
     }
 
     private fun createPanel(authHeader: String, body: JSONObject): String? {
+        val plugin = BotShared.getPlugin()
+        plugin?.log_info("面板API请求: ${body.toJSONString()}")
         val conn = URL("$API_BASE/v2/panels").openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Authorization", authHeader)
@@ -125,7 +138,7 @@ object MenuManager {
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader()?.readText() ?: ""
         conn.disconnect()
-        BotShared.getPlugin()?.log_info("面板API响应 [${conn.responseCode}]: $text")
+        plugin?.log_info("面板API响应 [${conn.responseCode}]: $text")
         val resp = JSON.parseObject(text)
         return resp?.getString("panel_id")
     }
