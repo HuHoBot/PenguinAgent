@@ -454,7 +454,16 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.8.0（最新）
+### v1.9.0（最新）
+
+**新功能：**
+- feat: 首次启动自动扫码登录 — 控制台打印二维码，手机 QQ 扫码后自动写入 AppID/Secret 到 config.yml
+
+**优化：**
+- opt: jar 文件名统一为 `PenguinAgent.jar`
+- opt: Gradle 配置缓存清理，确保 plugin.yml 版本号正确替换
+
+### v1.8.0
 
 **新功能：**
 - feat: `/send <消息>` — 游戏内向 QQ 群发送消息，所有人可用

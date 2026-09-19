@@ -20,6 +20,7 @@ import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotRecvMsg
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
+import cn.huohuas001.huhobotPenguin.spigot.manager.QrLoginManager
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
 import cn.huohuas001.huhobotPenguin.adapter.api.MsgPack
 import cn.huohuas001.huhobotPenguin.adapter.api.toMsgPack
@@ -92,6 +93,39 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         configManager.reload()
         reloadRuntimeConfig()
         logCommandExecutor()
+    }
+
+    /**
+     * 覆写公共运行时的 QQ 启动逻辑：
+     * 若 appid/secret 均为空，阻塞控制台等待扫码登录，成功后自动写入 config.yml。
+     */
+    override fun launchQqClient() {
+        val appId = getBotAppId()
+        val secret = getBotSecret()
+        if (appId.isBlank() || secret.isBlank()) {
+            // 首次启动：扫码登录（阻塞主线程直到成功）
+            val credentials = QrLoginManager.doQrLogin(this)
+            if (credentials != null) {
+                QrLoginManager.writeCredentials(this, credentials)
+            } else {
+                log_error("扫码登录失败，QQ 机器人未启动")
+                return
+            }
+        }
+        // 使用（可能刚写入的）凭据启动客户端
+        val finalAppId = getBotAppId()
+        val finalSecret = getBotSecret()
+        if (finalAppId.isBlank() || finalSecret.isBlank()) {
+            log_warning("未配置 bot.app-id 或 bot.secret，QQ 机器人未启动")
+            return
+        }
+        submitAsync {
+            try {
+                QClient.launchClient(finalAppId, finalSecret, getQqBotLogFilePattern())
+            } catch (error: Exception) {
+                log_error("QQ 机器人启动失败: ${error.message}")
+            }
+        }
     }
 
     /**
