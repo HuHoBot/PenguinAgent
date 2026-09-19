@@ -88,6 +88,13 @@ object QClient {
             QqBotConsoleOutputFilter.uninstall()
         }
 
+        // 关闭旧连接（只关 WebSocket，不杀线程池）
+        if (::starter.isInitialized) {
+            try {
+                starter.softClose()
+            } catch (_: Exception) {}
+        }
+
         try {
             groupMessageHandler = GroupMessageHandler(plugin)
             starter = Starter(appid, "", secret)

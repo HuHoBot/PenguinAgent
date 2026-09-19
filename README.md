@@ -454,7 +454,18 @@ ls build/gather-jar/
 
 ## 版本历史
 
-### v1.6.0（最新）
+### v1.8.0（最新）
+
+**新功能：**
+- feat: `/send <消息>` — 游戏内向 QQ 群发送消息，所有人可用
+- feat: `/hb reload` 完整重启 — 注销所有命令 → 重新加载配置 → 重启 QQ 客户端
+
+**Bug 修复：**
+- fix: plugin.yml 重复 permissions 段导致 `/qqbind` 权限丢失
+- fix: 禁用的命令不再注册到 QQ 指令面板
+- fix: 命令面板同步日志增强，便于排查问题
+
+### v1.6.0
 
 **新功能：**
 - feat: WebUI 端口可通过 `config.yml` 中的 `webui-port` 配置（默认 5678）
