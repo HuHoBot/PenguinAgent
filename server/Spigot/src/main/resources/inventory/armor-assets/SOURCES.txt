@@ -1,0 +1,23 @@
+HuHoBot Inventory Armor Runtime Assets
+
+Minecraft geometry semantics, equipment JSON, trim pattern definitions, trim material definitions,
+trim color palettes, and `textures/misc/enchanted_glint_armor.png`:
+- Source: local Minecraft Java Edition 26.1.2 client JAR
+- Client JAR SHA-256: B1B3158572666445EFF01E82FAD8C7DE2E4953DB6D354F311730D77A8359D0B0
+- Copyright: Mojang Studios / Microsoft; redistribution is subject to the Minecraft EULA.
+
+The deterministic static armor glint frame follows the 26.1.2 client constants: armor texture,
+0.16 UV scale, 10-degree rotation, default 0.75 glint strength, and GLINT `SRC_COLOR + ONE`
+blending. Animation time is intentionally frozen for reproducible PNG output.
+The glint pass uses white vertex modulation independently from the equipment dye color; leather
+dye applies only to the dyeable base equipment layer.
+
+32x equipment, trim-mask and item textures:
+- Source: Faithful 32x June 2026 / 26.2
+- Source ZIP SHA-256: D1337875AB89DE11931C690EA138C65BBCEACE059570EDB6BB95D5C1F98A9D0B
+- Project: https://faithfulpack.net/
+- Licensing information remains available in the bundled Faithful theme and project notices.
+
+Faithful does not provide leather_chestplate_overlay.png in this pack; that one transparent
+overlay is sourced from the same Minecraft 26.1.2 client and is scaled with nearest-neighbor
+sampling over the 32x Faithful base texture.

@@ -1,0 +1,9 @@
+Default player skin textures (9 characters, slim and wide variants)
+
+Source: Minecraft Java Edition 1.21.11 client JAR
+Official download SHA-1: BA2DF812C2D12E0219C489C4CD9A5E1F0760F5BD
+Path in client JAR: assets/minecraft/textures/entity/player/{slim,wide}/*.png
+
+The UUID selection order and model variants were checked against the 1.21.11
+client's DefaultPlayerSkin class. The textures remain copyrighted by Mojang
+Studios / Microsoft and redistribution is subject to the Minecraft EULA.

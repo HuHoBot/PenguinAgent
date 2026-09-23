@@ -233,6 +233,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
 
     /** 获取指定在线玩家的背包 PNG 图片字节数组；玩家离线或渲染失败返回 null。 */
     fun getPlayerInventoryImage(playerName: String): ByteArray? = null
+
+    /** 获取指定在线玩家的末影箱 PNG 图片字节数组；玩家离线或渲染失败返回 null。 */
+    fun getPlayerEnderChestImage(playerName: String): ByteArray? = null
 }
 
 private val DEFAULT_MARKDOWN_TEMPLATES = mapOf(

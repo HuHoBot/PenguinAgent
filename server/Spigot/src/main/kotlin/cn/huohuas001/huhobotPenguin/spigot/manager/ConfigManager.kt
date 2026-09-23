@@ -30,6 +30,7 @@ class ConfigManager(
 
         var changed = migratePostPrefix()
         changed = removeLegacyMotdOptions() || changed
+        changed = removeLegacyInventoryCommandOptions() || changed
         changed = ConfigUpgrader.fillMissing(DEFAULT_VALUES, plugin.config::contains, plugin.config::set) || changed
 
         val previousVersion = plugin.config.getInt(CONFIG_VERSION_PATH, 0)
@@ -137,6 +138,25 @@ class ConfigManager(
         listOf(
             "motd.output-online-list",
             "motd.custom-markdown"
+        ).forEach { path ->
+            if (plugin.config.contains(path)) {
+                plugin.config.set(path, null)
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    /** 清理旧版背包别名和渲染测试命令，避免它们继续进入 QQ 指令面板。 */
+    private fun removeLegacyInventoryCommandOptions(): Boolean {
+        var changed = false
+        listOf(
+            "commands.inv",
+            "commands.inventory",
+            "commands.ec",
+            "commands.enderchest",
+            "commands.invtest",
+            "commands.inventorytest"
         ).forEach { path ->
             if (plugin.config.contains(path)) {
                 plugin.config.set(path, null)
@@ -271,6 +291,18 @@ class ConfigManager(
     fun bindingRequireGameVerification(): Boolean =
         plugin.config.getBoolean("binding.require-game-verification", false)
 
+    fun customInventoryBackgroundEnabled(): Boolean =
+        plugin.config.getBoolean("inventory.render.custom-background.enabled", false)
+
+    fun customInventoryBackgroundFile(): String =
+        plugin.config.getString("inventory.render.custom-background.inventory-file", "inventory.png")!!
+
+    fun customEnderChestBackgroundFile(): String =
+        plugin.config.getString("inventory.render.custom-background.ender-chest-file", "")!!
+
+    fun customInventoryBackgroundFit(): String =
+        plugin.config.getString("inventory.render.custom-background.fit", "cover")!!
+
     fun commandBlacklist(): List<String> =
         plugin.config.getStringList("command-blacklist").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
 
@@ -290,7 +322,7 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 7
+        private const val CURRENT_CONFIG_VERSION = 8
         private const val CONFIG_VERSION_PATH = "config-version"
 
         private val COMMANDS_HIDDEN_FROM_MENU = setOf("blockMotd", "unblockMotd")
@@ -344,6 +376,10 @@ class ConfigManager(
             "features.full-amount" to "是否默认开启全量聊天转发",
             "features.enable-auth" to "是否启用 QQ 头像认证功能",
             "binding.require-game-verification" to "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作",
+            "inventory.render.custom-background.enabled" to "是否启用用户自定义背包底图",
+            "inventory.render.custom-background.inventory-file" to "背包底图文件名，文件放在 inventory/backgrounds/ 目录",
+            "inventory.render.custom-background.ender-chest-file" to "末影箱底图文件名；留空时复用背包底图",
+            "inventory.render.custom-background.fit" to "底图缩放方式：cover 裁切填满，stretch 拉伸填满",
             "audit.base-url" to "OpenAI 兼容审核接口地址，留空则只执行本地敏感词检测",
             "audit.api-key" to "审核接口密钥",
             "audit.model" to "审核使用的模型名",
@@ -375,7 +411,10 @@ class ConfigManager(
             "认证",
             "解除认证",
             "agent",
-            "背包查看"
+            "我的背包",
+            "我的末影箱",
+            "背包查看",
+            "末影箱查看"
         )
 
         private val DEFAULT_VALUES: Map<String, Any> = buildMap {
@@ -423,6 +462,10 @@ class ConfigManager(
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
             put("binding.require-game-verification", false)
+            put("inventory.render.custom-background.enabled", false)
+            put("inventory.render.custom-background.inventory-file", "inventory.png")
+            put("inventory.render.custom-background.ender-chest-file", "")
+            put("inventory.render.custom-background.fit", "cover")
             put("command-blacklist", emptyList<String>())
             put("custom-commands", emptyList<Map<String, Any>>())
             put("command-sender", "Hybrid")
