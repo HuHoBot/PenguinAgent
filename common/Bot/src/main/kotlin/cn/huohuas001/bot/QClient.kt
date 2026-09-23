@@ -75,7 +75,9 @@ object QClient {
             starter = starter,
             groupOpenIds = plugin.getGroupOpenIdList(),
             builtInCommands = builtInCommands,
-            customCommands = customCommands
+            customCommands = customCommands,
+            priorities = plugin.getCommandMenuPriorities(),
+            showAdminCommands = plugin.showAdminCommandsInMenu()
         )
     }
 

@@ -46,9 +46,7 @@ class BindingCommands : CommandSupport() {
             }
             val ok = BindingCommands.Companion.completeBind(groupId, userId, playerName, qqUsername)
             if (ok) {
-                val safeName = QClient.escapeMarkdown(playerName)
-                reply(plugin, event, "已成功绑定游戏账号：$safeName")
-                syncWhitelistAdd(plugin, event, playerName)
+                syncWhitelistAdd(plugin, playerName)
             } else {
                 reply(plugin, event, "绑定失败，该角色可能已被绑定")
             }
@@ -76,7 +74,7 @@ class BindingCommands : CommandSupport() {
         reply(plugin, event, "已解除角色绑定：${QClient.escapeMarkdown(existing.playerName)}")
 
         // 白名单同步
-        syncWhitelistRemove(plugin, event, existing.playerName)
+        syncWhitelistRemove(plugin, existing.playerName)
     }
 
     @Commands(command = "MC显示名称", describe = "切换 QQ→游戏 显示名称")
@@ -134,19 +132,23 @@ class BindingCommands : CommandSupport() {
     }
 
     /** 白名单同步：绑定时自动添加白名单。 */
-    private fun syncWhitelistAdd(plugin: HuHoBot, event: GroupMessageEvent, playerName: String) {
+    private fun syncWhitelistAdd(plugin: HuHoBot, playerName: String) {
         val whitelist = plugin.getWhiteList()
         if (whitelist.addCommand.isBlank()) return
         val command = whitelist.addCommand.replace("{name}", playerName)
-        executeGameCommand(plugin, event, command, direct = true)
+        plugin.sendCommand(command).whenComplete { _, error ->
+            if (error != null) plugin.log_error("绑定后添加白名单失败: ${error.message}")
+        }
     }
 
     /** 白名单同步：解除绑定时自动移除白名单。 */
-    private fun syncWhitelistRemove(plugin: HuHoBot, event: GroupMessageEvent, playerName: String) {
+    private fun syncWhitelistRemove(plugin: HuHoBot, playerName: String) {
         val whitelist = plugin.getWhiteList()
         if (whitelist.delCommand.isBlank()) return
         val command = whitelist.delCommand.replace("{name}", playerName)
-        executeGameCommand(plugin, event, command, direct = true)
+        plugin.sendCommand(command).whenComplete { _, error ->
+            if (error != null) plugin.log_error("解绑后移除白名单失败: ${error.message}")
+        }
     }
 
     companion object {

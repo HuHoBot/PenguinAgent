@@ -390,6 +390,30 @@ textarea.input { resize: vertical; min-height: 80px; font-family: ui-monospace, 
 
 .boolean-map-item .bm-desc { color: var(--text-faint); font-size: 12px; }
 
+.command-map { display: flex; flex-direction: column; overflow-x: auto; }
+
+.command-map-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) 70px 70px 100px;
+    align-items: center;
+    gap: 12px;
+    min-width: 450px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+
+.command-map-header { color: var(--text-faint); font-size: 12px; }
+.command-map-row .switch { justify-self: center; }
+.command-map-header span:nth-child(2),
+.command-map-header span:nth-child(3) { text-align: center; }
+.command-map-row input[data-setting="priority"] { appearance: textfield; -moz-appearance: textfield; }
+.command-map-row input[data-setting="priority"]::-webkit-inner-spin-button,
+.command-map-row input[data-setting="priority"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 .empty-hint {
     color: var(--text-faint);
     font-size: 13px;

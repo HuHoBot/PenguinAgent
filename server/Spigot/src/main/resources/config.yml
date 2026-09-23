@@ -79,6 +79,10 @@ inventory:
 # 例如禁止 /执行 op someone：["op", "deop"]
 command-blacklist: []
 
+command-panel:
+  # 仅决定 QQ 客户端是否显示管理员命令；机器人执行时仍检查管理员身份。
+  show-admin-commands: true
+
 commands:
   查信息: true
   查管理: true
@@ -97,7 +101,10 @@ commands:
   全量: true
   认证: true
   解除认证: true
-  agent: true
+  agent:
+    enable: true
+    pushMenu: true
+    priority: 0
   我的背包: true
   我的末影箱: true
   背包查看: true

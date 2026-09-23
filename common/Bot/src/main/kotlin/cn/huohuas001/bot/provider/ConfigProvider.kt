@@ -196,6 +196,12 @@ interface ConfigProvider {
         return emptyMap()
     }
 
+    /** 数值越小越先进入 QQ 面板；只影响面板，不影响命令执行。 */
+    fun getCommandMenuPriorities(): Map<String, Int> = emptyMap()
+
+    /** 展示管理员命令不放宽实际执行权限。 */
+    fun showAdminCommandsInMenu(): Boolean = false
+
     fun getBotName(): String
     fun getServerName(): String = getBotName()
     fun getPlatform(): String

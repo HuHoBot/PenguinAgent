@@ -26,6 +26,7 @@ class ConfigManager(
     }
 
     fun reload() {
+        mergeDuplicateTopLevelSections()
         plugin.reloadConfig()
 
         var changed = migratePostPrefix()
@@ -53,67 +54,59 @@ class ConfigManager(
             plugin.logger.info("配置文件已升级到版本 $CURRENT_CONFIG_VERSION（旧版本：$previousVersion）")
         }
 
-        // 直接检查文件文本，绕过 Bukkit contains/get 的嵌套路径 bug
-        appendMissingConfigKeys()
     }
 
-    /**
-     * 读取原始 config.yml 文本，逐项检查 DEFAULT_VALUES 中的 key 是否作为 YAML 键存在。
-     * 缺失的按 section 分组追加到文件末尾并重载。
-     */
-    private fun appendMissingConfigKeys() {
+    /** 合并旧配置升级器追加的重复顶层段，保留各段中的命令开关和 Agent 设置。 */
+    private fun mergeDuplicateTopLevelSections() {
+        if (!configFile.isFile) return
         val raw = try { configFile.readText(Charsets.UTF_8) } catch (_: Exception) { return }
-        val toAdd = mutableListOf<Pair<String, String>>()
-
-        for ((path, defaultValue) in DEFAULT_VALUES) {
-            val leafKey = path.substringAfterLast('.')
-            if (!raw.contains("$leafKey:") && !raw.contains("$leafKey =")) {
-                val yamlValue = when (defaultValue) {
-                    is Boolean -> defaultValue.toString()
-                    is Int -> defaultValue.toString()
-                    is String -> "\"$defaultValue\""
-                    is List<*> -> "[]"
-                    else -> defaultValue.toString()
-                }
-                toAdd.add(path to yamlValue)
-            }
+        val lines = raw.lines()
+        val rootLine = Regex("^[^\\s#][^:]*:.*$")
+        val starts = lines.indices.filter { rootLine.matches(lines[it]) }
+        if (starts.isEmpty()) return
+        val chunks = mutableListOf<List<String>>()
+        if (starts.first() > 0) chunks += lines.subList(0, starts.first())
+        starts.forEachIndexed { index, start ->
+            chunks += lines.subList(start, starts.getOrElse(index + 1) { lines.size })
         }
-
-        if (toAdd.isEmpty()) return
-
-        try {
-            val appended = buildString {
-                append(raw.trimEnd())
-                append("\n")
-                val grouped = toAdd.groupBy { it.first.substringBeforeLast('.', "") }
-                for ((section, entries) in grouped) {
-                    append("\n")
-                    if (section.isNotEmpty()) {
-                        append("$section:\n")
-                        for ((path, value) in entries) {
-                            val leaf = path.substringAfterLast('.')
-                            val comment = KEY_COMMENTS[path]
-                            if (!comment.isNullOrEmpty()) {
-                                append("  # $comment\n")
-                            }
-                            append("  $leaf: $value\n")
-                        }
-                    } else {
-                        for ((path, value) in entries) {
-                            val comment = KEY_COMMENTS[path]
-                            if (!comment.isNullOrEmpty()) {
-                                append("# $comment\n")
-                            }
-                            append("$path: $value\n")
-                        }
-                    }
+        val duplicateKeys = chunks.mapNotNull { chunk ->
+            chunk.firstOrNull()?.takeIf { it.endsWith(":") }?.removeSuffix(":")
+        }.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        if (duplicateKeys.isEmpty()) return
+        val childLine = Regex("^  ([^\\s#][^:]*):.*$")
+        val firstIndex = duplicateKeys.associateWith { key ->
+            chunks.indexOfFirst { it.firstOrNull() == "$key:" }
+        }
+        val merged = duplicateKeys.associateWith { key ->
+            val matching = chunks.filter { it.firstOrNull() == "$key:" }
+            val values = linkedMapOf<String, List<String>>()
+            val first = matching.first()
+            val firstChild = first.indexOfFirst { childLine.matches(it) }
+            val prefix = first.take(if (firstChild < 0) first.size else firstChild)
+            for (chunk in matching) {
+                val positions = chunk.indices.filter { childLine.matches(chunk[it]) }
+                positions.forEachIndexed { index, start ->
+                    val name = childLine.find(chunk[start])!!.groupValues[1]
+                    values[name] = chunk.subList(start, positions.getOrElse(index + 1) { chunk.size })
                 }
             }
-            configFile.writeText(appended, Charsets.UTF_8)
-            plugin.reloadConfig()
-            plugin.logger.info("配置文件已追加 ${toAdd.size} 个升级字段")
+            prefix + values.values.flatten()
+        }
+        try {
+            val backup = File(configFile.parentFile, "config.yml.before-duplicate-merge.bak")
+            if (!backup.exists()) configFile.copyTo(backup)
+            val normalized = chunks.flatMapIndexed { index, chunk ->
+                val key = chunk.firstOrNull()?.takeIf { it.endsWith(":") }?.removeSuffix(":")
+                when {
+                    key == null || key !in duplicateKeys -> chunk
+                    index == firstIndex[key] -> merged.getValue(key)
+                    else -> emptyList()
+                }
+            }
+            configFile.writeText(normalized.joinToString("\n").trimEnd() + "\n", Charsets.UTF_8)
+            plugin.logger.info("已合并重复配置段: ${duplicateKeys.joinToString()}（原文件已备份）")
         } catch (e: Exception) {
-            plugin.logger.warning("追加配置字段失败: ${e.message}")
+            plugin.logger.warning("合并重复配置段失败: ${e.message}")
         }
     }
 
@@ -241,8 +234,9 @@ class ConfigManager(
 
     fun commandSwitches(): Map<String, Boolean> {
         val commandSection = plugin.config.getConfigurationSection("commands") ?: return emptyMap()
-        return commandSection.getValues(false).mapValues { (_, value) ->
-            value as? Boolean ?: true
+        return commandSection.getKeys(false).associateWith { commandName ->
+            plugin.config.getBoolean("commands.$commandName.enable",
+                plugin.config.getBoolean("commands.$commandName", true))
         }
     }
 
@@ -268,6 +262,17 @@ class ConfigManager(
             }
         }
     }
+
+    fun commandMenuPriorities(): Map<String, Int> {
+        val section = plugin.config.getConfigurationSection("commands") ?: return emptyMap()
+        return section.getKeys(false).associateWith { commandName ->
+            plugin.config.getInt("commands.$commandName.priority", if (commandName == "agent") 0 else 100)
+                .coerceIn(0, 999)
+        }
+    }
+
+    fun showAdminCommandsInMenu(): Boolean =
+        plugin.config.getBoolean("command-panel.show-admin-commands", true)
 
     fun auditBaseUrl(): String? =
         plugin.config.getString("audit.base-url")?.takeIf(String::isNotBlank)
@@ -390,6 +395,7 @@ class ConfigManager(
             "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
             "command-sender" to "命令执行收集模式：Hybrid 同时收集发送者输出和服务端日志",
             "command-blacklist" to "/执行 命令黑名单，禁止通过 /执行 运行的服务器命令列表",
+            "command-panel.show-admin-commands" to "在 QQ 面板中向所有人展示管理员命令；执行时仍验证管理员权限",
         )
 
         private val COMMAND_NAMES = listOf(
@@ -469,6 +475,7 @@ class ConfigManager(
             put("command-blacklist", emptyList<String>())
             put("custom-commands", emptyList<Map<String, Any>>())
             put("command-sender", "Hybrid")
+            put("command-panel.show-admin-commands", true)
 
             COMMAND_NAMES.forEach { commandName ->
                 put("commands.$commandName", true)

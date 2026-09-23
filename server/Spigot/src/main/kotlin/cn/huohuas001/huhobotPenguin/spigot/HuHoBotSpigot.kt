@@ -6,6 +6,7 @@ import cn.huohuas001.bot.addon.Addon
 import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.agent.AgentCommandMode
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
+import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.tools.Cancelable
@@ -432,6 +433,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun isAuthenticationEnabled(): Boolean = configManager.isAuthenticationEnabled()
     override fun getCommandMenuList(): Map<String, Boolean> = configManager.commandMenuSwitches()
+    override fun getCommandMenuPriorities(): Map<String, Int> = configManager.commandMenuPriorities()
+    override fun showAdminCommandsInMenu(): Boolean = configManager.showAdminCommandsInMenu()
 
     override fun submit(task: Runnable): Cancelable =
         HuHoBotTask(server.scheduler.runTask(this, task))
@@ -721,7 +724,21 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getWebUiPort(): Int = config.getInt("webui-port", 5678)
 
     override fun getWebUiConfigValues(): Map<String, Any?> =
-        config.getValues(true)
+        config.getValues(true).toMutableMap().apply {
+            put("command-panel.show-admin-commands", configManager.showAdminCommandsInMenu())
+            BaseCommand.allCommands().distinctBy { it.command }.forEach { command ->
+                val name = command.command
+                if (!containsKey("commands.$name") && !containsKey("commands.$name.enable")) {
+                    put("commands.$name.enable", true)
+                }
+                if (!containsKey("commands.$name.pushMenu")) {
+                    put("commands.$name.pushMenu", true)
+                }
+                if (!containsKey("commands.$name.priority")) {
+                    put("commands.$name.priority", if (name == "agent") 0 else 100)
+                }
+            }
+        }
 
     override fun applyWebUiConfigChanges(changes: JSONObject): Boolean {
         return try {
