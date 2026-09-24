@@ -200,7 +200,7 @@ interface ConfigProvider {
     fun getCommandMenuPriorities(): Map<String, Int> = emptyMap()
 
     /** 展示管理员命令不放宽实际执行权限。 */
-    fun showAdminCommandsInMenu(): Boolean = false
+    fun showAdminCommandsInMenu(): Boolean = true
 
     fun getBotName(): String
     fun getServerName(): String = getBotName()

@@ -592,12 +592,31 @@ object InventoryRenderer {
         }
 
     private fun encode(image: BufferedImage): ByteArray? = try {
+        drawWatermark(image)
         ByteArrayOutputStream(256 * 1024).use { output ->
             if (!ImageIO.write(image, "PNG", output)) null else output.toByteArray()
         }
     } catch (error: Exception) {
         logger.log(Level.WARNING, "背包图片编码失败", error)
         null
+    }
+
+    private fun drawWatermark(image: BufferedImage) {
+        val text = "Textures: faithfulpack.net"
+        val graphics = image.createGraphics()
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+            graphics.font = Font(Font.SANS_SERIF, Font.PLAIN, 18)
+            val metrics = graphics.fontMetrics
+            val x = image.width - metrics.stringWidth(text) - 16
+            val y = image.height - 16
+            graphics.composite = AlphaComposite.SrcOver.derive(0.45f)
+            graphics.color = Color(255, 255, 255)
+            graphics.drawString(text, x, y)
+            graphics.composite = AlphaComposite.SrcOver
+        } finally {
+            graphics.dispose()
+        }
     }
 
     private fun configureItemGraphics(graphics: Graphics2D) {

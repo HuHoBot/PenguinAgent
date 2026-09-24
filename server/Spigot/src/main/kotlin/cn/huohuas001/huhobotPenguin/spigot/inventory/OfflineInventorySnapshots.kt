@@ -96,7 +96,7 @@ class OfflineInventorySnapshots(private val plugin: JavaPlugin) : Listener {
         captureAllOnline()
         writer.shutdown()
         try {
-            if (!writer.awaitTermination(15, TimeUnit.SECONDS)) {
+            if (!writer.awaitTermination(3, TimeUnit.SECONDS)) {
                 plugin.logger.warning("等待离线背包快照写入超时")
             }
         } catch (interrupted: InterruptedException) {
@@ -123,22 +123,22 @@ class OfflineInventorySnapshots(private val plugin: JavaPlugin) : Listener {
             writeItems(yaml, "ender-chest", snapshot.enderChest)
             yaml.set("skin.texture-url", snapshot.skinProfile?.textureUrl)
             yaml.set("skin.slim", snapshot.skinProfile?.slim)
-            val bytes = yaml.saveToString().toByteArray(StandardCharsets.UTF_8)
-            if (bytes.size > MAX_FILE_BYTES) {
-                plugin.logger.warning("背包快照过大，跳过 ${snapshot.playerName}")
-                return
-            }
             names[snapshot.playerName.lowercase()] = snapshot.playerUuid
             current[snapshot.playerUuid] = snapshot
-            writer.execute { writeAtomically(snapshot.playerUuid, bytes) }
+            writer.execute { writeAtomically(snapshot.playerUuid, yaml) }
         } catch (error: Exception) {
             plugin.logger.warning("保存 ${player.name} 的背包快照失败: ${error.message}")
         }
     }
 
-    private fun writeAtomically(uuid: UUID, bytes: ByteArray) {
+    private fun writeAtomically(uuid: UUID, yaml: YamlConfiguration) {
         var temporary: File? = null
         try {
+            val bytes = yaml.saveToString().toByteArray(StandardCharsets.UTF_8)
+            if (bytes.size > MAX_FILE_BYTES) {
+                plugin.logger.warning("背包快照过大，跳过 ${yaml.getString("player.name") ?: uuid}")
+                return
+            }
             if (!directory.exists()) directory.mkdirs()
             temporary = Files.createTempFile(directory.toPath(), "$uuid-", ".tmp").toFile()
             Files.write(temporary.toPath(), bytes)

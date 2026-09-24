@@ -60,28 +60,41 @@ class InventoryCommands : CommandSupport() {
     }
 
     private fun sendInventory(plugin: HuHoBot, event: GroupMessageEvent, playerName: String) {
-        val online = plugin.getOnlineList().any { it.equals(playerName, ignoreCase = true) }
-        val image = plugin.getPlayerInventoryImage(playerName)
+        val resolvedName = plugin.getOnlineList().firstOrNull { it.equals(playerName, ignoreCase = true) }
+            ?: playerName
+        val online = plugin.getOnlineList().any { it.equals(resolvedName, ignoreCase = true) }
+        val image = plugin.getPlayerInventoryImage(resolvedName)
         if (image != null) {
-            replyWithImgBytes(plugin, event, "$playerName 的背包${if (online) "" else "（离线快照）"}", image)
+            replyWithImgBytes(plugin, event, "$resolvedName 的背包${if (online) "" else "（离线快照）"}", image)
             return
         }
-        val inventory = plugin.getPlayerInventory(playerName)
+        val inventory = plugin.getPlayerInventory(resolvedName)
         if (inventory.isNullOrBlank()) {
-            reply(plugin, event, missingSnapshotMessage(playerName))
+            reply(plugin, event, missingSnapshotMessage(resolvedName))
         } else {
-            reply(plugin, event, "=== ${QClient.escapeMarkdown(playerName)} 的背包${if (online) "" else "（离线快照）"} ===\n$inventory")
+            reply(plugin, event, "=== ${QClient.escapeMarkdown(resolvedName)} 的背包${if (online) "" else "（离线快照）"} ===\n$inventory")
         }
     }
 
     private fun sendEnderChest(plugin: HuHoBot, event: GroupMessageEvent, playerName: String) {
-        val online = plugin.getOnlineList().any { it.equals(playerName, ignoreCase = true) }
-        val image = plugin.getPlayerEnderChestImage(playerName)
+        val resolvedName = plugin.getOnlineList().firstOrNull { it.equals(playerName, ignoreCase = true) }
+            ?: playerName
+        val online = plugin.getOnlineList().any { it.equals(resolvedName, ignoreCase = true) }
+        val image = try {
+            plugin.getPlayerEnderChestImage(resolvedName)
+        } catch (error: Exception) {
+            plugin.log_error("末影箱渲染失败: ${error.message}")
+            null
+        }
         if (image == null) {
-            reply(plugin, event, missingSnapshotMessage(playerName))
+            if (online) {
+                reply(plugin, event, "渲染失败：无法生成 ${QClient.escapeMarkdown(resolvedName)} 的末影箱图片，请稍后重试")
+            } else {
+                reply(plugin, event, missingSnapshotMessage(resolvedName))
+            }
             return
         }
-        replyWithImgBytes(plugin, event, "$playerName 的末影箱${if (online) "" else "（离线快照）"}", image)
+        replyWithImgBytes(plugin, event, "$resolvedName 的末影箱${if (online) "" else "（离线快照）"}", image)
     }
 
     private fun missingSnapshotMessage(playerName: String): String =

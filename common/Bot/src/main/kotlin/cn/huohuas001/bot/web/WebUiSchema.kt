@@ -172,7 +172,8 @@ object WebUiSchema {
                 fields = listOf(
                     FieldSpec("key", "触发词", "text"),
                     FieldSpec("command", "执行命令", "text"),
-                    FieldSpec("permission", "权限等级", "number")
+                    FieldSpec("permission", "权限等级", "number"),
+                    FieldSpec("pushMenu", "推送面板", "boolean", "是否同步到 QQ 命令面板")
                 )
             )
         )

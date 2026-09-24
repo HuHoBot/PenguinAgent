@@ -338,7 +338,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             CustomCommandDetail(key, command, permission, pushMenu)
         )
         if (!registered) return false
-        QClient.syncGroupPanels()
+        submitAsync { QClient.syncGroupPanels() }
         return true
     }
 
@@ -376,7 +376,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
                 source = addonName
             )
         )
-        QClient.syncGroupPanels()
+        submitAsync { QClient.syncGroupPanels() }
         return true
     }
 
@@ -408,7 +408,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     /** 注销运行时自定义命令，并按需刷新 QQ 命令面板。 */
     fun unregisterBotCommand(key: String): Boolean {
         val removed = CustomCommandRegistry.unregister(key)
-        if (removed) QClient.syncGroupPanels()
+        if (removed) submitAsync { QClient.syncGroupPanels() }
         return removed
     }
 
@@ -515,9 +515,15 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     private fun findInventorySnapshot(playerName: String): InventorySnapshot? =
         onServerThread { offlineInventorySnapshots.find(playerName) }
 
-    private fun <T> onServerThread(action: () -> T): T =
+    private fun <T> onServerThread(action: () -> T): T? =
         if (server.isPrimaryThread) action()
-        else server.scheduler.callSyncMethod(this, Callable { action() }).get()
+        else try {
+            server.scheduler.callSyncMethod(this, Callable { action() })
+                .get(10, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (error: Exception) {
+            log_error("同步调用服务器线程失败: ${error.message}")
+            null
+        }
 
     private fun initializeInventoryRenderer() {
         InventoryRenderer.init(

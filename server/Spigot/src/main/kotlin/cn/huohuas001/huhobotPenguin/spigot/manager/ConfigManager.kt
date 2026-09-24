@@ -69,16 +69,26 @@ class ConfigManager(
         starts.forEachIndexed { index, start ->
             chunks += lines.subList(start, starts.getOrElse(index + 1) { lines.size })
         }
-        val duplicateKeys = chunks.mapNotNull { chunk ->
-            chunk.firstOrNull()?.takeIf { it.endsWith(":") }?.removeSuffix(":")
-        }.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        fun headerKey(chunk: List<String>): String? {
+            val header = chunk.firstOrNull()?.substringBefore(" #")?.trimEnd() ?: return null
+            if (!header.endsWith(":")) return null
+            val key = header.removeSuffix(":").trim()
+            return key.takeIf { it.isNotEmpty() && !it.startsWith("#") }
+        }
+        val duplicateKeys = chunks.mapNotNull { headerKey(it) }
+            .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
         if (duplicateKeys.isEmpty()) return
         val childLine = Regex("^  ([^\\s#][^:]*):.*$")
         val firstIndex = duplicateKeys.associateWith { key ->
-            chunks.indexOfFirst { it.firstOrNull() == "$key:" }
+            chunks.indexOfFirst { headerKey(it) == key }
         }
-        val merged = duplicateKeys.associateWith { key ->
-            val matching = chunks.filter { it.firstOrNull() == "$key:" }
+        val merged = linkedMapOf<String, List<String>>()
+        for (key in duplicateKeys) {
+            val matching = chunks.filter { headerKey(it) == key }
+            if (matching.any { chunk -> chunk.none { childLine.matches(it) } }) {
+                plugin.logger.warning("重复配置段 \"$key\" 存在没有子项的块，已中止合并以免丢失内容")
+                return
+            }
             val values = linkedMapOf<String, List<String>>()
             val first = matching.first()
             val firstChild = first.indexOfFirst { childLine.matches(it) }
@@ -90,13 +100,13 @@ class ConfigManager(
                     values[name] = chunk.subList(start, positions.getOrElse(index + 1) { chunk.size })
                 }
             }
-            prefix + values.values.flatten()
+            merged[key] = prefix + values.values.flatten()
         }
         try {
             val backup = File(configFile.parentFile, "config.yml.before-duplicate-merge.bak")
             if (!backup.exists()) configFile.copyTo(backup)
             val normalized = chunks.flatMapIndexed { index, chunk ->
-                val key = chunk.firstOrNull()?.takeIf { it.endsWith(":") }?.removeSuffix(":")
+                val key = headerKey(chunk)
                 when {
                     key == null || key !in duplicateKeys -> chunk
                     index == firstIndex[key] -> merged.getValue(key)

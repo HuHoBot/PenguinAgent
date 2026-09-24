@@ -23,8 +23,10 @@ object SkinFetcher {
     private const val CONNECT_TIMEOUT = 5000
     private const val READ_TIMEOUT = 10000
     private const val MAX_SKIN_BYTES = 1024 * 1024
+    private const val FAILURE_CACHE_TTL_MS = 60_000L
 
     private val skinCache = ConcurrentHashMap<String, PlayerSkin>()
+    private val failureCache = ConcurrentHashMap<String, Long>()
 
     /** SkinsRestorer 可用性：null=未检测, true=可用, false=不可用 */
     private var srAvailable: Boolean? = null
@@ -39,6 +41,9 @@ object SkinFetcher {
         val cached = skinCache[key]
         if (cached != null) return cached
 
+        val failedAt = failureCache[key]
+        if (failedAt != null && System.currentTimeMillis() - failedAt < FAILURE_CACHE_TTL_MS) return null
+
         val skin = try {
             serverProfile?.let { fetchFromServerProfile(it) }
                 ?: fetchViaSkinsRestorer(playerName, uuid)
@@ -46,7 +51,12 @@ object SkinFetcher {
             null
         }
 
-        if (skin != null) skinCache[key] = skin
+        if (skin != null) {
+            skinCache[key] = skin
+            failureCache.remove(key)
+        } else {
+            failureCache[key] = System.currentTimeMillis()
+        }
         return skin
     }
 

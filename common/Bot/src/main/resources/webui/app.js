@@ -485,14 +485,31 @@ function buildObjectListControl(field, value) {
                 const label = document.createElement("div");
                 label.className = "row-label";
                 label.textContent = sub.label;
-                const input = document.createElement("input");
-                input.className = "input";
-                input.type = sub.type === "number" ? "number" : "text";
-                input.value = row[sub.path] ?? "";
-                input.dataset.subpath = sub.path;
-                input.addEventListener("input", () => { state.dirty = true; });
-                col.appendChild(label);
-                col.appendChild(input);
+                if (sub.type === "boolean") {
+                    const switchLabel = document.createElement("label");
+                    switchLabel.className = "switch";
+                    const input = document.createElement("input");
+                    input.type = "checkbox";
+                    const raw = row[sub.path];
+                    input.checked = raw == null ? true : raw === true || String(raw) === "true";
+                    input.dataset.subpath = sub.path;
+                    input.addEventListener("change", () => { state.dirty = true; });
+                    const track = document.createElement("span");
+                    track.className = "track";
+                    switchLabel.appendChild(input);
+                    switchLabel.appendChild(track);
+                    col.appendChild(label);
+                    col.appendChild(switchLabel);
+                } else {
+                    const input = document.createElement("input");
+                    input.className = "input";
+                    input.type = sub.type === "number" ? "number" : "text";
+                    input.value = row[sub.path] ?? "";
+                    input.dataset.subpath = sub.path;
+                    input.addEventListener("input", () => { state.dirty = true; });
+                    col.appendChild(label);
+                    col.appendChild(input);
+                }
                 fieldsDiv.appendChild(col);
             }
             div.appendChild(fieldsDiv);
@@ -591,7 +608,11 @@ function collectChanges() {
                         const obj = {};
                         rowEl.querySelectorAll("input[data-subpath]").forEach((inp) => {
                             obj[inp.dataset.subpath] =
-                                inp.type === "number" ? Number(inp.value || 0) : inp.value;
+                                inp.type === "checkbox"
+                                    ? inp.checked
+                                    : inp.type === "number"
+                                        ? Number(inp.value || 0)
+                                        : inp.value;
                         });
                         rows.push(obj);
                     });

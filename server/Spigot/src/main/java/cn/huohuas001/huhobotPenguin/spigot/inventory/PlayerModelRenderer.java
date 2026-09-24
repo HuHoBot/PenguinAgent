@@ -13,7 +13,6 @@ import java.util.List;
 
 /** Fixed-pose, headless Java2D software renderer for a textured Minecraft player model. */
 public final class PlayerModelRenderer {
-    public static final String CACHE_VERSION = "pv13";
     public static final int WIDTH = 128;
     public static final int HEIGHT = 256;
     static final int SUPERSAMPLE_SCALE = 4;
@@ -247,10 +246,10 @@ public final class PlayerModelRenderer {
                 -4, 12, -2, 4, 24, 2, 16, 16, 8, 12, 4, OUTER_ARMOR_EXPANSION, false);
             addArmorPart(faces, chest, assets, false,
                 -4 - armWidth, 12, -2, -4, 24, 2,
-                40, 16, 4, 12, 4, OUTER_ARMOR_EXPANSION, false);
+                40, 16, armWidth, 12, 4, OUTER_ARMOR_EXPANSION, false);
             addArmorPart(faces, chest, assets, false,
                 4, 12, -2, 4 + armWidth, 24, 2,
-                40, 16, 4, 12, 4, OUTER_ARMOR_EXPANSION, true);
+                40, 16, armWidth, 12, 4, OUTER_ARMOR_EXPANSION, true);
         }
 
         ArmorVisualDescriptor legs = equipment.get(ArmorSlot.LEGS);
