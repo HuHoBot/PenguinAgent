@@ -8,10 +8,6 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 
-![HuHoBot](https://count.moeyy.cn/@huhobot?name=huhobot&theme=booru-lewd&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
-
-[![bStats](https://count.moeyy.cn/@huhobot?name=huhobot&theme=booru-lewd&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)](https://bstats.org/)
-
 ---
 
 ## 功能概览
@@ -634,3 +630,7 @@ ls build/gather-jar/
 - 修改后的版本必须以相同许可证发布
 - 如果通过网络提供服务，必须向用户提供源代码
 - 包含来自贡献者的专利授权
+
+---
+
+[![bStats](https://bstats.org/api/plugin-badges/34268?color_a0a0a0)](https://bstats.org/plugins/bukkit/34268)
