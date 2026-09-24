@@ -20,9 +20,21 @@ import io.github.kloping.qqbot.entities.ex.Markdown
 import io.github.kloping.qqbot.entities.ex.msg.MessageChain
 import io.github.kloping.qqbot.entities.qqpd.Channel
 import io.github.kloping.qqbot.http.data.V2MsgData
+import io.github.kloping.qqbot.http.data.V2Result
 import io.github.kloping.qqbot.utils.LoggerImpl
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 object QClient {
+    private const val KEYBOARD_RECALL_DELAY_SECONDS = 30L
+
+    private val recallScheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "Penguin-Keyboard-Recall").apply { isDaemon = true }
+    }
+    private val pendingRecalls = ConcurrentHashMap<String, ScheduledFuture<*>>()
+
     private lateinit var starter: Starter
     private lateinit var groupMessageHandler: GroupMessageHandler
 
@@ -309,7 +321,8 @@ object QClient {
 
         plugin.getGroupOpenIdList().forEach { groupId ->
             try {
-                starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                val result = starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                scheduleKeyboardRecall(groupId, keyboard, result)
             } catch (e: Exception) {
                 plugin.log_error("向QQ群 $groupId 发送 Markdown 失败: ${e.message}")
             }
@@ -317,14 +330,14 @@ object QClient {
 
     }
 
-    /** 向指定 QQ 群发送自定义 Markdown。 */
-    fun sendMarkdownToGroup(groupOpenId: String, markdownContent: String, keyboard: Keyboard? = null) {
+    /** 向指定 QQ 群发送自定义 Markdown，返回消息 ID。 */
+    fun sendMarkdownToGroup(groupOpenId: String, markdownContent: String, keyboard: Keyboard? = null): String? {
         val plugin = BotShared.getPlugin()
         if (!::starter.isInitialized) {
             plugin.log_warning("QQ 机器人未启动，无法发送 Markdown")
-            return
+            return null
         }
-        if (markdownContent.isBlank()) return
+        if (markdownContent.isBlank()) return null
 
         val markdown = Markdown().setContent(markdownContent)
         val payload = V2MsgData()
@@ -336,10 +349,13 @@ object QClient {
             payload.setKeyboard(keyboard)
         }
 
-        try {
-            starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+        return try {
+            val result = starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+            scheduleKeyboardRecall(groupOpenId, keyboard, result)
+            result?.id
         } catch (error: Exception) {
             plugin.log_error("向QQ群 $groupOpenId 发送 Markdown 失败: ${error.message}")
+            null
         }
     }
 
@@ -432,11 +448,12 @@ object QClient {
         }
 
         return try {
-            starter.bot.groupBaseV2.send(
+            val result = starter.bot.groupBaseV2.send(
                 groupOpenId,
                 JSON.toJSONString(payload),
                 Channel.SEND_MESSAGE_HEADERS
             )
+            scheduleKeyboardRecall(groupOpenId, keyboard, result)
             true
         } catch (error: Exception) {
             plugin.log_error("回复 Markdown 失败: ${error.message}")
@@ -474,15 +491,49 @@ object QClient {
 
         return try {
             val groupId = event.groupOpenId ?: event.groupId
-            starter.bot.groupBaseV2.send(
+            val result = starter.bot.groupBaseV2.send(
                 groupId,
                 JSON.toJSONString(payload),
                 Channel.SEND_MESSAGE_HEADERS
             )
+            scheduleKeyboardRecall(groupId, keyboard, result)
             true
         } catch (error: Exception) {
             plugin.log_error("回复 Markdown 失败: ${error.message}")
             false
+        }
+    }
+
+    /** 键盘消息发送后统一安排 30 秒自动撤回。 */
+    private fun scheduleKeyboardRecall(groupOpenId: String, keyboard: Keyboard?, result: V2Result?) {
+        if (keyboard == null) return
+        val messageId = result?.id?.takeIf { it.isNotBlank() } ?: return
+        val future = recallScheduler.schedule({
+            pendingRecalls.remove(messageId)
+            recallMessageNow(groupOpenId, messageId)
+        }, KEYBOARD_RECALL_DELAY_SECONDS, TimeUnit.SECONDS)
+        pendingRecalls.put(messageId, future)?.cancel(false)
+    }
+
+    /** 立即撤回消息，并取消已安排的自动撤回。 */
+    fun recallMessage(groupOpenId: String, messageId: String) {
+        if (messageId.isBlank()) return
+        pendingRecalls.remove(messageId)?.cancel(false)
+        if (!::starter.isInitialized) return
+        Thread { recallMessageNow(groupOpenId, messageId) }.start()
+    }
+
+    private fun recallMessageNow(groupOpenId: String, messageId: String) {
+        val plugin = BotShared.getPlugin()
+        try {
+            val restApi = starter.bot.restApi
+            if (restApi == null) {
+                plugin.log_warning("RestApi 未就绪，无法撤回消息 $messageId")
+                return
+            }
+            restApi.recallMessage(groupOpenId, messageId)
+        } catch (error: Exception) {
+            plugin.log_warning("撤回QQ群 $groupOpenId 消息 $messageId 异常: ${error.message}")
         }
     }
 

@@ -44,6 +44,9 @@ class AgentSession(
         val toolName: String = "",
         val query: JSONObject? = null
     ) {
+        /** 审批卡片消息 ID，点击或超时后用于立即撤回。 */
+        @Volatile var messageId: String? = null
+
         /** 是否为 QQ 群管理工具调用（而非服务器命令）。 */
         val isTool: Boolean get() = toolName.isNotEmpty()
     }

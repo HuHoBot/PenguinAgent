@@ -69,6 +69,12 @@ object AgentMessageFormatter {
         "命令被管理员 **$byWho** 拒绝，已停止执行。"
     )
 
+    /** 审批超时自动拒绝通知。 */
+    fun approvalTimeoutNotice(): String = block(
+        "审批",
+        "30 秒内未处理，操作已自动拒绝。"
+    )
+
     /** 无审批权限提示。 */
     fun noPermissionNotice(): String = block(
         "审批",

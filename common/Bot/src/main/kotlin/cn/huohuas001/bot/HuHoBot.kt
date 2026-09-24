@@ -48,9 +48,11 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     }
 
     /** 向指定 QQ 群发送自定义 Markdown。 */
-    override fun sendMarkdownToGroup(groupOpenId: String, markdownContent: String, keyboard: Keyboard?) {
-        QClient.sendMarkdownToGroup(groupOpenId, markdownContent, keyboard)
-    }
+    override fun sendMarkdownToGroup(
+        groupOpenId: String,
+        markdownContent: String,
+        keyboard: Keyboard?
+    ): String? = QClient.sendMarkdownToGroup(groupOpenId, markdownContent, keyboard)
 
     /** 回复触发消息所在的 QQ 群，发送普通文本。 */
     override fun replyText(event: GroupMessageEvent, text: String): Boolean =

@@ -21,6 +21,11 @@ object AgentManager {
     private const val ACTION_PREFIX = "huhobot:agent:"
     private const val MAX_STEPS = 15
     private const val EXECUTE_TIMEOUT_SECONDS = 15L
+    private const val APPROVAL_TIMEOUT_SECONDS = 30L
+
+    private val approvalScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "Penguin-Agent-Approval").apply { isDaemon = true }
+    }
 
     /** 对话上下文窗口：始终保留首条 system 与最近 MAX_CONTEXT_MESSAGES - 1 条消息，防止历史无限增长超出模型上下文。 */
     private const val MAX_CONTEXT_MESSAGES = 40
@@ -286,12 +291,14 @@ object AgentManager {
     /** 发送执行审批卡片并挂起会话。 */
     private fun requestApproval(plugin: HuHoBot, session: AgentSession, toolCallId: String, command: String) {
         val approvalId = UUID.randomUUID().toString()
-        session.awaitingApproval = AgentSession.PendingApproval(approvalId, toolCallId, command)
-        plugin.sendMarkdownToGroup(
+        val pending = AgentSession.PendingApproval(approvalId, toolCallId, command)
+        session.awaitingApproval = pending
+        pending.messageId = plugin.sendMarkdownToGroup(
             session.groupOpenId,
             AgentMessageFormatter.approvalCard(command),
             buildApprovalKeyboard(approvalId)
         )
+        scheduleApprovalTimeout(plugin, session, approvalId)
     }
 
     /** 发送 QQ 群管理工具审批卡片并挂起会话。 */
@@ -304,12 +311,35 @@ object AgentManager {
     ) {
         val approvalId = UUID.randomUUID().toString()
         val description = describeToolAction(session, toolName, query)
-        session.awaitingApproval = AgentSession.PendingApproval(approvalId, toolCallId, description, toolName, query)
-        plugin.sendMarkdownToGroup(
+        val pending = AgentSession.PendingApproval(approvalId, toolCallId, description, toolName, query)
+        session.awaitingApproval = pending
+        pending.messageId = plugin.sendMarkdownToGroup(
             session.groupOpenId,
             AgentMessageFormatter.approvalCard(description),
             buildApprovalKeyboard(approvalId)
         )
+        scheduleApprovalTimeout(plugin, session, approvalId)
+    }
+
+    /** 审批卡片 30 秒未处理则自动拒绝。 */
+    private fun scheduleApprovalTimeout(plugin: HuHoBot, session: AgentSession, approvalId: String) {
+        approvalScheduler.schedule({
+            val pending = session.awaitingApproval ?: return@schedule
+            if (pending.approvalId != approvalId) return@schedule
+            if (session.stopped) {
+                session.awaitingApproval = null
+                pending.messageId?.let { QClient.recallMessage(session.groupOpenId, it) }
+                return@schedule
+            }
+            session.awaitingApproval = null
+            pending.messageId?.let { QClient.recallMessage(session.groupOpenId, it) }
+            sendToGroup(plugin, session, AgentMessageFormatter.approvalTimeoutNotice())
+            session.messages.add(toolMessage(pending.toolCallId, "审批超时未处理，操作已自动拒绝，请向用户说明无需执行。"))
+            val config = plugin.getAgentConfig()
+            if (config != null && config.usable) {
+                plugin.submitAsync { runLoop(plugin, session, config) }
+            }
+        }, APPROVAL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
     /** 生成群管理工具的审批描述文本（用用户名显示，openid 仅给 AI）。 */
@@ -442,6 +472,7 @@ object AgentManager {
 
         if (session.stopped) {
             session.awaitingApproval = null
+            pending.messageId?.let { QClient.recallMessage(groupOpenId, it) }
             return
         }
 
@@ -456,6 +487,7 @@ object AgentManager {
         }
 
         session.awaitingApproval = null
+        pending.messageId?.let { QClient.recallMessage(groupOpenId, it) }
 
         if (decision == "yes") {
             sendToGroup(plugin, session, AgentMessageFormatter.approvedNotice(session.displayName(memberOpenId)))
