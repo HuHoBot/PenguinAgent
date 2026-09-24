@@ -635,4 +635,5 @@ ls build/gather-jar/
 
 ---
 
-[![bStats](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fbstats.org%2Fapi%2Fv1%2Fplugins%2F34268&query=%24.name&label=bStats&suffix=%20metrics&color=blue)](https://bstats.org/plugin/bukkit/34268)
+[![bStats](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fbstats.org%2Fapi%2Fv1%2Fplugins%2F34268%2Fcharts%2Fservers%2Fdata%3FmaxElements%3D1&query=%24%5B0%5D%5B1%5D&label=servers&color=blue)](https://bstats.org/plugin/bukkit/34268)
+[![players](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fbstats.org%2Fapi%2Fv1%2Fplugins%2F34268%2Fcharts%2Fplayers%2Fdata%3FmaxElements%3D1&query=%24%5B0%5D%5B1%5D&label=players&color=blue)](https://bstats.org/plugin/bukkit/34268)
