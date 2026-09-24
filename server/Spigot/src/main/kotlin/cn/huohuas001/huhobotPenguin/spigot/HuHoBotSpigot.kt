@@ -37,6 +37,7 @@ import org.bukkit.command.Command
 import org.bukkit.command.CommandMap
 import org.bukkit.command.PluginCommand
 import org.bukkit.plugin.java.JavaPlugin
+import org.bstats.bukkit.Metrics
 import java.io.File
 import java.util.concurrent.Callable
 
@@ -78,6 +79,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             tabCompleter = sendCommand
         } ?: log_error("无法注册 /send 命令，请检查 plugin.yml")
         log_info("HuHoBot Penguin 已加载")
+        BStatsReporter.start(this)
     }
 
     override fun onDisable() {
@@ -959,4 +961,12 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun log_info(msg: String) = logger.info(msg)
     override fun log_warning(msg: String) = logger.warning(msg)
     override fun log_error(msg: String) = logger.severe(msg)
+}
+
+private object BStatsReporter {
+    private const val SERVICE_ID = 34268
+
+    fun start(plugin: JavaPlugin) {
+        Metrics(plugin, SERVICE_ID)
+    }
 }

@@ -19,10 +19,12 @@ dependencies {
     implementation("com.alibaba:fastjson:2.0.32")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
+    implementation("org.bstats:bstats-bukkit:3.2.1")
     compileOnly("org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    implementation("org.bstats:bstats-bukkit:3.2.1")
 }
 
 kotlin {
@@ -76,6 +78,7 @@ tasks {
         dependsOn(normalizeSpigotPackageDirectory)
         archiveFileName.set("HuHoBot-Penguin_Spigot-${project.version}.jar")
         finalizedBy(gatherJar)
+        relocate("org.bstats", "${project.group}.bstats")
     }
 
     processResources {
