@@ -14,7 +14,7 @@ fun GroupMessageEvent.toMsgPack(messageSequence: Int): MsgPack {
             id = senderContact?.id,
             openId = senderContact?.openid,
             username = senderContact?.username ?: "unknown",
-            role = senderContact?.role
+            role = senderContact?.memberRole
         ),
         content = rawMessage.content.orEmpty(),
         rawContent = rawMessage.toString0(),

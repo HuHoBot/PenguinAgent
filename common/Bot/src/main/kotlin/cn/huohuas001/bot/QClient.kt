@@ -20,6 +20,7 @@ import io.github.kloping.qqbot.entities.ex.Markdown
 import io.github.kloping.qqbot.entities.ex.msg.MessageChain
 import io.github.kloping.qqbot.entities.qqpd.Channel
 import io.github.kloping.qqbot.http.data.V2MsgData
+import io.github.kloping.qqbot.utils.LoggerImpl
 
 object QClient {
     private lateinit var starter: Starter
@@ -97,13 +98,13 @@ object QClient {
 
         try {
             groupMessageHandler = GroupMessageHandler(plugin)
-            starter = Starter(appid, "", secret)
+            starter = Starter(appid, secret)
             starter.config.code = Intents.PUBLIC_INTENTS.and(Intents.GROUP_INTENTS)
             starter.run()
             starter.registerListenerHost(groupMessageHandler)
             starter.registerListenerHost(AgentInteractionListener())
-            starter.APPLICATION.logger.setLogLevel(1)
-            starter.APPLICATION.logger.setOutFile(logFilePattern)
+            LoggerImpl.INSTANCE.setLogLevel(1)
+            logFilePattern?.let { LoggerImpl.INSTANCE.setOutFile(it) }
             syncGroupPanels()
             // 加载本地昵称缓存
             NicknameManager.load()

@@ -23,14 +23,15 @@ dependencies {
     implementation(kotlin("stdlib"))
 
     // Dependencies declared by deps/qqpd-bot-java/pom.xml.
-    implementation("io.github.kloping:SpringTool:0.6.4") {
+    implementation("io.github.kloping:SpringTool:0.7.2-L2") {
         exclude(group = "io.github.Kloping", module = "JvUtils")
     }
     implementation("io.github.kloping:JvUtils:0.4.9-Beta1") {
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
     implementation("org.java-websocket:Java-WebSocket:1.6.0")
-    implementation("org.slf4j:slf4j-nop:2.0.12")
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.3.14")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jsoup:jsoup:1.15.4")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

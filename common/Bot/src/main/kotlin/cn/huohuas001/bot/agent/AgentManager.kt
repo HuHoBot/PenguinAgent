@@ -425,8 +425,8 @@ object AgentManager {
         val data = interaction?.data?.resolved?.button_data ?: return
         if (!data.startsWith(ACTION_PREFIX)) return
 
-        val groupOpenId = interaction.group_openid ?: return
-        val memberOpenId = interaction.group_member_openid ?: ""
+        val groupOpenId = interaction.groupOpenid ?: return
+        val memberOpenId = interaction.groupMemberOpenid ?: ""
         plugin.log_info("Agent 审批回调: group=$groupOpenId, member=$memberOpenId, data=$data")
 
         // event.response(0) 调用 QQ API 确认交互，但该端点返回 405（jsoup 在抛异常前打日志），
