@@ -111,11 +111,11 @@ class PublicCommands : CommandSupport() {
         md.appendLine("# HuHoBot 命令帮助")
         md.appendLine()
 
-        // 收集三处命令，按 key 去重，每个 key 只归一个分类
-        val addonCmdMap = mutableMapOf<String, RegisteredCommand>()
+        // 收集三处命令，按 key 去重并保留优先级最高的来源
+        val addonCmdMap = mutableMapOf<String, Pair<RegisteredCommand, String>>()
         for (addon in AddonManager.allAddons()) {
             for (cmd in AddonManager.commandsOf(addon.name)) {
-                addonCmdMap.putIfAbsent(cmd.command, cmd)
+                addonCmdMap.putIfAbsent(cmd.command, cmd to addon.name)
             }
         }
         val customCmdMap = CustomCommandRegistry.snapshot().associateBy { it.key }
@@ -126,48 +126,36 @@ class PublicCommands : CommandSupport() {
         val builtInKeys = builtInCmdMap.keys.filter { it !in addonKeys }.toSet()
         val customKeys = customCmdMap.keys.filter { it !in addonKeys && it !in builtInKeys }.toSet()
 
-        // 内置命令
-        if (builtInKeys.isNotEmpty()) {
-            md.appendLine("## 内置命令")
+        data class HelpRow(val name: String, val description: String, val onlyAdmin: Boolean)
+        val rows = mutableListOf<HelpRow>()
+        for (key in builtInKeys) {
+            val cmd = builtInCmdMap.getValue(key)
+            rows += HelpRow(cmd.command, cmd.describe, cmd.onlyAdmin)
+        }
+        for (key in customKeys) {
+            val cmd = customCmdMap.getValue(key)
+            rows += HelpRow(cmd.key, "${cmd.command}（自定义）", cmd.permission > 0)
+        }
+        for ((cmd, addonName) in addonCmdMap.values) {
+            rows += HelpRow(cmd.command, "${cmd.describe}（扩展：$addonName）", cmd.onlyAdmin)
+        }
+
+        fun appendSection(title: String, commands: List<HelpRow>) {
+            if (commands.isEmpty()) return
+            md.appendLine("## $title")
             md.appendLine()
             md.appendLine("| 命令 | 说明 | 权限 |")
             md.appendLine("| --- | --- | --- |")
-            for (key in builtInKeys.sorted()) {
-                val cmd = builtInCmdMap[key]!!
-                val perm = if (cmd.onlyAdmin) "管理员" else "公开"
-                md.appendLine("| ${cmd.command} | ${cmd.describe} | $perm |")
+            for (cmd in commands.sortedBy { it.name }) {
+                val permission = if (cmd.onlyAdmin) "管理员" else "公开"
+                md.appendLine("| /${cmd.name} | ${cmd.description} | $permission |")
             }
             md.appendLine()
         }
 
-        // 自定义命令
-        if (customKeys.isNotEmpty()) {
-            md.appendLine("## 自定义命令")
-            md.appendLine()
-            md.appendLine("| 命令 | 说明 | 权限 |")
-            md.appendLine("| --- | --- | --- |")
-            for (key in customKeys.sorted()) {
-                val c = customCmdMap[key]!!
-                val perm = if (c.permission > 0) "管理员" else "公开"
-                md.appendLine("| ${c.key} | ${c.command} | $perm |")
-            }
-            md.appendLine()
-        }
-
-        // 扩展命令
-        for (addon in AddonManager.allAddons()) {
-            val addonCmds = AddonManager.commandsOf(addon.name)
-            if (addonCmds.isNotEmpty()) {
-                md.appendLine("## 扩展：${addon.name}")
-                md.appendLine()
-                md.appendLine("| 命令 | 说明 | 权限 |")
-                md.appendLine("| --- | --- | --- |")
-                for (cmd in addonCmds.sortedBy { it.command }) {
-                    val perm = if (cmd.onlyAdmin) "管理员" else "公开"
-                    md.appendLine("| ${cmd.command} | ${cmd.describe} | $perm |")
-                }
-                md.appendLine()
-            }
+        appendSection("公开命令", rows.filterNot { it.onlyAdmin })
+        if (isAdmin(plugin, event)) {
+            appendSection("管理员命令", rows.filter { it.onlyAdmin })
         }
 
         plugin.replyMarkdown(event, md.toString().trimEnd())

@@ -1,448 +1,622 @@
 package cn.huohuas001.huhobotPenguin.spigot.inventory
 
+import org.bukkit.Bukkit
 import org.bukkit.Material
-import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.Damageable
+import org.bukkit.inventory.meta.LeatherArmorMeta
+import org.bukkit.inventory.meta.SkullMeta
 import java.awt.AlphaComposite
+import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
+import java.awt.GradientPaint
 import java.awt.Graphics2D
+import java.awt.Rectangle
 import java.awt.RenderingHints
+import java.awt.Shape
+import java.awt.geom.AffineTransform
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
 import java.util.logging.Logger
 import javax.imageio.ImageIO
+import kotlin.math.ceil
+import kotlin.math.max
 
 /**
- * 基于 Faithful 32x (MIT) 主题的背包渲染器。
- * 使用纯 Java2D，无外部依赖。
+ * Agent 内置背包渲染管线。
+ *
+ * Faithful 只负责物品纹理；背景、圆角遮罩、格子卡片和人物预览均由程序独立合成。
+ * 用户壁纸始终位于最底层，不会影响物品格子和人物模型的可读性。
  */
 object InventoryRenderer {
-
     private val logger = Logger.getLogger("InventoryRenderer")
-    private const val BG_WIDTH = 704
-    private const val BG_HEIGHT = 664
-    private const val SLOT_SIZE = 72
-    private const val ITEM_SIZE = 64
 
-    // 布局坐标（来自 layout.yml）
-    private const val STORAGE_X = 28
-    private const val STORAGE_Y = 332
-    private const val STORAGE_COLS = 9
-    private const val STORAGE_ROWS = 3
-    private const val STEP_X = 72
-    private const val STEP_Y = 72
+    private const val RESOURCE_ROOT = "inventory/faithful32x"
+    private const val MAX_BACKGROUND_BYTES = 16L * 1024L * 1024L
+    private const val MAX_BACKGROUND_PIXELS = 32L * 1024L * 1024L
 
-    private const val HOTBAR_X = 28
-    private const val HOTBAR_Y = 564
+    private const val INVENTORY_WIDTH = 1359
+    private const val INVENTORY_HEIGHT = 1017
+    private const val SLOT_SIZE = 104
+    private const val ITEM_SIZE = 96
+    private const val STORAGE_X = 151
+    private const val STORAGE_Y = 485
+    private const val STORAGE_STEP_X = 119
+    private const val STORAGE_STEP_Y = 114
+    private const val HOTBAR_Y = 861
+    private const val PREVIEW_X = 537
+    private const val PREVIEW_Y = 80
+    private const val PREVIEW_WIDTH = 272
+    private const val PREVIEW_HEIGHT = 373
 
-    private val ARMOR_POS = mapOf(
-        "head" to Pair(28, 28),
-        "chest" to Pair(28, 100),
-        "legs" to Pair(28, 172),
-        "feet" to Pair(28, 244)
+    private const val ENDER_WIDTH = 1620
+    private const val ENDER_HEIGHT = 694
+    private const val ENDER_SLOT_SIZE = 128
+    private const val ENDER_ITEM_SIZE = 112
+    private const val ENDER_X = 175
+    private const val ENDER_Y = 138
+    private const val ENDER_STEP_X = 143
+    private const val ENDER_STEP_Y = 149
+
+    private val armorPositions = mapOf(
+        "head" to Rectangle(399, 143, SLOT_SIZE, SLOT_SIZE),
+        "chest" to Rectangle(399, 286, SLOT_SIZE, SLOT_SIZE),
+        "legs" to Rectangle(844, 143, SLOT_SIZE, SLOT_SIZE),
+        "feet" to Rectangle(844, 286, SLOT_SIZE, SLOT_SIZE)
     )
-    private val OFFHAND_POS = Pair(304, 244)
-    private val QTY_OFFSET = Pair(68, 68)
-    private val DUR_OFFSET = Pair(8, 64)
-    private const val DUR_WIDTH = 56
-    private const val DUR_HEIGHT = 4
+    private val offhandPosition = Rectangle(210, 221, SLOT_SIZE, SLOT_SIZE)
 
-    // 缓存背景图和纹理
-    private var backgroundImage: BufferedImage? = null
-    private val textureCache = ConcurrentHashMap<String, BufferedImage?>()
+    private val cardFill = Color(244, 247, 249, 42)
+    private val playerFill = Color(244, 247, 249, 48)
+    private val cardEdge = Color(255, 255, 255, 78)
+    private val cardInnerEdge = Color(35, 51, 64, 26)
+
+    @Volatile private var inventoryBackground: BufferedImage? = null
+    @Volatile private var enderChestBackground: BufferedImage? = null
+    private val textureCache = ConcurrentHashMap<String, BufferedImage>()
+    private val playerHeadCache = ConcurrentHashMap<String, BufferedImage>()
     private var fallbackTexture: BufferedImage? = null
+    private val playerModelRenderer by lazy { PlayerModelRenderer(PREVIEW_WIDTH, PREVIEW_HEIGHT) }
+    private val equipmentAssets by lazy { EquipmentAssetResolver() }
 
-    fun init() {
-        // 服务器通常无图形环境，需要启用 headless 模式
+    /** 初始化默认壁纸或用户壁纸，并预先合成所有强制遮罩。 */
+    fun init(
+        dataFolder: File,
+        customEnabled: Boolean = false,
+        inventoryFile: String = "inventory.png",
+        enderChestFile: String = "",
+        fit: String = "cover"
+    ) {
         if (System.getProperty("java.awt.headless") == null) {
             System.setProperty("java.awt.headless", "true")
         }
-        backgroundImage = loadResource("inventory/faithful32x/background.png")
-        fallbackTexture = loadResource("inventory/faithful32x/fallback/unknown.png")
-    }
+        textureCache.clear()
+        playerHeadCache.clear()
+        fallbackTexture = loadResource("$RESOURCE_ROOT/fallback/unknown.png")
 
-    /**
-     * 渲染玩家背包为 PNG 字节数组。
-     */
-    fun render(player: Player): ByteArray? {
-        val bg = backgroundImage ?: return null
-        val canvas = BufferedImage(BG_WIDTH, BG_HEIGHT, BufferedImage.TYPE_INT_ARGB)
-        val g = canvas.createGraphics()
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF)
+        val normalizedFit = fit.trim().lowercase().takeIf { it == "cover" || it == "stretch" }
+            ?: run {
+                logger.warning("inventory.render.custom-background.fit 只能是 cover 或 stretch，已使用 cover")
+                "cover"
+            }
+        val defaultInventory = loadResource("$RESOURCE_ROOT/default-wallpaper.png")
+            ?: solidWallpaper()
 
-        // 绘制背景
-        g.drawImage(bg, 0, 0, null)
-
-        // 绘制玩家预览
-        drawPlayerPreview(g, player)
-
-        val inv = player.inventory
-        val armor = mapOf(
-            "head" to inv.helmet,
-            "chest" to inv.chestplate,
-            "legs" to inv.leggings,
-            "feet" to inv.boots
-        )
-        val offhand = inv.itemInOffHand
-        val storage = inv.storageContents // 36 slots: 0-8=hotbar, 9-35=storage
-
-        // 绘制护甲槽
-        for ((slot, pos) in ARMOR_POS) {
-            val item = armor[slot]
-            drawSlot(g, item, pos.first, pos.second)
-        }
-
-        // 绘制副手
-        drawSlot(g, offhand, OFFHAND_POS.first, OFFHAND_POS.second)
-
-        // 绘制物品栏 (3行9列, storageContents[9..35])
-        for (row in 0 until STORAGE_ROWS) {
-            for (col in 0 until STORAGE_COLS) {
-                val idx = 9 + row * STORAGE_COLS + col
-                val item = storage.getOrNull(idx)
-                val x = STORAGE_X + col * STEP_X
-                val y = STORAGE_Y + row * STEP_Y
-                drawSlot(g, item, x, y)
+        var inventoryWallpaper = defaultInventory
+        var enderWallpaper = defaultInventory
+        if (customEnabled) {
+            val directory = File(dataFolder, "inventory/backgrounds")
+            if (!directory.exists() && !directory.mkdirs()) {
+                logger.warning("无法创建自定义背包底图目录: ${directory.absolutePath}")
+            }
+            inventoryWallpaper = loadCustomWallpaper(directory, inventoryFile) ?: defaultInventory
+            enderWallpaper = if (enderChestFile.isBlank()) {
+                inventoryWallpaper
+            } else {
+                loadCustomWallpaper(directory, enderChestFile) ?: defaultInventory
             }
         }
 
-        // 绘制快捷栏 (storageContents[0..8])
-        for (col in 0 until 9) {
-            val item = storage.getOrNull(col)
-            val x = HOTBAR_X + col * STEP_X
-            drawSlot(g, item, x, HOTBAR_Y)
-        }
-
-        // 绘制 Faithful 32x 水印（License 要求）
-        drawWatermark(g)
-
-        g.dispose()
-
-        // 输出 PNG
-        return try {
-            val baos = ByteArrayOutputStream()
-            ImageIO.write(canvas, "PNG", baos)
-            baos.toByteArray()
-        } catch (_: Exception) {
-            null
-        }
+        inventoryBackground = composeInventoryBackground(inventoryWallpaper, normalizedFit)
+        enderChestBackground = composeEnderChestBackground(enderWallpaper, normalizedFit)
     }
 
-    private fun drawWatermark(g: Graphics2D) {
-        val origComposite = g.composite
-        val origColor = g.color
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+    fun render(snapshot: InventorySnapshot): ByteArray? {
+        val background = inventoryBackground ?: return null
+        val canvas = copyImage(background)
+        val graphics = canvas.createGraphics()
+        try {
+            configureItemGraphics(graphics)
+            drawPlayerPreview(graphics, snapshot)
 
-        val fontSmall = Font("SansSerif", Font.PLAIN, 16)
-        val fontBold = Font("SansSerif", Font.BOLD, 18)
+            drawSlot(graphics, snapshot.armor.getOrNull(0), armorPositions.getValue("head"), ITEM_SIZE)
+            drawSlot(graphics, snapshot.armor.getOrNull(1), armorPositions.getValue("chest"), ITEM_SIZE)
+            drawSlot(graphics, snapshot.armor.getOrNull(2), armorPositions.getValue("legs"), ITEM_SIZE)
+            drawSlot(graphics, snapshot.armor.getOrNull(3), armorPositions.getValue("feet"), ITEM_SIZE)
+            drawSlot(graphics, snapshot.offhand, offhandPosition, ITEM_SIZE)
 
-        val line1 = "Faithful 32x"
-        val line2 = "faithfulpack.net"
-
-        val fmSmall = g.getFontMetrics(fontSmall)
-        val fmBold = g.getFontMetrics(fontBold)
-
-        val padding = 12
-        val lineSpacing = 3
-        val totalHeight = fmBold.height + lineSpacing + fmSmall.height
-        val maxWidth = maxOf(fmBold.stringWidth(line1), fmSmall.stringWidth(line2))
-
-        val boxW = maxWidth + padding * 2
-        val boxH = totalHeight + padding
-        val boxX = BG_WIDTH - boxW - padding
-        val boxY = padding
-
-        // 背景半透明黑色矩形
-        g.composite = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.45f)
-        g.color = Color.BLACK
-        g.fillRoundRect(boxX, boxY, boxW, boxH, 8, 8)
-
-        // 文字
-        g.composite = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.8f)
-        g.color = Color.WHITE
-        g.font = fontBold
-        g.drawString(line1, boxX + padding, boxY + padding + fmBold.ascent)
-        g.font = fontSmall
-        g.drawString(line2, boxX + padding, boxY + padding + fmBold.height + lineSpacing + fmSmall.ascent)
-
-        g.composite = origComposite
-        g.color = origColor
-    }
-
-    private fun drawSlot(g: Graphics2D, item: ItemStack?, x: Int, y: Int) {
-        if (item == null || item.type.isAir) return
-        val texture = getTexture(item) ?: return
-
-        // 绘制物品纹理 (居中在格子内)
-        val offsetX = x + (SLOT_SIZE - ITEM_SIZE) / 2
-        val offsetY = y + (SLOT_SIZE - ITEM_SIZE) / 2
-        g.drawImage(texture, offsetX, offsetY, ITEM_SIZE, ITEM_SIZE, null)
-
-        // 绘制数量
-        if (item.amount > 1) {
-            drawQuantity(g, item.amount, x + QTY_OFFSET.first, y + QTY_OFFSET.second)
-        }
-
-        // 绘制耐久条
-        if (item.type.maxDurability > 0) {
-            val dmg = (item.itemMeta as? Damageable)?.damage ?: 0
-            if (dmg > 0) {
-                drawDurability(g, item.type.maxDurability.toInt(), dmg, x + DUR_OFFSET.first, y + DUR_OFFSET.second)
+            val storage = snapshot.storage
+            for (index in 9 until 36) {
+                val normalized = index - 9
+                val bounds = Rectangle(
+                    STORAGE_X + normalized % 9 * STORAGE_STEP_X,
+                    STORAGE_Y + normalized / 9 * STORAGE_STEP_Y,
+                    SLOT_SIZE,
+                    SLOT_SIZE
+                )
+                drawSlot(graphics, storage.getOrNull(index), bounds, ITEM_SIZE)
             }
+            for (index in 0 until 9) {
+                val bounds = Rectangle(
+                    STORAGE_X + index * STORAGE_STEP_X,
+                    HOTBAR_Y,
+                    SLOT_SIZE,
+                    SLOT_SIZE
+                )
+                drawSlot(graphics, storage.getOrNull(index), bounds, ITEM_SIZE)
+            }
+        } finally {
+            graphics.dispose()
+        }
+        return encode(canvas)
+    }
+
+    fun renderEnderChest(snapshot: InventorySnapshot): ByteArray? {
+        val background = enderChestBackground ?: return null
+        val canvas = copyImage(background)
+        val graphics = canvas.createGraphics()
+        try {
+            configureItemGraphics(graphics)
+            val contents = snapshot.enderChest
+            for (index in 0 until 27) {
+                val bounds = Rectangle(
+                    ENDER_X + index % 9 * ENDER_STEP_X,
+                    ENDER_Y + index / 9 * ENDER_STEP_Y,
+                    ENDER_SLOT_SIZE,
+                    ENDER_SLOT_SIZE
+                )
+                drawSlot(graphics, contents.getOrNull(index), bounds, ENDER_ITEM_SIZE)
+            }
+        } finally {
+            graphics.dispose()
+        }
+        return encode(canvas)
+    }
+
+    private fun drawPlayerPreview(graphics: Graphics2D, snapshot: InventorySnapshot) {
+        val skin = SkinFetcher.fetchSkin(snapshot.playerName, snapshot.playerUuid, snapshot.skinProfile)
+            ?: DefaultPlayerSkinProvider.defaultSkin(snapshot.playerUuid, Bukkit.getBukkitVersion())
+        try {
+            graphics.drawImage(
+                playerModelRenderer.render(skin, snapshot.armorVisuals, equipmentAssets), PREVIEW_X, PREVIEW_Y, null
+            )
+        } catch (error: Exception) {
+            logger.log(Level.WARNING, "盔甲模型渲染失败，改用普通模型: ${snapshot.playerName}", error)
+            graphics.drawImage(playerModelRenderer.render(skin), PREVIEW_X, PREVIEW_Y, null)
         }
     }
 
-    // 玩家预览区域 (来自 layout.yml)
-    private const val PREVIEW_X = 102
-    private const val PREVIEW_Y = 30
-    private const val PREVIEW_W = 198
-    private const val PREVIEW_H = 283
+    private fun drawSlot(graphics: Graphics2D, item: ItemStack?, bounds: Rectangle, itemSize: Int) {
+        if (item == null || item.type.isAir || item.amount <= 0) return
+        val texture = getTexture(item) ?: fallbackTexture ?: return
+        val itemX = bounds.x + (bounds.width - itemSize) / 2
+        val itemY = bounds.y + (bounds.height - itemSize) / 2
+        graphics.composite = AlphaComposite.SrcOver
+        graphics.drawImage(texture, itemX, itemY, itemSize, itemSize, null)
 
-    private fun drawPlayerPreview(g: Graphics2D, player: Player) {
-        val skin = SkinFetcher.fetchSkin(player.name) ?: DefaultPlayerSkinProvider.defaultSkin()
-        val preview = try {
-            PlayerSkinRenderer.render(skin)
-        } catch (e: Exception) {
-            logger.log(Level.WARNING, "皮肤渲染失败: ${player.name}", e)
-            return
+        if (item.enchantments.isNotEmpty()) {
+            graphics.color = Color(130, 95, 255, 150)
+            graphics.stroke = BasicStroke(3f)
+            graphics.drawRoundRect(itemX + 1, itemY + 1, itemSize - 2, itemSize - 2, 8, 8)
         }
-        // 缩放适配预览区域
-        val scale = minOf(
-            PREVIEW_W.toDouble() / preview.width,
-            PREVIEW_H.toDouble() / preview.height
-        )
-        val drawW = (preview.width * scale).toInt()
-        val drawH = (preview.height * scale).toInt()
-        val drawX = PREVIEW_X + (PREVIEW_W - drawW) / 2
-        val drawY = PREVIEW_Y + (PREVIEW_H - drawH) / 2
-        g.drawImage(preview, drawX, drawY, drawW, drawH, null)
+        if (item.amount > 1) drawAmount(graphics, bounds, item.amount)
+        val maxDamage = item.type.maxDurability.toInt()
+        val damage = (item.itemMeta as? Damageable)?.damage ?: 0
+        if (maxDamage > 0 && damage > 0) drawDurability(graphics, bounds, maxDamage, damage)
     }
 
-    private fun drawQuantity(g: Graphics2D, amount: Int, x: Int, y: Int) {
-        g.font = Font("SansSerif", Font.BOLD, 14)
-        val fm = g.fontMetrics
-        val text = if (amount > 999) "999+" else amount.toString()
-        val textW = fm.stringWidth(text)
-        val textH = fm.ascent
-
-        // 阴影
-        g.color = Color(0, 0, 0, 180)
-        g.drawString(text, x - textW + 1, y + textH + 1)
-        // 白色文字
-        g.color = Color.WHITE
-        g.drawString(text, x - textW, y + textH)
+    private fun drawAmount(graphics: Graphics2D, bounds: Rectangle, amount: Int) {
+        val text = amount.toString()
+        graphics.font = Font(Font.SANS_SERIF, Font.BOLD, 26)
+        val metrics = graphics.fontMetrics
+        val x = bounds.x + bounds.width - 4 - metrics.stringWidth(text)
+        val y = bounds.y + bounds.height - 4
+        graphics.color = Color(0, 0, 0, 210)
+        graphics.drawString(text, x + 2, y + 2)
+        graphics.color = Color.WHITE
+        graphics.drawString(text, x, y)
     }
 
-    private fun drawDurability(g: Graphics2D, maxDur: Int, damage: Int, x: Int, y: Int) {
-        val ratio = 1.0 - damage.toDouble() / maxDur
-        val fillWidth = (DUR_WIDTH * ratio).toInt().coerceIn(0, DUR_WIDTH)
-
-        // 背景条
-        g.color = Color(0, 0, 0, 120)
-        g.fillRect(x, y, DUR_WIDTH, DUR_HEIGHT)
-
-        // 颜色：绿→黄→红
-        g.color = when {
-            ratio > 0.5 -> Color(0x55FF55)
-            ratio > 0.2 -> Color(0xFFFF55)
-            else -> Color(0xFF5555)
-        }
-        g.fillRect(x, y, fillWidth, DUR_HEIGHT)
+    private fun drawDurability(
+        graphics: Graphics2D,
+        bounds: Rectangle,
+        maxDamage: Int,
+        damage: Int
+    ) {
+        val remaining = (1.0 - damage.toDouble() / maxDamage.toDouble()).coerceIn(0.0, 1.0)
+        val x = bounds.x + 12
+        val y = bounds.y + 96
+        val width = 80
+        graphics.color = Color(18, 18, 18, 230)
+        graphics.fillRect(x, y, width, 6)
+        graphics.color = if (remaining > 0.5) Color(73, 214, 112) else Color(238, 177, 47)
+        graphics.fillRect(x, y, (width * remaining).toInt(), 6)
     }
 
     private fun getTexture(item: ItemStack): BufferedImage? {
-        val key = item.type.key.toString() // e.g. "minecraft:diamond_sword"
-        return textureCache.getOrPut(key) { loadTexture(item.type, item) }
+        dynamicPlayerHead(item)?.let { return it }
+        if (item.type == Material.LEATHER_HELMET || item.type == Material.LEATHER_CHESTPLATE ||
+            item.type == Material.LEATHER_LEGGINGS || item.type == Material.LEATHER_BOOTS
+        ) {
+            val color = (item.itemMeta as? LeatherArmorMeta)?.color?.asRGB()
+                ?: Bukkit.getItemFactory().defaultLeatherColor.asRGB()
+            runCatching { equipmentAssets.resolveLeatherItemTexture(item.type.key.key, color) }
+                .onFailure { logger.log(Level.WARNING, "皮革物品贴图渲染失败: ${item.type}", it) }
+                .getOrNull()?.let { return it }
+        }
+        val key = item.type.key.toString()
+        textureCache[key]?.let { return it }
+        val loaded = loadTexture(item.type) ?: fallbackTexture ?: return null
+        return textureCache.putIfAbsent(key, loaded) ?: loaded
     }
 
-    private val missingTextureBlocks = setOf(
-        "anvil", "chipped_anvil", "damaged_anvil",
-        "chest", "trapped_chest", "ender_chest", "barrel",
-        "hopper", "dispenser", "dropper", "brewing_stand",
-        "enchanting_table", "stonecutter", "loom",
-        "bell", "campfire", "soul_campfire", "torch", "soul_torch",
-        "wall_torch", "soul_wall_torch", "redstone_torch", "redstone_wall_torch",
-        "candle", "cake", "cake_with_candle",
-        "flower_pot", "potted_oak_sapling", "potted_spruce_sapling",
-        "potted_birch_sapling", "potted_jungle_sapling", "potted_acacia_sapling",
-        "potted_dark_oak_sapling", "potted_fern", "potted_allium",
-        "potted_azalea_bush", "potted_rose_bush", "potted_dead_bush",
-        "potted_cactus", "potted_bamboo", "potted_crimson_fungus",
-        "potted_warped_fungus", "potted_crimson_roots", "potted_warped_roots",
-        "potted_brown_mushroom", "potted_red_mushroom", "potted_wither_rose",
-        "potted_blue_orchid", "potted_orange_tulip", "potted_pink_tulip",
-        "potted_peony", "potted_lily_of_the_valley",
-        "head", "skeleton_skull", "wither_skeleton_skull",
-        "zombie_head", "creeper_head", "dragon_head",
-        "player_head", "player_wall_head",
-        "skeleton_wall_skull", "wither_skeleton_wall_skull",
-        "zombie_wall_head", "creeper_wall_head", "dragon_wall_head",
-        "armor_stand", "item_frame", "painting",
-        "sign", "oak_sign", "spruce_sign", "birch_sign", "jungle_sign",
-        "acacia_sign", "dark_oak_sign", "crimson_sign", "warped_sign",
-        "oak_wall_sign", "spruce_wall_sign", "birch_wall_sign",
-        "jungle_wall_sign", "acacia_wall_sign", "dark_oak_wall_sign",
-        "crimson_wall_sign", "warped_wall_sign",
-        "bed", "white_bed", "orange_bed", "magenta_bed", "light_blue_bed",
-        "yellow_bed", "lime_bed", "pink_bed", "gray_bed", "light_gray_bed",
-        "cyan_bed", "purple_bed", "blue_bed", "brown_bed", "green_bed",
-        "red_bed", "black_bed",
-        "white_wall_bed", "orange_wall_bed", "magenta_wall_bed",
-        "light_blue_wall_bed", "yellow_wall_bed", "lime_wall_bed",
-        "pink_wall_bed", "gray_wall_bed", "light_gray_wall_bed",
-        "cyan_wall_bed", "purple_wall_bed", "blue_wall_bed",
-        "brown_wall_bed", "green_wall_bed", "red_wall_bed", "black_wall_bed",
-        "banner", "white_banner", "orange_banner", "magenta_banner",
-        "light_blue_banner", "yellow_banner", "lime_banner", "pink_banner",
-        "gray_banner", "light_gray_banner", "cyan_banner", "purple_banner",
-        "blue_banner", "brown_banner", "green_banner", "red_banner", "black_banner",
-        "white_wall_banner", "orange_wall_banner", "magenta_wall_banner",
-        "light_blue_wall_banner", "yellow_wall_banner", "lime_wall_banner",
-        "pink_wall_banner", "gray_wall_banner", "light_gray_wall_banner",
-        "cyan_wall_banner", "purple_wall_banner", "blue_wall_banner",
-        "brown_wall_banner", "green_wall_banner", "red_wall_banner", "black_wall_banner",
-        "shulker_box", "white_shulker_box", "orange_shulker_box",
-        "magenta_shulker_box", "light_blue_shulker_box", "yellow_shulker_box",
-        "lime_shulker_box", "pink_shulker_box", "gray_shulker_box",
-        "light_gray_shulker_box", "cyan_shulker_box", "purple_shulker_box",
-        "blue_shulker_box", "brown_shulker_box", "green_shulker_box",
-        "red_shulker_box", "black_shulker_box",
-        "glow_item_frame", "painting"
-    )
+    private fun dynamicPlayerHead(item: ItemStack): BufferedImage? {
+        if (item.type != Material.PLAYER_HEAD) return null
+        val meta = item.itemMeta as? SkullMeta ?: return null
+        val owner = meta.owningPlayer
+        val ownerName = owner?.name ?: meta.owner ?: return null
+        val profile = sequenceOf("getOwnerProfile", "getPlayerProfile")
+            .mapNotNull { method -> runCatching { meta.javaClass.getMethod(method).invoke(meta) }.getOrNull() }
+            .firstOrNull()
+        val skin = SkinFetcher.fetchSkin(
+            ownerName, owner?.uniqueId, ServerSkinProfile.fromProfile(profile)
+        ) ?: return null
+        return playerHeadCache.computeIfAbsent(skin.cacheKey) { renderPlayerHead(skin.image) }
+    }
 
-    private fun loadTexture(material: Material, item: ItemStack): BufferedImage? {
-        val key = material.key.toString()
-        val name = key.replace("minecraft:", "")
-        val basePath = "inventory/faithful32x/assets/minecraft"
+    private fun loadTexture(material: Material): BufferedImage? {
+        val name = material.key.key
+        loadResource("$RESOURCE_ROOT/special-variants/minecraft/$name.png")?.let { return it }
+        loadResource("$RESOURCE_ROOT/overrides/items/minecraft/$name.png")?.let { return it }
 
-        // 0. 硬编码缺失贴图 → 直接回退
-        if (name in missingTextureBlocks) return fallbackTexture
+        val direct = loadResource("$RESOURCE_ROOT/assets/minecraft/$name.png")
+        if (material.isBlock && material.isSolid) {
+            val top = loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_top.png") ?: direct
+            val side = loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_side.png")
+                ?: loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_front.png")
+                ?: direct
+            if (top != null && side != null) return renderIsometricBlock(top, side)
+        }
+        return direct ?: fallbackTexture
+    }
 
-        // 1. 尝试 overrides（优先级最高）
-        var img = loadResource("inventory/faithful32x/overrides/items/$key.png")
-        if (img != null) return img
-
-        // 2. 尝试 item 贴图
-        img = loadResource("$basePath/$name.png")
-        if (img != null) return img
-
-        // 3. 方块物品：尝试合成等距3D预览
-        if (material.isBlock) {
-            val hasTop = loadResource("$basePath/${name}_top.png") != null
-            val hasFront = loadResource("$basePath/${name}_front.png") != null
-                    || loadResource("$basePath/${name}_side.png") != null
-
-            if (hasTop && hasFront) {
-                val top = loadResource("$basePath/${name}_top.png")!!
-                val front = loadResource("$basePath/${name}_front.png")
-                    ?: loadResource("$basePath/${name}_side.png")!!
-                img = renderIsometricBlock(top, front)
-            } else {
-                img = loadResource("$basePath/${name}.png")
+    private fun renderPlayerHead(skin: BufferedImage): BufferedImage {
+        val normalized = if (skin.height == 64) skin else BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB).also {
+            it.createGraphics().run {
+                drawImage(skin, 0, 0, null)
+                dispose()
             }
         }
-
-        // 4. 回退纹理
-        return img ?: fallbackTexture
+        val top = headFace(normalized, 8, 0, 40, 0)
+        val front = headFace(normalized, 8, 8, 40, 8)
+        val side = headFace(normalized, 0, 8, 32, 8)
+        return renderIsometricBlock(top, front, side)
     }
 
-    /**
-     * 用顶面+正面贴图合成等距3D方块预览。
-     */
-    private fun renderIsometricBlock(topTex: BufferedImage, sideTex: BufferedImage): BufferedImage {
-        val size = 64
-        val result = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
-        val g = result.createGraphics()
+    private fun headFace(
+        skin: BufferedImage,
+        baseX: Int,
+        baseY: Int,
+        overlayX: Int,
+        overlayY: Int
+    ): BufferedImage {
+        val face = BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB)
+        face.createGraphics().run {
+            setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
+            drawImage(skin, 0, 0, 8, 8, baseX, baseY, baseX + 8, baseY + 8, null)
+            if (skin.height >= overlayY + 8) {
+                drawImage(skin, 0, 0, 8, 8, overlayX, overlayY, overlayX + 8, overlayY + 8, null)
+            }
+            dispose()
+        }
+        return face
+    }
+
+    private fun renderIsometricBlock(top: BufferedImage, side: BufferedImage): BufferedImage =
+        renderIsometricBlock(top, side, side)
+
+    private fun renderIsometricBlock(
+        top: BufferedImage,
+        front: BufferedImage,
+        right: BufferedImage
+    ): BufferedImage {
+        val result = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB)
+        val graphics = result.createGraphics()
         try {
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-
-            // 等距参数
-            val tw = 22  // 顶面半宽
-            val th = 11  // 顶面半高
-            val sh = 26  // 侧面高度
-
-            // 居中偏移
-            val ox = size / 2
-            val oy = 10
-
-            // 顶面 (菱形)
-            val topPoly = intArrayOf(
-                ox, oy,              // 上
-                ox + tw, oy + th,    // 右
-                ox, oy + th * 2,     // 下
-                ox - tw, oy + th     // 左
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            val centerX = 32
+            val topY = 6
+            val halfWidth = 25
+            val halfHeight = 13
+            val sideHeight = 31
+            drawFace(
+                graphics,
+                top,
+                intArrayOf(
+                    centerX, topY,
+                    centerX + halfWidth, topY + halfHeight,
+                    centerX, topY + halfHeight * 2,
+                    centerX - halfWidth, topY + halfHeight
+                )
             )
-            drawFaceTransformed(g, topTex, topPoly)
-
-            // 正面 (左下平行四边形)
-            val frontPoly = intArrayOf(
-                ox - tw, oy + th,        // 左上
-                ox, oy + th * 2,         // 右上
-                ox, oy + th * 2 + sh,    // 右下
-                ox - tw, oy + th + sh    // 左下
+            drawFace(
+                graphics,
+                shade(front, 0.80),
+                intArrayOf(
+                    centerX - halfWidth, topY + halfHeight,
+                    centerX, topY + halfHeight * 2,
+                    centerX, topY + halfHeight * 2 + sideHeight,
+                    centerX - halfWidth, topY + halfHeight + sideHeight
+                )
             )
-            drawFaceTransformed(g, sideTex, frontPoly)
-
-            // 右侧面 (右下平行四边形)
-            val rightPoly = intArrayOf(
-                ox, oy + th * 2,          // 左上
-                ox + tw, oy + th,         // 右上
-                ox + tw, oy + th + sh,    // 右下
-                ox, oy + th * 2 + sh      // 左下
+            drawFace(
+                graphics,
+                shade(right, 0.68),
+                intArrayOf(
+                    centerX, topY + halfHeight * 2,
+                    centerX + halfWidth, topY + halfHeight,
+                    centerX + halfWidth, topY + halfHeight + sideHeight,
+                    centerX, topY + halfHeight * 2 + sideHeight
+                )
             )
-            drawFaceTransformed(g, sideTex, rightPoly)
-
         } finally {
-        g.dispose()
+            graphics.dispose()
         }
         return result
     }
 
-    /**
-     * 将纹理通过仿射变换绘制到目标四边形。
-     */
-    private fun drawFaceTransformed(g: Graphics2D, texture: BufferedImage, dst: IntArray) {
-        val w = texture.width.toDouble()
-        val h = texture.height.toDouble()
-
-        // 4点映射: src(0,0)(w,0)(w,h)(0,h) -> dst 四边形
-        // 使用 PerspectiveTransform 通过 Graphics2D.transform
-        val dx1 = dst[0].toDouble(); val dy1 = dst[1].toDouble()
-        val dx2 = dst[2].toDouble(); val dy2 = dst[3].toDouble()
-        val dx3 = dst[4].toDouble(); val dy3 = dst[5].toDouble()
-        val dx4 = dst[6].toDouble(); val dy4 = dst[7].toDouble()
-
-        // 用平移+剪切+缩放映射: 先算 3 点确定仿射
-        val m00 = (dx2 - dx1) / w
-        val m10 = (dy2 - dy1) / w
-        val m01 = (dx4 - dx1) / h
-        val m11 = (dy4 - dy1) / h
-        val m02 = dx1
-        val m12 = dy1
-
-        val tx = java.awt.geom.AffineTransform(m00, m10, m01, m11, m02, m12)
-        g.drawImage(texture, tx, null)
+    private fun drawFace(graphics: Graphics2D, texture: BufferedImage, target: IntArray) {
+        val width = texture.width.toDouble()
+        val height = texture.height.toDouble()
+        val transform = AffineTransform(
+            (target[2] - target[0]) / width,
+            (target[3] - target[1]) / width,
+            (target[6] - target[0]) / height,
+            (target[7] - target[1]) / height,
+            target[0].toDouble(),
+            target[1].toDouble()
+        )
+        val oldClip = graphics.clip
+        graphics.clip = java.awt.Polygon(
+            intArrayOf(target[0], target[2], target[4], target[6]),
+            intArrayOf(target[1], target[3], target[5], target[7]),
+            4
+        )
+        graphics.drawImage(texture, transform, null)
+        graphics.clip = oldClip
     }
 
-    private fun loadResource(path: String): BufferedImage? {
-        return try {
-            val stream: InputStream? = InventoryRenderer::class.java.classLoader.getResourceAsStream(path)
-            stream?.use {
-                val img = ImageIO.read(it) ?: return null
-                // 动画贴图：高度>宽度时只取第一帧
-                if (img.height > img.width && img.height > 16) {
-                    img.getSubimage(0, 0, img.width, img.width)
-                } else img
+    private fun shade(source: BufferedImage, factor: Double): BufferedImage {
+        val result = BufferedImage(source.width, source.height, BufferedImage.TYPE_INT_ARGB)
+        for (y in 0 until source.height) for (x in 0 until source.width) {
+            val argb = source.getRGB(x, y)
+            val alpha = argb ushr 24
+            val red = (((argb ushr 16) and 0xff) * factor).toInt().coerceAtMost(255)
+            val green = (((argb ushr 8) and 0xff) * factor).toInt().coerceAtMost(255)
+            val blue = ((argb and 0xff) * factor).toInt().coerceAtMost(255)
+            result.setRGB(x, y, (alpha shl 24) or (red shl 16) or (green shl 8) or blue)
+        }
+        return result
+    }
+
+    private fun composeInventoryBackground(wallpaper: BufferedImage, fit: String): BufferedImage {
+        val result = wallpaper(wallpaper, INVENTORY_WIDTH, INVENTORY_HEIGHT, fit)
+        val graphics = result.createGraphics()
+        try {
+            configureBackgroundGraphics(graphics)
+            for (index in 0 until 27) {
+                drawSelectionCard(
+                    graphics,
+                    Rectangle(
+                        STORAGE_X + index % 9 * STORAGE_STEP_X + 2,
+                        STORAGE_Y + index / 9 * STORAGE_STEP_Y + 2,
+                        SLOT_SIZE - 4,
+                        SLOT_SIZE - 4
+                    ),
+                    cardFill
+                )
             }
-        } catch (_: Exception) {
+            for (index in 0 until 9) {
+                drawSelectionCard(
+                    graphics,
+                    Rectangle(STORAGE_X + index * STORAGE_STEP_X + 2, HOTBAR_Y + 2, SLOT_SIZE - 4, SLOT_SIZE - 4),
+                    cardFill
+                )
+            }
+            armorPositions.values.forEach { drawSelectionCard(graphics, inset(it, 2), cardFill) }
+            drawSelectionCard(graphics, inset(offhandPosition, 2), cardFill)
+            drawSelectionCard(
+                graphics,
+                Rectangle(PREVIEW_X, PREVIEW_Y, PREVIEW_WIDTH, PREVIEW_HEIGHT),
+                playerFill,
+                14
+            )
+            drawOuterFrame(graphics, INVENTORY_WIDTH, INVENTORY_HEIGHT)
+        } finally {
+            graphics.dispose()
+        }
+        return result
+    }
+
+    private fun composeEnderChestBackground(wallpaper: BufferedImage, fit: String): BufferedImage {
+        val result = wallpaper(wallpaper, ENDER_WIDTH, ENDER_HEIGHT, fit)
+        val graphics = result.createGraphics()
+        try {
+            configureBackgroundGraphics(graphics)
+            for (index in 0 until 27) {
+                drawSelectionCard(
+                    graphics,
+                    Rectangle(
+                        ENDER_X + index % 9 * ENDER_STEP_X + 2,
+                        ENDER_Y + index / 9 * ENDER_STEP_Y + 2,
+                        ENDER_SLOT_SIZE - 4,
+                        ENDER_SLOT_SIZE - 4
+                    ),
+                    cardFill
+                )
+            }
+            drawOuterFrame(graphics, ENDER_WIDTH, ENDER_HEIGHT)
+        } finally {
+            graphics.dispose()
+        }
+        return result
+    }
+
+    private fun wallpaper(source: BufferedImage, width: Int, height: Int, fit: String): BufferedImage {
+        val result = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        val graphics = result.createGraphics()
+        try {
+            configureBackgroundGraphics(graphics)
+            val clip: Shape = RoundRectangle2D.Float(2f, 2f, width - 4f, height - 4f, 60f, 60f)
+            graphics.clip(clip)
+            if (fit == "stretch") {
+                graphics.drawImage(source, 0, 0, width, height, null)
+            } else {
+                val scale = max(width.toDouble() / source.width, height.toDouble() / source.height)
+                val scaledWidth = max(1, ceil(source.width * scale).toInt())
+                val scaledHeight = max(1, ceil(source.height * scale).toInt())
+                graphics.drawImage(
+                    source,
+                    (width - scaledWidth) / 2,
+                    (height - scaledHeight) / 2,
+                    scaledWidth,
+                    scaledHeight,
+                    null
+                )
+            }
+        } finally {
+            graphics.dispose()
+        }
+        return result
+    }
+
+    private fun drawSelectionCard(
+        graphics: Graphics2D,
+        bounds: Rectangle,
+        fill: Color,
+        arc: Int = 10
+    ) {
+        val originalPaint = graphics.paint
+        graphics.paint = GradientPaint(
+            0f, bounds.y.toFloat(), Color(244, 247, 249, (fill.alpha * 1.15).toInt()),
+            0f, (bounds.y + bounds.height).toFloat(), Color(214, 221, 226, (fill.alpha * 0.65).toInt())
+        )
+        graphics.fillRoundRect(bounds.x, bounds.y, bounds.width, bounds.height, arc, arc)
+        graphics.paint = originalPaint
+        graphics.stroke = BasicStroke(1.2f)
+        graphics.color = cardEdge
+        graphics.drawRoundRect(bounds.x, bounds.y, bounds.width - 1, bounds.height - 1, arc, arc)
+        graphics.stroke = BasicStroke(1f)
+        graphics.color = cardInnerEdge
+        graphics.drawRoundRect(bounds.x + 2, bounds.y + 2, bounds.width - 5, bounds.height - 5, arc, arc)
+    }
+
+    private fun drawOuterFrame(graphics: Graphics2D, width: Int, height: Int) {
+        graphics.stroke = BasicStroke(4f)
+        graphics.color = Color(245, 252, 253, 210)
+        graphics.draw(RoundRectangle2D.Float(2f, 2f, width - 5f, height - 5f, 60f, 60f))
+        graphics.stroke = BasicStroke(1f)
+        graphics.color = Color(20, 35, 47, 210)
+        graphics.draw(RoundRectangle2D.Float(0.5f, 0.5f, width - 2f, height - 2f, 62f, 62f))
+    }
+
+    private fun loadCustomWallpaper(directory: File, fileName: String): BufferedImage? {
+        val safeName = fileName.trim()
+        if (!safeName.matches(Regex("[A-Za-z0-9._-]+\\.png"))) {
+            logger.warning("忽略不安全的自定义底图文件名: $fileName")
+            return null
+        }
+        val root = directory.canonicalFile
+        val file = File(root, safeName).canonicalFile
+        if (!file.path.startsWith(root.path + File.separator) || !file.isFile) {
+            logger.warning("找不到自定义背包底图: ${file.absolutePath}")
+            return null
+        }
+        return try {
+            if (file.length() > MAX_BACKGROUND_BYTES) {
+                logger.warning("自定义背包底图超过 16 MiB: ${file.absolutePath}")
+                null
+            } else {
+                val image = ImageIO.read(file)
+                val pixels = if (image == null) Long.MAX_VALUE else image.width.toLong() * image.height.toLong()
+                if (image == null || image.width < 1 || image.height < 1 || pixels > MAX_BACKGROUND_PIXELS) {
+                    logger.warning("自定义背包底图无法读取或尺寸不安全: ${file.absolutePath}")
+                    null
+                } else image
+            }
+        } catch (error: Exception) {
+            logger.log(Level.WARNING, "读取自定义背包底图失败: ${file.absolutePath}", error)
             null
         }
     }
+
+    private fun loadResource(path: String): BufferedImage? = try {
+        val stream: InputStream? = InventoryRenderer::class.java.classLoader.getResourceAsStream(path)
+        stream?.use {
+            val image = ImageIO.read(it) ?: return null
+            if (image.height > image.width && image.height > 16) {
+                image.getSubimage(0, 0, image.width, image.width)
+            } else image
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun solidWallpaper(): BufferedImage = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).also {
+        it.setRGB(0, 0, Color(45, 58, 72).rgb)
+    }
+
+    private fun copyImage(source: BufferedImage): BufferedImage =
+        BufferedImage(source.width, source.height, BufferedImage.TYPE_INT_ARGB).also { target ->
+            target.createGraphics().run {
+                drawImage(source, 0, 0, null)
+                dispose()
+            }
+        }
+
+    private fun encode(image: BufferedImage): ByteArray? = try {
+        ByteArrayOutputStream(256 * 1024).use { output ->
+            if (!ImageIO.write(image, "PNG", output)) null else output.toByteArray()
+        }
+    } catch (error: Exception) {
+        logger.log(Level.WARNING, "背包图片编码失败", error)
+        null
+    }
+
+    private fun configureItemGraphics(graphics: Graphics2D) {
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
+        graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+    }
+
+    private fun configureBackgroundGraphics(graphics: Graphics2D) {
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+    }
+
+    private fun inset(bounds: Rectangle, amount: Int): Rectangle = Rectangle(
+        bounds.x + amount,
+        bounds.y + amount,
+        bounds.width - amount * 2,
+        bounds.height - amount * 2
+    )
 }

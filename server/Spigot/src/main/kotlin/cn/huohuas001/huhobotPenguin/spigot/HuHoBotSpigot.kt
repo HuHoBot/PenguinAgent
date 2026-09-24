@@ -6,6 +6,7 @@ import cn.huohuas001.bot.addon.Addon
 import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.agent.AgentCommandMode
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
+import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.tools.Cancelable
@@ -22,6 +23,8 @@ import cn.huohuas001.huhobotPenguin.spigot.events.OnBotRecvMsg
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
 import cn.huohuas001.huhobotPenguin.spigot.manager.QrLoginManager
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
+import cn.huohuas001.huhobotPenguin.spigot.inventory.InventorySnapshot
+import cn.huohuas001.huhobotPenguin.spigot.inventory.OfflineInventorySnapshots
 import cn.huohuas001.huhobotPenguin.adapter.api.MsgPack
 import cn.huohuas001.huhobotPenguin.adapter.api.toMsgPack
 import cn.huohuas001.huhobotPenguin.adapter.api.withCommand
@@ -35,6 +38,7 @@ import org.bukkit.command.CommandMap
 import org.bukkit.command.PluginCommand
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
+import java.util.concurrent.Callable
 
 class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     companion object {
@@ -43,11 +47,14 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     private lateinit var configManager: ConfigManager
+    private lateinit var offlineInventorySnapshots: OfflineInventorySnapshots
 
     override fun onEnable() {
         instance = this
         configManager = ConfigManager(this)
         configManager.initialize()
+        initializeInventoryRenderer()
+        offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
         initializeRuntime()
         logCommandExecutor()
         val command = HuHoBotCommand(this)
@@ -70,11 +77,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             setExecutor(sendCommand)
             tabCompleter = sendCommand
         } ?: log_error("无法注册 /send 命令，请检查 plugin.yml")
-        InventoryRenderer.init()
         log_info("HuHoBot Penguin 已加载")
     }
 
     override fun onDisable() {
+        if (::offlineInventorySnapshots.isInitialized) offlineInventorySnapshots.close()
         instance = null
         shutdownRuntime()
         CommandOutputAppender.removeInstance()
@@ -91,6 +98,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun reloadPluginConfig() {
         configManager.reload()
+        initializeInventoryRenderer()
         reloadRuntimeConfig()
         logCommandExecutor()
     }
@@ -139,6 +147,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
         // 2. 重新加载配置
         configManager.reload()
+        initializeInventoryRenderer()
 
         // 3. 重新注册 MC 命令
         registerBukkitCommands()
@@ -424,6 +433,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun isAuthenticationEnabled(): Boolean = configManager.isAuthenticationEnabled()
     override fun getCommandMenuList(): Map<String, Boolean> = configManager.commandMenuSwitches()
+    override fun getCommandMenuPriorities(): Map<String, Int> = configManager.commandMenuPriorities()
+    override fun showAdminCommandsInMenu(): Boolean = configManager.showAdminCommandsInMenu()
 
     override fun submit(task: Runnable): Cancelable =
         HuHoBotTask(server.scheduler.runTask(this, task))
@@ -440,17 +451,15 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getOnlineList(): List<String> = server.onlinePlayers.map { it.name }.toMutableList()
 
     override fun getPlayerInventory(playerName: String): String? {
-        val player = server.getPlayerExact(playerName) ?: return null
-        if (!player.isOnline) return null
-        val inv = player.inventory
+        val snapshot = findInventorySnapshot(playerName) ?: return null
         val lines = mutableListOf<String>()
 
         // 护甲
         val armorNames = mapOf(
-            "头盔" to inv.helmet,
-            "胸甲" to inv.chestplate,
-            "护腿" to inv.leggings,
-            "靴子" to inv.boots
+            "头盔" to snapshot.armor.getOrNull(0),
+            "胸甲" to snapshot.armor.getOrNull(1),
+            "护腿" to snapshot.armor.getOrNull(2),
+            "靴子" to snapshot.armor.getOrNull(3)
         )
         val armorLine = armorNames.map { (slot, item) ->
             "$slot: ${item?.let { formatItem(it) } ?: "空"}"
@@ -460,11 +469,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
         // 副手
         lines.add("=== 副手 ===")
-        lines.add("副手: ${inv.itemInOffHand.let { formatItem(it) }}")
+        lines.add("副手: ${snapshot.offhand?.let { formatItem(it) } ?: "空"}")
 
         // 物品栏（3行9列）
         lines.add("=== 物品栏 ===")
-        val storage = inv.storageContents
+        val storage = snapshot.storage
         for (row in 0 until 3) {
             val rowItems = (0 until 9).map { col ->
                 val idx = row * 9 + col
@@ -484,14 +493,40 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     override fun getPlayerInventoryImage(playerName: String): ByteArray? {
-        val player = server.getPlayerExact(playerName) ?: return null
-        if (!player.isOnline) return null
+        val snapshot = findInventorySnapshot(playerName) ?: return null
         return try {
-            InventoryRenderer.render(player)
+            InventoryRenderer.render(snapshot)
         } catch (e: Exception) {
             log_error("背包渲染失败: ${e.message}")
             null
         }
+    }
+
+    override fun getPlayerEnderChestImage(playerName: String): ByteArray? {
+        val snapshot = findInventorySnapshot(playerName) ?: return null
+        return try {
+            InventoryRenderer.renderEnderChest(snapshot)
+        } catch (e: Exception) {
+            log_error("末影箱渲染失败: ${e.message}")
+            null
+        }
+    }
+
+    private fun findInventorySnapshot(playerName: String): InventorySnapshot? =
+        onServerThread { offlineInventorySnapshots.find(playerName) }
+
+    private fun <T> onServerThread(action: () -> T): T =
+        if (server.isPrimaryThread) action()
+        else server.scheduler.callSyncMethod(this, Callable { action() }).get()
+
+    private fun initializeInventoryRenderer() {
+        InventoryRenderer.init(
+            dataFolder = dataFolder,
+            customEnabled = configManager.customInventoryBackgroundEnabled(),
+            inventoryFile = configManager.customInventoryBackgroundFile(),
+            enderChestFile = configManager.customEnderChestBackgroundFile(),
+            fit = configManager.customInventoryBackgroundFit()
+        )
     }
 
     private fun formatItem(item: org.bukkit.inventory.ItemStack): String {
@@ -689,7 +724,21 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getWebUiPort(): Int = config.getInt("webui-port", 5678)
 
     override fun getWebUiConfigValues(): Map<String, Any?> =
-        config.getValues(true)
+        config.getValues(true).toMutableMap().apply {
+            put("command-panel.show-admin-commands", configManager.showAdminCommandsInMenu())
+            BaseCommand.allCommands().distinctBy { it.command }.forEach { command ->
+                val name = command.command
+                if (!containsKey("commands.$name") && !containsKey("commands.$name.enable")) {
+                    put("commands.$name.enable", true)
+                }
+                if (!containsKey("commands.$name.pushMenu")) {
+                    put("commands.$name.pushMenu", true)
+                }
+                if (!containsKey("commands.$name.priority")) {
+                    put("commands.$name.priority", if (name == "agent") 0 else 100)
+                }
+            }
+        }
 
     override fun applyWebUiConfigChanges(changes: JSONObject): Boolean {
         return try {

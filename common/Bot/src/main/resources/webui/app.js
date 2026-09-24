@@ -42,6 +42,22 @@ function isFlatValues(values) {
 
 /** 根据字段路径收集值。 */
 function collectValue(values, field) {
+    if (field.type === "command-map") {
+        const map = {};
+        const prefix = field.path + ".";
+        for (const [key, value] of Object.entries(values)) {
+            if (!key.startsWith(prefix)) continue;
+            const remainder = key.slice(prefix.length);
+            const [name, setting] = remainder.split(".");
+            if (!name) continue;
+            const entry = map[name] ||= { enable: true, pushMenu: true, priority: name === "agent" ? 0 : 100 };
+            if (!setting && typeof value === "boolean") entry.enable = value;
+            if (setting === "enable") entry.enable = !!value;
+            if (setting === "pushMenu") entry.pushMenu = !!value;
+            if (setting === "priority") entry.priority = Number(value);
+        }
+        return map;
+    }
     if (field.type === "boolean-map") {
         const map = {};
         const prefix = field.path + ".";
@@ -275,6 +291,9 @@ function buildControl(field) {
         case "boolean-map":
             return buildBooleanMapControl(field, value);
 
+        case "command-map":
+            return buildCommandMapControl(field, value);
+
         case "object-list":
             return buildObjectListControl(field, value);
 
@@ -379,6 +398,65 @@ function buildBooleanMapControl(field, value) {
         item.appendChild(text);
         item.appendChild(label);
         container.appendChild(item);
+    }
+    return container;
+}
+
+function buildCommandMapControl(field, value) {
+    const container = document.createElement("div");
+    container.className = "command-map";
+    container.dataset.path = field.path;
+    container.dataset.type = "command-map";
+    const entries = Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b, "zh-CN"));
+    const header = document.createElement("div");
+    header.className = "command-map-row command-map-header";
+    header.innerHTML = "<span>命令</span><span>启用</span><span>面板</span><span>优先级</span>";
+    container.appendChild(header);
+    for (const [name, settings] of entries) {
+        const row = document.createElement("div");
+        row.className = "command-map-row";
+        row.dataset.name = name;
+        const title = document.createElement("span");
+        title.textContent = name;
+        row.appendChild(title);
+        for (const key of ["enable", "pushMenu"]) {
+            const label = document.createElement("label");
+            label.className = "switch";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.dataset.setting = key;
+            checkbox.checked = !!settings[key];
+            checkbox.setAttribute("aria-label", `${name} ${key === "enable" ? "启用" : "显示在面板"}`);
+            checkbox.addEventListener("change", () => { state.dirty = true; });
+            const track = document.createElement("span");
+            track.className = "track";
+            label.appendChild(checkbox);
+            label.appendChild(track);
+            row.appendChild(label);
+        }
+        const priority = document.createElement("input");
+        priority.className = "input";
+        priority.type = "number";
+        priority.min = "0";
+        priority.max = "999";
+        priority.step = "1";
+        priority.dataset.setting = "priority";
+        priority.value = Number.isFinite(settings.priority) ? settings.priority : 100;
+        priority.setAttribute("aria-label", `${name} 优先级`);
+        priority.title = "点击后可用鼠标滚轮调整";
+        priority.addEventListener("input", () => { state.dirty = true; });
+        priority.addEventListener("wheel", (event) => {
+            if (document.activeElement !== priority || event.ctrlKey || event.deltaY === 0) return;
+            event.preventDefault();
+            const current = Number.isFinite(priority.valueAsNumber) ? priority.valueAsNumber : 100;
+            const next = Math.min(999, Math.max(0, Math.trunc(current) + (event.deltaY < 0 ? 1 : -1)));
+            if (next !== current) {
+                priority.value = String(next);
+                priority.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        }, { passive: false });
+        row.appendChild(priority);
+        container.appendChild(row);
     }
     return container;
 }
@@ -493,6 +571,17 @@ function collectChanges() {
                 case "boolean-map": {
                     node.querySelectorAll("input[type=checkbox]").forEach((cb) => {
                         changes[field.path + "." + cb.dataset.name] = cb.checked;
+                    });
+                    break;
+                }
+                case "command-map": {
+                    node.querySelectorAll(".command-map-row[data-name]").forEach((row) => {
+                        const name = row.dataset.name;
+                        const prefix = field.path + "." + name + ".";
+                        changes[prefix + "enable"] = row.querySelector('[data-setting="enable"]').checked;
+                        changes[prefix + "pushMenu"] = row.querySelector('[data-setting="pushMenu"]').checked;
+                        const priority = Number(row.querySelector('[data-setting="priority"]').value);
+                        changes[prefix + "priority"] = Math.min(999, Math.max(0, Number.isFinite(priority) ? priority : 100));
                     });
                     break;
                 }

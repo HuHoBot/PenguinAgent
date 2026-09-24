@@ -1,61 +1,48 @@
 package cn.huohuas001.huhobotPenguin.spigot.inventory
 
-import java.awt.Color
-import java.awt.Graphics2D
-import java.awt.image.BufferedImage
+import java.security.MessageDigest
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import javax.imageio.ImageIO
 
-/** 程序化生成的回退皮肤；不捆绑 Mojang 或第三方图片。 */
 object DefaultPlayerSkinProvider {
+    private val names = arrayOf("alex", "ari", "efe", "kai", "makena", "noor", "steve", "sunny", "zuri")
+    private const val SKIN_COUNT = 18
+    private const val WIDE_STEVE_INDEX = 15
+    private val skins = ConcurrentHashMap<Int, PlayerSkin>()
 
-    private val fallback by lazy {
-        PlayerSkin(createSkin(), "huhobot-default-v1", "LOCAL_DEFAULT", false)
-    }
+    fun defaultSkin(uuid: UUID?, bukkitVersion: String): PlayerSkin = skinAt(indexFor(uuid, bukkitVersion))
 
-    fun defaultSkin(): PlayerSkin = fallback
+    fun defaultSkin(): PlayerSkin = skinAt(WIDE_STEVE_INDEX)
 
-    private fun createSkin(): BufferedImage {
-        val skin = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB)
-        val g = skin.createGraphics()
-        try {
-            val face = Color(207, 151, 112)
-            val hair = Color(58, 36, 31)
-            val shirt = Color(43, 145, 151)
-            val trousers = Color(48, 55, 92)
-
-            // 头
-            fillCuboid(g, 0, 0, 8, 8, 8, face)
-            // 身体
-            fillCuboid(g, 16, 16, 8, 12, 4, shirt)
-            // 右臂
-            fillCuboid(g, 40, 16, 4, 12, 4, face)
-            // 右臂外层
-            fillCuboid(g, 32, 48, 4, 12, 4, face)
-            // 左腿
-            fillCuboid(g, 0, 16, 4, 12, 4, trousers)
-            // 右腿
-            fillCuboid(g, 16, 48, 4, 12, 4, trousers)
-
-            // 头发
-            g.color = hair
-            g.fillRect(8, 8, 8, 3)
-
-            // 眼睛
-            g.color = Color(45, 30, 27)
-            g.fillRect(9, 11, 2, 1)
-            g.fillRect(13, 11, 2, 1)
-
-            // 身体外层（半透明）
-            fillCuboid(g, 16, 32, 8, 12, 4, Color(78, 198, 197, 130))
-            fillCuboid(g, 40, 32, 4, 12, 4, Color(78, 198, 197, 130))
-            fillCuboid(g, 48, 48, 4, 12, 4, Color(78, 198, 197, 130))
-        } finally {
-            g.dispose()
+    internal fun indexFor(uuid: UUID?, bukkitVersion: String): Int {
+        if (uuid == null) return WIDE_STEVE_INDEX
+        if (usesLegacyDefaults(bukkitVersion)) {
+            return if (uuid.hashCode() and 1 == 0) WIDE_STEVE_INDEX else 0
         }
-        return skin
+        return Math.floorMod(uuid.hashCode(), SKIN_COUNT)
     }
 
-    private fun fillCuboid(g: Graphics2D, u: Int, v: Int, width: Int, height: Int, depth: Int, color: Color) {
-        g.color = color
-        g.fillRect(u, v, depth * 2 + width * 2, depth + height)
+    private fun usesLegacyDefaults(version: String): Boolean {
+        val match = Regex("^1\\.(\\d+)(?:\\.(\\d+))?").find(version) ?: return false
+        val minor = match.groupValues[1].toIntOrNull() ?: return false
+        val patch = match.groupValues[2].toIntOrNull() ?: 0
+        return minor < 19 || (minor == 19 && patch < 3)
+    }
+
+    private fun skinAt(index: Int): PlayerSkin = skins.computeIfAbsent(index) {
+        val slim = index < names.size
+        val model = if (slim) "slim" else "wide"
+        val name = names[index % names.size]
+        val resource = "inventory/default-skins/$model/$name.png"
+        val bytes = DefaultPlayerSkinProvider::class.java.classLoader
+            .getResourceAsStream(resource)?.use { it.readBytes() }
+            ?: error("缺少默认玩家皮肤: $resource")
+        val image = ImageIO.read(bytes.inputStream())
+            ?: error("默认玩家皮肤无法读取: $resource")
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        PlayerSkin(image, digest, "BUNDLED_DEFAULT_$name", slim)
     }
 }

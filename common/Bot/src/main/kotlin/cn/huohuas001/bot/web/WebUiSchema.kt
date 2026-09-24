@@ -7,7 +7,7 @@ import com.alibaba.fastjson.JSON
  *
  * @property path    配置键的 dotted path（如 "bot.app-id"）
  * @property label   前端展示的中文标签
- * @property type    控件类型：text / password / number / boolean / select / list / textarea / boolean-map / object-list
+ * @property type    控件类型：text / password / number / boolean / select / list / textarea / command-map / object-list
  * @property description 字段说明（前端灰字提示）
  * @property options select 类型的可选项
  * @property placeholder 输入框占位提示
@@ -157,9 +157,10 @@ object WebUiSchema {
 
     private val COMMANDS_SECTION = SectionSpec(
         key = "commands",
-        title = "命令开关",
+        title = "命令与 QQ 面板",
         fields = listOf(
-            FieldSpec("commands", "命令开关", "boolean-map", "逐个开关机器人在群内的可用命令")
+            FieldSpec("command-panel.show-admin-commands", "管理员命令对所有人显示", "boolean", "只影响 QQ 面板可见性；执行管理员命令时仍严格验证权限"),
+            FieldSpec("commands", "命令设置", "command-map", "启用控制能否执行；面板控制是否推送；优先级越小越先占用 20 个面板名额")
         )
     )
 

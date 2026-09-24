@@ -15,8 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 
 /**
- * 皮肤获取：优先反射调用 SkinsRestorer API，回退 Mojang API。
- * 零编译时依赖，SkinsRestorer 未安装也能正常编译运行。
+ * 从服务端已有的皮肤资料获取贴图；没有可用资料时由渲染器使用内置皮肤。
  */
 object SkinFetcher {
 
@@ -25,25 +24,35 @@ object SkinFetcher {
     private const val READ_TIMEOUT = 10000
     private const val MAX_SKIN_BYTES = 1024 * 1024
 
-    private val skinCache = ConcurrentHashMap<String, PlayerSkin?>()
+    private val skinCache = ConcurrentHashMap<String, PlayerSkin>()
 
     /** SkinsRestorer 可用性：null=未检测, true=可用, false=不可用 */
     private var srAvailable: Boolean? = null
     private var srApi: Any? = null
 
-    fun fetchSkin(playerName: String, uuid: UUID? = null): PlayerSkin? {
-        val cached = skinCache[playerName.lowercase()]
+    fun fetchSkin(
+        playerName: String,
+        uuid: UUID? = null,
+        serverProfile: ServerSkinProfile? = null
+    ): PlayerSkin? {
+        val key = playerName.lowercase(Locale.ROOT) + "|" + (serverProfile?.textureUrl ?: "")
+        val cached = skinCache[key]
         if (cached != null) return cached
 
         val skin = try {
-            fetchViaSkinsRestorer(playerName, uuid)
-                ?: fetchViaMojang(playerName)
+            serverProfile?.let { fetchFromServerProfile(it) }
+                ?: fetchViaSkinsRestorer(playerName, uuid)
         } catch (_: Exception) {
             null
         }
 
-        skinCache[playerName.lowercase()] = skin
+        if (skin != null) skinCache[key] = skin
         return skin
+    }
+
+    private fun fetchFromServerProfile(profile: ServerSkinProfile): PlayerSkin? {
+        val image = downloadImage(URL(profile.textureUrl)) ?: return null
+        return PlayerSkin(image, PlayerSkin.safeKey(sha256(profile.textureUrl)), "SERVER_PROFILE", profile.slim)
     }
 
     // ==================== SkinsRestorer (纯反射) ====================
@@ -109,33 +118,6 @@ object SkinFetcher {
         }
     }
 
-    // ==================== Mojang API ====================
-
-    private fun fetchViaMojang(playerName: String): PlayerSkin? {
-        val profileUrl = "https://api.mojang.com/users/profiles/minecraft/$playerName"
-        val profileResponse = httpGet(profileUrl) ?: return null
-        val uuid = com.alibaba.fastjson.JSONObject.parseObject(profileResponse)?.getString("id") ?: return null
-
-        val sessionUrl = "https://sessionserver.mojang.com/session/minecraft/profile/$uuid"
-        val sessionResponse = httpGet(sessionUrl) ?: return null
-        val sessionObj = com.alibaba.fastjson.JSONObject.parseObject(sessionResponse)
-        val properties = sessionObj?.getJSONArray("properties") ?: return null
-        if (properties.size == 0) return null
-
-        val value = properties.getJSONObject(0).getString("value") ?: return null
-        val decoded = String(Base64.getDecoder().decode(value))
-        val textureObj = com.alibaba.fastjson.JSONObject.parseObject(decoded)
-        val textures = textureObj?.getJSONObject("textures") ?: return null
-        val skinTexture = textures.getJSONObject("SKIN") ?: return null
-        val textureUrl = skinTexture.getString("url") ?: return null
-        val metadata = skinTexture.getJSONObject("metadata")
-        val isSlim = metadata?.getString("model") == "slim"
-
-        val image = downloadImage(URL(textureUrl)) ?: return null
-        val cacheKey = PlayerSkin.safeKey(uuid)
-        return PlayerSkin(image, cacheKey, "MOJANG", isSlim)
-    }
-
     // ==================== 公共下载 ====================
 
     private fun downloadImage(url: URL): BufferedImage? {
@@ -160,22 +142,6 @@ object SkinFetcher {
             val image = ImageIO.read(ByteArrayInputStream(output.toByteArray())) ?: return null
             if (image.width != 64 || (image.height != 64 && image.height != 32)) return null
             return image
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    private fun httpGet(urlStr: String): String? {
-        val url = URL(urlStr)
-        val conn = url.openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", USER_AGENT)
-            conn.connectTimeout = CONNECT_TIMEOUT
-            conn.readTimeout = READ_TIMEOUT
-            conn.connect()
-            if (conn.responseCode != 200) return null
-            return conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
             conn.disconnect()
         }
