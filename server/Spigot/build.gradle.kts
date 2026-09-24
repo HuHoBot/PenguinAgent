@@ -74,7 +74,7 @@ tasks {
 
     shadowJar {
         dependsOn(normalizeSpigotPackageDirectory)
-        archiveFileName.set("PenguinAgent.jar")
+        archiveFileName.set("HuHoBot-Penguin_Spigot-${project.version}.jar")
         finalizedBy(gatherJar)
     }
 
