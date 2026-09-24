@@ -8,6 +8,8 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 
+![HuHoBot](https://count.moeyy.cn/@huhobot?name=huhobot&theme=booru-lewd&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
+
 ---
 
 ## 功能概览
@@ -633,4 +635,4 @@ ls build/gather-jar/
 
 ---
 
-[![bStats](https://bstats.org/api/plugin-badges/34268?color_a0a0a0)](https://bstats.org/plugins/bukkit/34268)
+[![bStats](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fbstats.org%2Fapi%2Fv1%2Fplugins%2F34268&query=%24.name&label=bStats&suffix=%20metrics&color=blue)](https://bstats.org/plugin/bukkit/34268)
