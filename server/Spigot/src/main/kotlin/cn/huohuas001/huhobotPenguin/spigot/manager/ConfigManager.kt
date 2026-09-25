@@ -180,7 +180,7 @@ class ConfigManager(
     fun commandSender(): String = plugin.config.getString("command-sender", "Hybrid")!!
 
     fun chatFormat(): ChatFormat = ChatFormat(
-        fromGame = plugin.config.getString("chat-format.from-game", "[游戏] {message}")!!,
+        fromGame = plugin.config.getString("chat-format.from-game", "[游戏] {name}: {message}")!!,
         fromGroup = plugin.config.getString("chat-format.from-group", "[QQ] {name}: {message}")!!,
         postChat = plugin.config.getBoolean("chat-format.post-chat", true),
         startWith = plugin.config.getString("chat-format.start-with", "")!!
@@ -284,6 +284,17 @@ class ConfigManager(
     fun showAdminCommandsInMenu(): Boolean =
         plugin.config.getBoolean("command-panel.show-admin-commands", true)
 
+    fun isUpdateCheckEnabled(): Boolean =
+        plugin.config.getBoolean("update-check.enabled", true)
+
+    fun updateCheckUrls(): String = plugin.config.getString("update-check.url", "").orEmpty()
+
+    fun isPlaceholderApiEnabled(): Boolean =
+        plugin.config.getBoolean("placeholder-api.enabled", true)
+
+    fun isAutoAddGroupsEnabled(): Boolean =
+        plugin.config.getBoolean("bot.auto-add-groups", true)
+
     fun auditBaseUrl(): String? =
         plugin.config.getString("audit.base-url")?.takeIf(String::isNotBlank)
 
@@ -302,6 +313,9 @@ class ConfigManager(
     fun agentModel(): String? = plugin.config.getString("agent.model")?.takeIf(String::isNotBlank)
     fun agentCommandMode(): AgentCommandMode =
         AgentCommandMode.from(plugin.config.getString("agent.command-mode")) ?: AgentCommandMode.MANUAL
+
+    fun isAgentFetchResultHidden(): Boolean =
+        plugin.config.getBoolean("agent.hide-fetch-results", true)
 
     fun bindingRequireGameVerification(): Boolean =
         plugin.config.getBoolean("binding.require-game-verification", false)
@@ -403,9 +417,14 @@ class ConfigManager(
             "agent.api-key" to "AI Agent 的接口密钥",
             "agent.model" to "AI Agent 使用的模型名",
             "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
+            "agent.hide-fetch-results" to "获取类工具（插件列表/命令帮助/服务器日志）结果只交给 AI，不在群里发卡片",
             "command-sender" to "命令执行收集模式：Hybrid 同时收集发送者输出和服务端日志",
             "command-blacklist" to "/执行 命令黑名单，禁止通过 /执行 运行的服务器命令列表",
             "command-panel.show-admin-commands" to "在 QQ 面板中向所有人展示管理员命令；执行时仍验证管理员权限",
+            "update-check.enabled" to "启动时与 /版本 命令检查 GitHub Release 新版本（忽略 Pre-Release）",
+            "update-check.url" to "自定义更新检查数据源（逗号分隔的 URL，可返回纯文本版本号或 JSON）；留空使用内置数据源",
+            "placeholder-api.enabled" to "启用 PlaceholderAPI 占位符解析（未安装 PlaceholderAPI 时无效果）",
+            "bot.auto-add-groups" to "收到陌生群消息时自动把群 OpenID 写入 bot.groups",
         )
 
         private val COMMAND_NAMES = listOf(
@@ -443,7 +462,7 @@ class ConfigManager(
             put("serverName", "HuHoBot")
             put("webui-port", 5678)
 
-            put("chat-format.from-game", "[游戏] {message}")
+            put("chat-format.from-game", "[游戏] {name}: {message}")
             put("chat-format.from-group", "[QQ] {name}: {message}")
             put("chat-format.post-chat", true)
             put("chat-format.start-with", "")
@@ -477,6 +496,7 @@ class ConfigManager(
             put("agent.api-key", "")
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
+            put("agent.hide-fetch-results", true)
             put("binding.require-game-verification", false)
             put("inventory.render.custom-background.enabled", false)
             put("inventory.render.custom-background.inventory-file", "inventory.png")
@@ -486,6 +506,10 @@ class ConfigManager(
             put("custom-commands", emptyList<Map<String, Any>>())
             put("command-sender", "Hybrid")
             put("command-panel.show-admin-commands", true)
+            put("update-check.enabled", true)
+            put("update-check.url", "")
+            put("placeholder-api.enabled", true)
+            put("bot.auto-add-groups", true)
 
             COMMAND_NAMES.forEach { commandName ->
                 put("commands.$commandName", true)

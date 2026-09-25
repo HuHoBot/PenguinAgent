@@ -355,6 +355,12 @@ textarea.input { resize: vertical; min-height: 80px; font-family: ui-monospace, 
 
 .tag .tag-remove:hover { color: var(--danger); }
 
+.tag .tag-label { cursor: default; }
+
+.tag .tag-label:hover { text-decoration: underline; }
+
+.tag .tag-suffix { color: var(--text-dim); margin-left: 4px; }
+
 .list-add-row { display: flex; gap: 8px; margin-top: 6px; }
 
 /* 对象列表（表格） */

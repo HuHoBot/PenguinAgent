@@ -22,6 +22,7 @@ import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotRecvMsg
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
 import cn.huohuas001.huhobotPenguin.spigot.manager.QrLoginManager
+import cn.huohuas001.huhobotPenguin.spigot.integration.PlaceholderApiSupport
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventorySnapshot
 import cn.huohuas001.huhobotPenguin.spigot.inventory.OfflineInventorySnapshots
@@ -54,6 +55,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         instance = this
         configManager = ConfigManager(this)
         configManager.initialize()
+        PlaceholderApiSupport.setup(this)
         initializeInventoryRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
         initializeRuntime()
@@ -100,6 +102,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun reloadPluginConfig() {
         configManager.reload()
+        PlaceholderApiSupport.setup(this)
         initializeInventoryRenderer()
         reloadRuntimeConfig()
         logCommandExecutor()
@@ -704,6 +707,28 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getAdminMode(): AdminMode = configManager.adminMode()
     override fun getAdminList(): List<String> = configManager.adminOpenIds()
     override fun getGroupOpenIdList(): List<String> = configManager.groupOpenIds()
+    override fun isUpdateCheckEnabled(): Boolean = configManager.isUpdateCheckEnabled()
+    override fun getUpdateCheckUrls(): String = configManager.updateCheckUrls()
+    override fun isAgentFetchResultHidden(): Boolean = configManager.isAgentFetchResultHidden()
+    override fun isPlaceholderApiEnabled(): Boolean = configManager.isPlaceholderApiEnabled()
+    override fun applyPlaceholders(playerName: String?, text: String): String =
+        PlaceholderApiSupport.apply(playerName, text)
+
+    override fun addGroupOpenId(groupOpenId: String): Boolean {
+        val openId = groupOpenId.trim()
+        if (openId.isEmpty() || !configManager.isAutoAddGroupsEnabled()) return false
+        if (configManager.groupOpenIds().contains(openId)) return false
+        return try {
+            config.set("bot.groups", configManager.groupOpenIds() + openId)
+            saveConfig()
+            log_info("已自动把群 $openId 添加到 bot.groups")
+            reloadRuntimeConfig()
+            true
+        } catch (error: Exception) {
+            log_error("自动添加群 $openId 失败: ${error.message}")
+            false
+        }
+    }
     override fun shouldSuppressQqBotConsoleOutput(): Boolean =
         configManager.suppressQqBotConsoleOutput()
 
@@ -734,6 +759,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getWebUiConfigValues(): Map<String, Any?> =
         config.getValues(true).toMutableMap().apply {
             put("command-panel.show-admin-commands", configManager.showAdminCommandsInMenu())
+            put("bot.auto-add-groups", configManager.isAutoAddGroupsEnabled())
+            put("update-check.enabled", configManager.isUpdateCheckEnabled())
+            put("update-check.url", configManager.updateCheckUrls())
+            put("placeholder-api.enabled", configManager.isPlaceholderApiEnabled())
+            put("agent.hide-fetch-results", configManager.isAgentFetchResultHidden())
             BaseCommand.allCommands().distinctBy { it.command }.forEach { command ->
                 val name = command.command
                 if (!containsKey("commands.$name") && !containsKey("commands.$name.enable")) {

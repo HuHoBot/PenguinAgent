@@ -2,6 +2,7 @@ package cn.huohuas001.bot
 
 import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.agent.AgentInteractionListener
+import cn.huohuas001.bot.agent.GroupManagementApi
 import cn.huohuas001.bot.addon.Addon
 import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.events.GroupMessageHandler
@@ -10,6 +11,7 @@ import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.BotShared
 import cn.huohuas001.bot.state.CommandRepositories
+import cn.huohuas001.bot.state.GroupDirectory
 import cn.huohuas001.bot.tools.QqBotConsoleOutputFilter
 import com.alibaba.fastjson.JSON
 import io.github.kloping.qqbot.Starter
@@ -122,6 +124,10 @@ object QClient {
             syncGroupPanels()
             // 加载本地昵称缓存
             NicknameManager.load()
+            GroupDirectory.load()
+            GroupDirectory.knownOpenIds().filter { it in plugin.getGroupOpenIdList() }.forEach {
+                if (GroupDirectory.isStale(it)) refreshGroupNames(listOf(it))
+            }
         } catch (error: Exception) {
             if (suppressConsoleOutput) {
                 QqBotConsoleOutputFilter.uninstall()
@@ -156,7 +162,10 @@ object QClient {
         }
 
         val safeProcessed = processed.replace("_", "\\_")
-        val content = plugin.formatGameMessage(qqSenderName, safeProcessed)
+        val content = plugin.applyPlaceholders(
+            playerName,
+            plugin.formatGameMessage(qqSenderName, safeProcessed)
+        )
         val markdown = Markdown().setContent(content)
         val payload = V2MsgData()
             .setContent(content)
@@ -575,7 +584,7 @@ object QClient {
         val filtered = plugin.auditText(message)
         // markdown 下需转义玩家名中的 _ 等特殊字符，避免被识别为斜体
         val safeName = escapeMarkdown(playerName)
-        val content = plugin.formatGameMessage(safeName, filtered)
+        val content = plugin.applyPlaceholders(playerName, plugin.formatGameMessage(safeName, filtered))
         val markdown = Markdown().setContent(content)
         val payload = V2MsgData()
             .setContent(content)
@@ -588,6 +597,45 @@ object QClient {
                 plugin.log_error("向QQ群 $groupId 转发@消息失败: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 刷新已配置群的群名称缓存（供 WebUI 展示）。
+     *
+     * @return 是否至少成功取得一个群名称
+     */
+    fun refreshGroupNames(groupOpenIds: List<String>): Boolean {
+        if (!::starter.isInitialized) {
+            BotShared.getPlugin().log_warning("群名刷新失败：QQ 机器人尚未启动")
+            return false
+        }
+        val current = starter
+        val plugin = BotShared.getPlugin()
+        var any = false
+        groupOpenIds.forEach { openId ->
+            if (!GroupDirectory.isStale(openId)) {
+                if (GroupDirectory.nameOf(openId) != null) any = true
+                return@forEach
+            }
+            val response = try {
+                GroupManagementApi.getGroupInfo(current, openId)
+            } catch (error: Exception) {
+                plugin.log_warning("群名刷新失败 group=$openId 错误=${error.javaClass.simpleName}: ${error.message}")
+                null
+            }
+            val name = response?.getString("group_name")
+            if (response == null) {
+                plugin.log_warning("群名刷新失败 group=$openId 响应为空")
+            } else if (name.isNullOrBlank()) {
+                plugin.log_warning("群名刷新失败 group=$openId 响应=${response.toJSONString().take(300)}")
+            } else {
+                GroupDirectory.put(openId, name)
+                any = true
+                plugin.log_info("群名已更新 group=$openId name=$name")
+            }
+        }
+        if (any) GroupDirectory.save()
+        return any
     }
 
     /** 转义 Markdown 特殊字符，防止玩家名被渲染为格式符号。 */

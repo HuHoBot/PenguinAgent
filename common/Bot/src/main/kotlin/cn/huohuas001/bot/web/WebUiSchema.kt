@@ -41,7 +41,25 @@ object WebUiSchema {
             FieldSpec("bot.secret", "Secret", "password", "QQ 开放平台机器人密钥"),
             FieldSpec("bot.name", "机器人名称", "text", "机器人显示的昵称"),
             FieldSpec("bot.groups", "群列表", "list", "允许机器人工作的群 OpenID（每行一个）"),
-            FieldSpec("bot.suppress-console-output", "屏蔽 SDK 控制台输出", "boolean", "关闭 QQ Bot SDK 直接写入 System.out 的调试输出")
+            FieldSpec("bot.suppress-console-output", "屏蔽 SDK 控制台输出", "boolean", "关闭 QQ Bot SDK 直接写入 System.out 的调试输出"),
+            FieldSpec("bot.auto-add-groups", "自动收录陌生群", "boolean", "收到未配置群的 QQ 消息时，自动把群 OpenID 写入群列表")
+        )
+    )
+
+    private val UPDATE_CHECK_SECTION = SectionSpec(
+        key = "update-check",
+        title = "版本更新",
+        fields = listOf(
+            FieldSpec("update-check.enabled", "检查新版本", "boolean", "启动时后台检查一次，/版本 命令会再检查一次；只认 GitHub 正式 Release"),
+            FieldSpec("update-check.url", "自定义数据源", "text", "逗号分隔的 URL，可返回纯文本版本号或 JSON；留空使用内置数据源")
+        )
+    )
+
+    private val PLACEHOLDER_API_SECTION = SectionSpec(
+        key = "placeholder-api",
+        title = "PlaceholderAPI",
+        fields = listOf(
+            FieldSpec("placeholder-api.enabled", "启用占位符解析", "boolean", "安装 PlaceholderAPI 后，配置中的 %占位符% 交由它解析；未安装时原样保留")
         )
     )
 
@@ -151,7 +169,8 @@ object WebUiSchema {
             FieldSpec("agent.base-url", "接口地址", "text", "OpenAI 兼容接口地址"),
             FieldSpec("agent.api-key", "接口密钥", "password", "AI 接口密钥"),
             FieldSpec("agent.model", "模型名", "text", "使用的模型", placeholder = "gpt-4o-mini"),
-            FieldSpec("agent.command-mode", "命令执行模式", "select", "manual=手动审批；auto=自动执行", options = listOf("manual", "auto"))
+            FieldSpec("agent.command-mode", "命令执行模式", "select", "manual=手动审批；auto=自动执行", options = listOf("manual", "auto")),
+            FieldSpec("agent.hide-fetch-results", "不在群聊输出获取类结果", "boolean", "开启后获取插件列表、命令帮助、服务器日志等结果只交给 AI，不在群里发卡片")
         )
     )
 
@@ -212,7 +231,9 @@ object WebUiSchema {
         COMMANDS_SECTION,
         CUSTOM_COMMANDS_SECTION,
         BINDING_SECTION,
-        COMMAND_BLACKLIST_SECTION
+        COMMAND_BLACKLIST_SECTION,
+        UPDATE_CHECK_SECTION,
+        PLACEHOLDER_API_SECTION
     )
 
     /** 序列化为前端可用的 JSON（sections 数组）。 */

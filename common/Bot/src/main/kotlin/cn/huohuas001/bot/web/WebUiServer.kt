@@ -3,6 +3,7 @@ package cn.huohuas001.bot.web
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.provider.BotShared
+import cn.huohuas001.bot.state.GroupDirectory
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.sun.net.httpserver.HttpExchange
@@ -139,7 +140,16 @@ object WebUiServer {
         payload["schema"] = JSON.parseArray(WebUiSchema.toJson())
         payload["values"] = JSON.toJSON(values)
         payload["platform"] = plugin.getPlatform()
+        scheduleGroupNameRefresh(plugin)
+        payload["groupNames"] = JSON.toJSON(GroupDirectory.snapshot())
         respond(exchange, 200, payload.toJSONString())
+    }
+
+    /** 群名称走网络查询，后台刷新，本次先用缓存名称返回。 */
+    private fun scheduleGroupNameRefresh(plugin: HuHoBot) {
+        val stale = plugin.getGroupOpenIdList().filter { GroupDirectory.isStale(it) }
+        if (stale.isEmpty()) return
+        plugin.submitAsync { QClient.refreshGroupNames(stale) }
     }
 
     private fun handleSaveConfig(exchange: HttpExchange) {
@@ -165,7 +175,17 @@ object WebUiServer {
         payload["appId"] = plugin.getBotAppId()
         payload["qqConnected"] = QClient.getStarter() != null
         payload["online"] = plugin.getOnlineList()
-        payload["groups"] = plugin.getGroupOpenIdList()
+        val groupOpenIds = plugin.getGroupOpenIdList()
+        scheduleGroupNameRefresh(plugin)
+        payload["groups"] = JSON.toJSON(
+            groupOpenIds.map { openId ->
+                mapOf(
+                    "openId" to openId,
+                    "name" to (GroupDirectory.nameOf(openId) ?: ""),
+                    "suffix" to openId.takeLast(6)
+                )
+            }
+        )
         payload["agentEnabled"] = plugin.getAgentEnabled()
         respond(exchange, 200, payload.toJSONString())
     }

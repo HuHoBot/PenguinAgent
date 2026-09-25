@@ -137,7 +137,7 @@ interface ConfigProvider {
             .replace("{player}", name)
             .replace("{server}", getServerName())
             .replace("{platform}", getPlatform())
-        return convertAmpersandColors(result)
+        return applyPlaceholders(name, convertAmpersandColors(result))
     }
 
     /** 将 & 颜色符号转换为 Minecraft § 颜色代码。 */
@@ -170,6 +170,24 @@ interface ConfigProvider {
             null
         }
     }
+
+    /**
+     * 解析第三方占位符（Spigot 侧为 PlaceholderAPI 的 %占位符%）。
+     *
+     * 未安装对应插件时默认原样返回，平台可覆盖实现。
+     *
+     * @param playerName 玩家名；为空表示没有玩家上下文，只解析全局占位符
+     */
+    fun applyPlaceholders(playerName: String?, text: String): String = text
+
+    /** 是否启用 PlaceholderAPI 占位符解析；未安装 PlaceholderAPI 时无效果。 */
+    fun isPlaceholderApiEnabled(): Boolean = true
+
+    /** 自定义更新检查数据源（逗号分隔的 URL），留空使用内置数据源。 */
+    fun getUpdateCheckUrls(): String = ""
+
+    /** 是否启用启动时与 /版本 的 GitHub Release 更新检查。 */
+    fun isUpdateCheckEnabled(): Boolean = true
 
     fun getAdminMode(): AdminMode {
         return AdminMode.BOTH
@@ -217,6 +235,9 @@ interface ConfigProvider {
     fun getAgentApiKey(): String? = System.getenv("HUHOBOT_AGENT_API_KEY")
     fun getAgentModel(): String? = System.getenv("HUHOBOT_AGENT_MODEL")
     fun getAgentCommandMode(): cn.huohuas001.bot.agent.AgentCommandMode = cn.huohuas001.bot.agent.AgentCommandMode.MANUAL
+
+    /** 获取类工具结果只交给 AI，不在群里发卡片（默认开启）。 */
+    fun isAgentFetchResultHidden(): Boolean = true
 
     /** 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定。 */
     fun getBindingRequireGameVerification(): Boolean = false

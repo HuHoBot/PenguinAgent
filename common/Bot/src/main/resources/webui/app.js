@@ -8,6 +8,7 @@ const state = {
     values: {},
     activeSection: null,
     dirty: false,
+    groupNames: {},
 };
 
 /* ───────────────────────── 工具 ───────────────────────── */
@@ -185,12 +186,33 @@ async function loadConfig() {
     const data = await api("/api/config");
     state.schema = data.schema || [];
     state.values = data.values || {};
+    state.groupNames = data.groupNames || {};
     state.platform = data.platform || "";
     renderNav();
     if (!state.activeSection) state.activeSection = state.schema[0]?.key || null;
     const section = state.schema.find((s) => s.key === state.activeSection);
     if (section) renderSection(section);
     updateNavActive();
+    refreshGroupNames();
+}
+
+/* 群名称在后台异步补齐，取到后重绘当前分节 */
+async function refreshGroupNames() {
+    try {
+        const data = await api("/api/status");
+        const groups = Array.isArray(data.groups) ? data.groups : [];
+        let changed = false;
+        for (const g of groups) {
+            if (typeof g === "string") continue;
+            if (g.name && state.groupNames[g.openId] !== g.name) {
+                state.groupNames[g.openId] = g.name;
+                changed = true;
+            }
+        }
+        if (!changed) return;
+        const section = state.schema.find((s) => s.key === state.activeSection);
+        if (section) renderSection(section);
+    } catch (_) { /* 忽略：不影响配置编辑 */ }
 }
 
 function renderSection(section) {
@@ -309,19 +331,34 @@ function buildControl(field) {
 /* 标签式列表 */
 function buildListControl(field, value) {
     const items = Array.isArray(value) ? value.map(String) : [];
+    const isGroupList = field.path === "bot.groups";
     const container = document.createElement("div");
     container.className = "list-input";
     container.dataset.path = field.path;
     container.dataset.type = "list";
+
+    function displayText(item) {
+        if (!isGroupList) return esc(item);
+        const name = state.groupNames[item];
+        const label = name ? esc(name) : "名称暂不可用";
+        return `${label}<span class="tag-suffix">…${esc(item.slice(-6))}</span>`;
+    }
 
     function renderTags() {
         container.querySelectorAll(".tag").forEach((t) => t.remove());
         items.forEach((item, idx) => {
             const tag = document.createElement("span");
             tag.className = "tag";
+            tag.title = isGroupList ? `点击复制 ${item}` : item;
             tag.innerHTML =
-                `<span>${esc(item)}</span>` +
+                `<span class="tag-label" data-value="${esc(item)}">${displayText(item)}</span>` +
                 `<span class="tag-remove" data-idx="${idx}">×</span>`;
+            if (isGroupList) {
+                tag.querySelector(".tag-label").addEventListener("click", () => {
+                    navigator.clipboard?.writeText(item);
+                    showToast("已复制群 OpenID");
+                });
+            }
             tag.querySelector(".tag-remove").addEventListener("click", () => {
                 items.splice(idx, 1);
                 state.dirty = true;
@@ -581,7 +618,7 @@ function collectChanges() {
                 }
                 case "list": {
                     const items = [];
-                    node.querySelectorAll(".tag > span:first-child").forEach((s) => items.push(s.textContent));
+                    node.querySelectorAll(".tag > span:first-child").forEach((s) => items.push(s.dataset.value ?? s.textContent));
                     changes[field.path] = items;
                     break;
                 }
@@ -653,6 +690,16 @@ async function loadStatus() {
     const grid = $("#status-cards");
     grid.innerHTML = "";
 
+    state.groupNames = {};
+    const groupLines = (Array.isArray(data.groups) ? data.groups : []).map((g) => {
+        if (typeof g === "string") {
+            state.groupNames[g] = "";
+            return g;
+        }
+        state.groupNames[g.openId] = g.name || "";
+        return g.name ? `${g.name}（…${g.suffix}）` : `名称暂不可用（…${g.suffix}）`;
+    });
+
     const cards = [
         ["平台", data.platform || "-"],
         ["版本", data.version || "-"],
@@ -662,7 +709,8 @@ async function loadStatus() {
         ["QQ 连接", data.qqConnected ? "✅ 已连接" : "⚠️ 未连接", data.qqConnected ? "ok" : "bad"],
         ["Agent", data.agentEnabled ? "✅ 已启用" : "—— 未启用", data.agentEnabled ? "ok" : ""],
         ["在线玩家", Array.isArray(data.online) ? data.online.join(", ") || "无" : "-", "dim"],
-        ["绑定群数量", Array.isArray(data.groups) ? String(data.groups.length) : "0"],
+        ["绑定群数量", String(groupLines.length)],
+        ["绑定群", groupLines.join("\n") || "未配置（不限制）", "dim"],
     ];
 
     for (const [label, value, cls] of cards) {

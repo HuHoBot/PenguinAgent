@@ -201,19 +201,19 @@ object AgentManager {
                     AgentTools.TOOL_GET_PLUGIN_LIST -> {
                         val result0 = AgentTools.getPluginList(plugin)
                         session.messages.add(toolMessage(toolCallId, result0.aiText))
-                        sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result0.displayTitle, result0.displayContent))
+                        showFetchResult(plugin, session, result0)
                     }
 
                     AgentTools.TOOL_GET_COMMAND_HELP -> {
                         val result0 = AgentTools.getCommandHelp(plugin, query)
                         session.messages.add(toolMessage(toolCallId, result0.aiText))
-                        sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result0.displayTitle, result0.displayContent))
+                        showFetchResult(plugin, session, result0)
                     }
 
                     AgentTools.TOOL_READ_SERVER_LOGS -> {
                         val result0 = AgentTools.getServerLogs(plugin, query)
                         session.messages.add(toolMessage(toolCallId, result0.aiText))
-                        sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result0.displayTitle, result0.displayContent))
+                        showFetchResult(plugin, session, result0)
                     }
 
                     AgentTools.TOOL_RUN_COMMAND -> {
@@ -286,6 +286,13 @@ object AgentManager {
                 }
             }
         }
+    }
+
+    /** 获取类工具结果默认只在群里展示，配置关闭后不再回显。 */
+    private fun showFetchResult(plugin: HuHoBot, session: AgentSession, result: AgentTools.ToolResult) {
+        if (plugin.isAgentFetchResultHidden()) return
+        if (result.displayTitle.isEmpty()) return
+        sendToGroup(plugin, session, AgentMessageFormatter.fetchCard(result.displayTitle, result.displayContent))
     }
 
     /** 发送执行审批卡片并挂起会话。 */

@@ -39,13 +39,11 @@ object GroupManagementApi {
         conn.doOutput = body != null
         body?.let {
             val bodyStr = it.toJSONString()
-            println("[GroupApi] $method $path body=$bodyStr")
             OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { w -> w.write(bodyStr) }
         }
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader()?.readText() ?: "{}"
         conn.disconnect()
-        println("[GroupApi] <- ${conn.responseCode} $text")
         val resp = JSON.parseObject(text)
         if (resp == null || resp.containsKey("code")) {
             val msg = resp?.getString("message") ?: "未知错误"

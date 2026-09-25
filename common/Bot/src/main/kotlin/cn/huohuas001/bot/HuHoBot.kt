@@ -5,6 +5,7 @@ import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.SensitiveFilter
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.state.CommandRepositories
+import cn.huohuas001.bot.update.UpdateChecker
 import cn.huohuas001.bot.web.WebUiServer
 import com.alibaba.fastjson.JSONObject
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
@@ -36,6 +37,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
 
     /** 查询指定群内 OpenID 已认证的 QQ 号；未认证时返回 null。 */
     fun getAuthenticatedQq(groupOpenId: String, openId: String): String? = null
+
+    /** 群 OpenID 不在配置中时自动收录（Spigot 侧写回 config.yml）；返回是否新增成功。 */
+    fun addGroupOpenId(groupOpenId: String): Boolean = false
 
     /** 向配置中的所有 QQ 群发送普通文本。 */
     override fun sendText(text: String) {
@@ -98,6 +102,7 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         reloadRuntimeConfig()
         launchQqClient()
         WebUiServer.start()
+        UpdateChecker.checkOnStartup(this)
     }
 
     /** 平台停止时调用，释放 SDK 日志桥接和公共运行时资源。 */
@@ -213,7 +218,7 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         if (resolved.error != null) {
             return CompletableFuture.completedFuture(TextExecution(resolved.error, this))
         }
-        return dispatchCommand(resolved.command!!)
+        return dispatchCommand(applyPlaceholders(null, resolved.command!!))
     }
 
     /** 统一执行正则过滤、本地敏感词首检和可选 AI 二审。 */

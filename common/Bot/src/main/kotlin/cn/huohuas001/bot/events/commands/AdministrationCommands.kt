@@ -82,7 +82,7 @@ class AdministrationCommands : CommandSupport() {
             sendMessage(event, "参数不正确")
             return
         }
-        val command = plugin.getWhiteList().addCommand.replace("{name}", params)
+        val command = plugin.applyPlaceholders(params, plugin.getWhiteList().addCommand.replace("{name}", params))
         executeGameCommand(plugin, event, command, direct = true)
     }
 
@@ -93,7 +93,7 @@ class AdministrationCommands : CommandSupport() {
             sendMessage(event, "参数不正确")
             return
         }
-        val command = plugin.getWhiteList().delCommand.replace("{name}", params)
+        val command = plugin.applyPlaceholders(params, plugin.getWhiteList().delCommand.replace("{name}", params))
         executeGameCommand(plugin, event, command, direct = true)
     }
 

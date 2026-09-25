@@ -3,6 +3,7 @@ version: '@version@'
 
 main: cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
 api-version: '1.18'
+softdepend: [PlaceholderAPI]
 
 commands:
   huhobot:

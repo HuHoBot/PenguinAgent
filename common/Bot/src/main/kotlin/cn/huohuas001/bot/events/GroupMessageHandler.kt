@@ -12,6 +12,7 @@ import cn.huohuas001.bot.events.commands.MotdCommands
 import cn.huohuas001.bot.events.commands.PublicCommands
 import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.state.CommandRepositories
+import cn.huohuas001.bot.state.GroupDirectory
 import cn.huohuas001.bot.tools.FaceEmojiParser
 import cn.huohuas001.bot.tools.MessageAttachmentParser
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
@@ -94,7 +95,13 @@ class GroupMessageHandler(
         }
 
         if(!content.contains("查信息")){
-            if (!isAllowedGroup(groupId)) return
+            if (!isAllowedGroup(groupId)) {
+                // 陌生群首次发来消息时自动收录，随后该群即可正常使用
+                if (plugin.getGroupOpenIdList().isNotEmpty() && plugin.addGroupOpenId(groupId)) {
+                    GroupDirectory.markAdded(groupId)
+                }
+                return
+            }
         }
         when (dispatchCommand(event)) {
             BaseCommand.DispatchResult.CUSTOM_COMMAND -> Unit
@@ -285,7 +292,10 @@ class GroupMessageHandler(
             }
         }
 
-        val formatted = plugin.formatGroupMessage(senderName, highlighted)
+        val formatted = plugin.applyPlaceholders(
+            binding?.playerName,
+            plugin.formatGroupMessage(senderName, highlighted)
+        )
         val colored = formatted.replace(Regex("&([0-9a-fk-orA-FK-OR])")) { "§${it.groupValues[1].lowercase()}" }
         plugin.broadcastMessage(colored, mentionedPlayers)
     }

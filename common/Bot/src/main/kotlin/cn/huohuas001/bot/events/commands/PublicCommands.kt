@@ -71,9 +71,12 @@ class PublicCommands : CommandSupport() {
 
         if (!motd.useMarkdown) {
             val formattedPlayerList = onlineList.mapIndexed { _, name -> name }.joinToString("\n")
-            val formatedText = motd.text
-                .replace("{online}", onlineList.count().toString())
-                .replace("{players}", formattedPlayerList)
+            val formatedText = plugin.applyPlaceholders(
+                null,
+                motd.text
+                    .replace("{online}", onlineList.count().toString())
+                    .replace("{players}", formattedPlayerList)
+            )
             if (motd.postImg) {
                 replyWithImg(plugin, event, formatedText, imgUrl)
             } else {
@@ -91,11 +94,14 @@ class PublicCommands : CommandSupport() {
         val formattedPlayerList = onlineList.mapIndexed { index, name -> "${index + 1}. **${QClient.escapeMarkdown(name)}**" }.joinToString("\n")
 
         //替换文本内容
-        markdown = markdown
-            .replace("{{.server}}", plugin.getServerName())
-            .replace("{{.img_url}}", imgUrl)
-            .replace("{{.player}}", formattedPlayerList)
-            .replace("{{.online_num}}", onlineList.count().toString())
+        markdown = plugin.applyPlaceholders(
+            null,
+            markdown
+                .replace("{{.server}}", plugin.getServerName())
+                .replace("{{.img_url}}", imgUrl)
+                .replace("{{.player}}", formattedPlayerList)
+                .replace("{{.online_num}}", onlineList.count().toString())
+        )
 
         plugin.replyMarkdown(event, markdown)
     }

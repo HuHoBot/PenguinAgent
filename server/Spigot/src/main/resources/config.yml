@@ -13,9 +13,13 @@ bot:
   groups: []
   # 屏蔽 io.github.kloping.qqbot 直接通过 System.out 输出的调试信息。
   suppress-console-output: true
+  # 收到未配置群的 QQ 消息时，自动把该群 OpenID 追加到上面的 groups。
+  auto-add-groups: true
 
 chat-format:
+  # 游戏→QQ：{name} 为 MC 玩家名
   from-game: "[游戏] {name}: {message}"
+  # QQ→游戏：{name} 为 QQ 用户名（绑定后默认仍是 QQ 名，可用 /MC显示名称 MC 切换）
   from-group: "[QQ] {name}: {message}"
   post-chat: true
   # 只有以该内容开头的游戏消息才会转发；转发时会移除该内容。留空表示全部转发。
@@ -83,6 +87,20 @@ command-panel:
   # 仅决定 QQ 客户端是否显示管理员命令；机器人执行时仍检查管理员身份。
   show-admin-commands: true
 
+# 更新检查：启动时后台检查一次，/版本 命令会再检查一次（10 分钟内复用结果）。
+# 数据源顺序：update-check.url 自定义地址 → GitHub 代理/CDN 的 version.txt → GitHub Releases。
+# 纯文本版本号（如 1.12.0）或 {"version":"1.12.0"} 均可；只认正式版，忽略 Pre-Release。
+update-check:
+  enabled: true
+  # 留空使用内置数据源；可填逗号分隔的多个 URL，例如国内自建接口。
+  url: ""
+
+# PlaceholderAPI：安装 PlaceholderAPI 后，配置里的 %占位符% 会交给它解析
+# （如 chat-format.from-game: "[%playertitle%] {name}: {message}"）。
+# 未安装 PlaceholderAPI 时文本原样保留。默认配置本身不含任何 %占位符%。
+placeholder-api:
+  enabled: true
+
 commands:
   查信息: true
   查管理: true
@@ -128,6 +146,8 @@ agent:
   # auto: 自动执行命令，仅推送思考/输出/工具调用信息
   # manual: 执行命令前需管理员在 QQ 按钮卡片上点击审批（默认）
   command-mode: "manual"
+  # 开启后，获取插件列表 / 命令帮助 / 服务器日志等结果只交给 AI，不在群里发卡片
+  hide-fetch-results: true
 
 # /执行 <key> [参数]：仅 permission=0
 # /管理员执行 <key> [参数]：可执行全部权限等级

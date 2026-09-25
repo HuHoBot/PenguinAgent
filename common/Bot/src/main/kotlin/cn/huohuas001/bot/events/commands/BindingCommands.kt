@@ -5,6 +5,7 @@ import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.state.CommandRepositories
 import cn.huohuas001.bot.state.PendingBindingStore
+import cn.huohuas001.bot.update.UpdateChecker
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 
 /** 角色绑定、显示名称切换和版本查询命令。 */
@@ -121,21 +122,41 @@ class BindingCommands : CommandSupport() {
 
     @Commands(command = "版本", describe = "查看版本信息")
     fun version(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
-        val version = plugin.getPluginVersion()
-        reply(
-            plugin, event,
-            "您正在使用 HuHoBot-Penguin $version 版本\n" +
-                "开发者：Shabby-666（${QClient.escapeMarkdown("_Chinese_Player_")}）\n" +
-                "Github：https://github.com/HuHoBot/PenguinAgent\n" +
-                "文档：https://shabby-666.github.io/PenguinAgent-Docs/"
-        )
+        val current = plugin.getPluginVersion()
+        if (!plugin.isUpdateCheckEnabled()) {
+            reply(plugin, event, versionText(current, "最新版本：未启用更新检查"))
+            return
+        }
+        val cached = UpdateChecker.cachedState(plugin)
+        if (cached != null) {
+            reply(plugin, event, versionText(current, latestLine(cached)))
+            return
+        }
+        plugin.submitAsync {
+            val state = UpdateChecker.check(plugin, force = true)
+            reply(plugin, event, versionText(current, latestLine(state)))
+        }
     }
+
+    private fun latestLine(state: UpdateChecker.UpdateState): String = when {
+        !state.checked -> "最新版本：暂时无法检查"
+        state.outdated -> "最新版本：${state.latest}（检测到更新，请前往官网下载）"
+        else -> "最新版本：${state.latest}（已是最新）"
+    }
+
+    private fun versionText(current: String, latestLine: String): String =
+        "您正在使用 HuHoBot-Penguin $current 版本\n" +
+            "$latestLine\n" +
+            "官网：${UpdateChecker.SITE_URL}\n" +
+            "GitHub：${UpdateChecker.PROJECT}\n" +
+            "文档：${UpdateChecker.DOCS}\n" +
+            "开发者：Shabby-666（${QClient.escapeMarkdown("_Chinese_Player_")}）"
 
     /** 白名单同步：绑定时自动添加白名单。 */
     private fun syncWhitelistAdd(plugin: HuHoBot, playerName: String) {
         val whitelist = plugin.getWhiteList()
         if (whitelist.addCommand.isBlank()) return
-        val command = whitelist.addCommand.replace("{name}", playerName)
+        val command = plugin.applyPlaceholders(playerName, whitelist.addCommand.replace("{name}", playerName))
         plugin.sendCommand(command).whenComplete { _, error ->
             if (error != null) plugin.log_error("绑定后添加白名单失败: ${error.message}")
         }
@@ -145,7 +166,7 @@ class BindingCommands : CommandSupport() {
     private fun syncWhitelistRemove(plugin: HuHoBot, playerName: String) {
         val whitelist = plugin.getWhiteList()
         if (whitelist.delCommand.isBlank()) return
-        val command = whitelist.delCommand.replace("{name}", playerName)
+        val command = plugin.applyPlaceholders(playerName, whitelist.delCommand.replace("{name}", playerName))
         plugin.sendCommand(command).whenComplete { _, error ->
             if (error != null) plugin.log_error("解绑后移除白名单失败: ${error.message}")
         }

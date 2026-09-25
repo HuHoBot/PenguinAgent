@@ -204,14 +204,14 @@ internal class HumanReadableStateFile {
         bindings: Map<String, Map<String, BindingInfo>>
     ) {
         val hasSettings = bindings.values.any { group ->
-            group.values.any { it.qqDisplayNameMode != "QQ" || it.mcDisplayNameMode != "MC" }
+            group.values.any { it.qqDisplayNameMode != "QQ" || it.mcDisplayNameMode != "QQ" }
         }
         if (!hasSettings) return
 
         writer.appendLine("[binding-settings]")
         bindings.toSortedMap().forEach { (groupId, groupBindings) ->
             val entries = groupBindings.entries
-                .filter { it.value.qqDisplayNameMode != "QQ" || it.value.mcDisplayNameMode != "MC" }
+                .filter { it.value.qqDisplayNameMode != "QQ" || it.value.mcDisplayNameMode != "QQ" }
                 .joinToString(",") { (oid, info) -> "$oid:${info.qqDisplayNameMode}:${info.mcDisplayNameMode}" }
             if (entries.isNotBlank()) {
                 writer.appendLine("$groupId = $entries")
