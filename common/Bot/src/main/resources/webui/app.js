@@ -9,6 +9,7 @@ const state = {
     activeSection: null,
     dirty: false,
     groupNames: {},
+    groupNamesSettled: false,
 };
 
 /* ───────────────────────── 工具 ───────────────────────── */
@@ -20,8 +21,32 @@ function showToast(msg, type = "info", ms = 2600) {
     toast.textContent = msg;
     toast.className = "toast" + (type === "success" ? " success" : type === "error" ? " error" : "");
     toast.classList.remove("hidden");
+    // 强制回流后加上 show，保证连续弹出时动画也会重放
+    void toast.offsetWidth;
+    toast.classList.add("show");
     clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => toast.classList.add("hidden"), ms);
+    showToast._t = setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => toast.classList.add("hidden"), 240);
+    }, ms);
+}
+
+/** 点击涟漪反馈 */
+function attachRipple(el) {
+    if (!el || el.dataset.ripple === "1") return;
+    el.dataset.ripple = "1";
+    el.addEventListener("click", (e) => {
+        const rect = el.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const ripple = document.createElement("span");
+        ripple.className = "ripple";
+        ripple.style.width = size + "px";
+        ripple.style.height = size + "px";
+        ripple.style.left = (e.clientX - rect.left - size / 2) + "px";
+        ripple.style.top = (e.clientY - rect.top - size / 2) + "px";
+        el.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 520);
+    });
 }
 
 /** 从扁平(dotted)或嵌套 Map 中解析路径值。 */
@@ -151,6 +176,11 @@ const SECTION_ICONS = {
     agent: "🧠",
     commands: "🔘",
     "custom-commands": "🧩",
+    binding: "🔗",
+    "command-blacklist": "🚫",
+    "update-check": "🆕",
+    "placeholder-api": "🔤",
+    addons: "🧩",
 };
 
 function renderNav() {
@@ -170,8 +200,25 @@ function renderNav() {
             renderSection(section);
             updateNavActive();
         });
+        attachRipple(btn);
         nav.appendChild(btn);
     }
+
+    const addonBtn = document.createElement("button");
+    addonBtn.className = "nav-item";
+    addonBtn.dataset.section = "addons";
+    addonBtn.innerHTML =
+        `<span class="nav-icon">${SECTION_ICONS.addons}</span>` +
+        `<span class="nav-label">附属插件中心</span>`;
+    addonBtn.addEventListener("click", () => {
+        if (state.dirty && !confirm("有未保存的修改，切换到其他页面将丢失。继续？")) return;
+        state.activeSection = "addons";
+        state.dirty = false;
+        renderSection({ key: "addons", title: "附属插件中心", fields: [] });
+        updateNavActive();
+    });
+    attachRipple(addonBtn);
+    nav.appendChild(addonBtn);
 }
 
 function updateNavActive() {
@@ -187,6 +234,8 @@ async function loadConfig() {
     state.schema = data.schema || [];
     state.values = data.values || {};
     state.groupNames = data.groupNames || {};
+    state.groupNamesSettled = false;
+    groupNameAttempts = 0;
     state.platform = data.platform || "";
     renderNav();
     if (!state.activeSection) state.activeSection = state.schema[0]?.key || null;
@@ -197,10 +246,14 @@ async function loadConfig() {
 }
 
 /* 群名称在后台异步补齐，取到后重绘当前分节 */
+let groupNameAttempts = 0;
+
 async function refreshGroupNames() {
+    groupNameAttempts += 1;
+    let groups = [];
     try {
         const data = await api("/api/status");
-        const groups = Array.isArray(data.groups) ? data.groups : [];
+        groups = Array.isArray(data.groups) ? data.groups : [];
         let changed = false;
         for (const g of groups) {
             if (typeof g === "string") continue;
@@ -209,15 +262,39 @@ async function refreshGroupNames() {
                 changed = true;
             }
         }
-        if (!changed) return;
-        const section = state.schema.find((s) => s.key === state.activeSection);
-        if (section) renderSection(section);
-    } catch (_) { /* 忽略：不影响配置编辑 */ }
+        if (changed) {
+            const section = state.schema.find((s) => s.key === state.activeSection);
+            if (section) renderSection(section);
+        }
+        const pending = groups.some((g) => typeof g !== "string" && !g.name);
+        if (!pending) {
+            state.groupNamesSettled = true;
+            return;
+        }
+        if (groupNameAttempts < 8) {
+            setTimeout(refreshGroupNames, 1500);
+        } else {
+            state.groupNamesSettled = true;
+            const section = state.schema.find((s) => s.key === state.activeSection);
+            if (section) renderSection(section);
+        }
+    } catch (_) {
+        if (groupNameAttempts < 8) {
+            setTimeout(refreshGroupNames, 2000);
+        } else {
+            state.groupNamesSettled = true;
+        }
+    }
 }
 
 function renderSection(section) {
     $("#config-panel").classList.remove("hidden");
     $("#status-panel").classList.add("hidden");
+    if (section.key === "addons") {
+        renderAddonPanel(section);
+        return;
+    }
+    $("#save-btn").classList.remove("hidden");
     $("#config-section-title").textContent = section.title;
     $("#config-section-desc").textContent = section.fields
         .map((f) => f.description)
@@ -231,6 +308,169 @@ function renderSection(section) {
     for (const field of section.fields) {
         form.appendChild(renderField(field));
     }
+}
+
+/* ───────────────────────── 附属插件中心 ───────────────────────── */
+
+function formatBytes(bytes) {
+    const n = Number(bytes) || 0;
+    if (n <= 0) return "-";
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+    if (n >= 1024) return Math.round(n / 1024) + " KB";
+    return n + " B";
+}
+
+function renderAddonPanel(section) {
+    const form = $("#config-form");
+    form.innerHTML = "";
+    $("#save-btn").classList.add("hidden");
+    $("#config-section-title").textContent = section.title;
+    $("#config-section-desc").textContent =
+        "从附属插件中心获取 Spigot / Paper 平台的扩展；下载后需重启服务器才会生效（不做热加载）";
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "addon-toolbar";
+    const search = document.createElement("input");
+    search.className = "input";
+    search.placeholder = "搜索插件名称或简介";
+    const refresh = document.createElement("button");
+    refresh.className = "btn btn-ghost btn-sm";
+    refresh.textContent = "刷新";
+    toolbar.appendChild(search);
+    toolbar.appendChild(refresh);
+
+    const list = document.createElement("div");
+    list.className = "addon-list";
+    list.innerHTML = '<div class="addon-empty">正在加载附属插件…</div>';
+
+    form.appendChild(toolbar);
+    form.appendChild(list);
+
+    const load = async (keyword) => {
+        list.innerHTML = '<div class="addon-empty">正在加载附属插件…</div>';
+        const query = keyword ? `?search=${encodeURIComponent(keyword)}` : "";
+        const data = await api("/api/addons" + query);
+        const plugins = Array.isArray(data.plugins) ? data.plugins : [];
+        const loadedNames = new Set(
+            (Array.isArray(data.installed) ? data.installed : []).map((s) => String(s).toLowerCase())
+        );
+        const records = Array.isArray(data.installedRecords) ? data.installedRecords : [];
+        const recordById = new Map(records.map((r) => [r.id, r]));
+        const recordByName = new Map(records.map((r) => [String(r.name).toLowerCase(), r]));
+        list.innerHTML = "";
+        if (!plugins.length) {
+            list.innerHTML = '<div class="addon-empty">没有找到符合条件的插件</div>';
+            return;
+        }
+        for (const p of plugins) {
+            const record = recordById.get(p.id) || recordByName.get(String(p.name).toLowerCase());
+            list.appendChild(buildAddonCard(p, loadedNames, record || null));
+        }
+    };
+
+    const run = () => load(search.value.trim()).catch((e) => {
+        list.innerHTML = `<div class="addon-empty">加载失败：${esc(e.message)}</div>`;
+    });
+    search.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            run();
+        }
+    });
+    attachRipple(refresh);
+    refresh.addEventListener("click", run);
+    run();
+}
+
+function buildAddonCard(addon, installed, record) {
+    const card = document.createElement("div");
+    card.className = "addon-card";
+
+    const isInstalled = installed.has(String(addon.name).toLowerCase()) || !!record;
+    const tags = (Array.isArray(addon.tags) ? addon.tags : [])
+        .map((t) => `<span class="addon-tag">${esc(t)}</span>`).join("");
+
+    card.innerHTML =
+        `<div class="addon-head">` +
+        `<div class="addon-title">${esc(addon.name)}${isInstalled ? '<span class="badge-ok">已安装</span>' : ""}</div>` +
+        `<div class="addon-version">v${esc(addon.version || "-")}</div>` +
+        `</div>` +
+        `<div class="addon-desc">${esc(addon.description || "暂无简介")}</div>` +
+        `<div class="addon-meta">` +
+        `<span>作者：${esc(addon.author || "-")}</span>` +
+        `<span>平台：${esc(addon.serverType || "-")}</span>` +
+        `<span>大小：${esc(formatBytes(addon.fileSize))}</span>` +
+        `<span>下载：${esc(String(addon.downloads ?? 0))}</span>` +
+        (record && record.file ? `<span>文件：${esc(record.file)}</span>` : "") +
+        `</div>` +
+        (tags ? `<div class="addon-tags">${tags}</div>` : "") +
+        `<div class="addon-actions">` +
+        `<button class="btn btn-ghost btn-sm" data-act="detail">详情</button>` +
+        `<button class="btn btn-primary btn-sm" data-act="install"${isInstalled ? " disabled" : ""}>` +
+        `${isInstalled ? "已安装" : "下载安装"}</button>` +
+        (record && record.file
+            ? `<button class="btn btn-danger-ghost btn-sm" data-act="remove">删除</button>`
+            : "") +
+        `</div>` +
+        `<pre class="addon-readme hidden"></pre>`;
+
+    const readme = card.querySelector(".addon-readme");
+    const detailBtn = card.querySelector('[data-act="detail"]');
+    attachRipple(detailBtn);
+    detailBtn.addEventListener("click", () => {
+        const hidden = readme.classList.toggle("hidden");
+        if (!hidden && !readme.textContent) {
+            readme.textContent = addon.readme || "该插件没有提供说明文档。";
+        }
+        detailBtn.textContent = hidden ? "详情" : "收起";
+    });
+
+    const installBtn = card.querySelector('[data-act="install"]');
+    attachRipple(installBtn);
+    installBtn.addEventListener("click", async () => {
+        installBtn.classList.add("is-busy");
+        try {
+            const data = await api("/api/addons/install", {
+                method: "POST",
+                body: JSON.stringify({ id: addon.id }),
+            });
+            showToast(`已下载 ${data.file}，重启服务器后生效`, "success", 4200);
+            card.querySelector(".addon-title").insertAdjacentHTML("beforeend", '<span class="badge-ok">已安装</span>');
+            installBtn.disabled = true;
+            installBtn.textContent = "已安装";
+        } catch (e) {
+            showToast("下载失败：" + e.message, "error");
+        } finally {
+            installBtn.classList.remove("is-busy");
+        }
+    });
+
+    const removeBtn = card.querySelector('[data-act="remove"]');
+    if (removeBtn) {
+        attachRipple(removeBtn);
+        removeBtn.addEventListener("click", async () => {
+            if (!confirm(`确定删除 ${record.file}？删除后重启服务器生效。`)) return;
+            removeBtn.classList.add("is-busy");
+            try {
+                await api("/api/addons/remove", {
+                    method: "POST",
+                    body: JSON.stringify({ file: record.file }),
+                });
+                showToast(`已删除 ${record.file}，重启服务器后生效`, "success", 4200);
+                const badge = card.querySelector(".badge-ok");
+                if (badge) badge.remove();
+                removeBtn.remove();
+                installBtn.disabled = false;
+                installBtn.textContent = "下载安装";
+            } catch (e) {
+                showToast("删除失败：" + e.message, "error");
+            } finally {
+                removeBtn.classList.remove("is-busy");
+            }
+        });
+    }
+
+    return card;
 }
 
 function renderField(field) {
@@ -340,8 +580,11 @@ function buildListControl(field, value) {
     function displayText(item) {
         if (!isGroupList) return esc(item);
         const name = state.groupNames[item];
-        const label = name ? esc(name) : "名称暂不可用";
-        return `${label}<span class="tag-suffix">…${esc(item.slice(-6))}</span>`;
+        if (name) return `${esc(name)}<span class="tag-suffix">…${esc(item.slice(-6))}</span>`;
+        const suffix = `<span class="tag-suffix">…${esc(item.slice(-6))}</span>`;
+        return state.groupNamesSettled
+            ? `名称暂不可用${suffix}`
+            : `正在获取…${suffix}`;
     }
 
     function renderTags() {
@@ -377,6 +620,7 @@ function buildListControl(field, value) {
     addBtn.type = "button";
     addBtn.className = "btn btn-ghost btn-sm";
     addBtn.textContent = "添加";
+    attachRipple(addBtn);
     addBtn.addEventListener("click", () => {
         const v = input.value.trim();
         if (v && !items.includes(v)) {
@@ -663,7 +907,9 @@ function collectChanges() {
 }
 
 async function saveConfig() {
+    const btn = $("#save-btn");
     const changes = collectChanges();
+    btn.classList.add("is-busy");
     try {
         await api("/api/config", {
             method: "POST",
@@ -680,6 +926,8 @@ async function saveConfig() {
         loadStatus().catch(() => {});
     } catch (e) {
         showToast("保存失败：" + e.message, "error");
+    } finally {
+        btn.classList.remove("is-busy");
     }
 }
 
@@ -746,6 +994,9 @@ function init() {
         updateNavActive();
         loadStatus().catch((e) => showToast(e.message, "error"));
     });
+
+    // 静态按钮点击反馈
+    [$("#login-btn"), $("#save-btn"), $("#logout-btn"), $("#status-btn")].forEach(attachRipple);
 
     if (state.token) {
         showMain();

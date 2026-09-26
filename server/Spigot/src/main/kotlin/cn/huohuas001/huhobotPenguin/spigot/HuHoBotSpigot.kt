@@ -729,6 +729,47 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             false
         }
     }
+
+    override fun installAddon(fileName: String, bytes: ByteArray): Boolean = writeAddonFile(fileName) { it.writeBytes(bytes) }
+
+    override fun removeAddon(fileName: String): Boolean {
+        val safeName = fileName.trim()
+        if (!isSafeAddonFileName(safeName)) {
+            log_warning("拒绝删除非法的附属插件文件名: $fileName")
+            return false
+        }
+        return try {
+            val target = pluginsFolder().resolve(safeName)
+            // 文件已不存在时同样视为删除成功，交由调用方清理安装记录
+            !target.exists() || target.delete()
+        } catch (error: Exception) {
+            log_error("删除附属插件 $safeName 失败: ${error.message}")
+            false
+        }
+    }
+
+    private fun writeAddonFile(fileName: String, write: (File) -> Unit): Boolean {
+        val safeName = fileName.trim()
+        if (!isSafeAddonFileName(safeName)) {
+            log_warning("拒绝写入非法的附属插件文件名: $fileName")
+            return false
+        }
+        return try {
+            val folder = pluginsFolder()
+            if (!folder.isDirectory && !folder.mkdirs()) return false
+            write(folder.resolve(safeName))
+            true
+        } catch (error: Exception) {
+            log_error("写入附属插件 $safeName 失败: ${error.message}")
+            false
+        }
+    }
+
+    private fun pluginsFolder(): File = dataFolder.parentFile?.takeIf { it.isDirectory } ?: File("plugins")
+
+    private fun isSafeAddonFileName(name: String): Boolean =
+        name.isNotEmpty() && !name.contains("..") && !name.contains('/') && !name.contains('\\')
+
     override fun shouldSuppressQqBotConsoleOutput(): Boolean =
         configManager.suppressQqBotConsoleOutput()
 

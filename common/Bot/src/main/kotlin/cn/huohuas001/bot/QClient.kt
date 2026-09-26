@@ -31,6 +31,9 @@ import java.util.concurrent.TimeUnit
 
 object QClient {
     private const val KEYBOARD_RECALL_DELAY_SECONDS = 30L
+    private const val GROUP_NAME_RETRY_MILLIS = 30_000L
+
+    private val groupNameAttempts = ConcurrentHashMap<String, Long>()
 
     private val recallScheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "Penguin-Keyboard-Recall").apply { isDaemon = true }
@@ -611,12 +614,18 @@ object QClient {
         }
         val current = starter
         val plugin = BotShared.getPlugin()
+        val now = System.currentTimeMillis()
         var any = false
         groupOpenIds.forEach { openId ->
             if (!GroupDirectory.isStale(openId)) {
                 if (GroupDirectory.nameOf(openId) != null) any = true
                 return@forEach
             }
+            // 失败后短时间内不重复请求，避免刷屏和打爆接口
+            val lastAttempt = groupNameAttempts[openId] ?: 0L
+            if (now - lastAttempt < GROUP_NAME_RETRY_MILLIS) return@forEach
+            groupNameAttempts[openId] = now
+
             val response = try {
                 GroupManagementApi.getGroupInfo(current, openId)
             } catch (error: Exception) {

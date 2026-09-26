@@ -1,6 +1,7 @@
 package cn.huohuas001.bot
 
 import cn.huohuas001.bot.agent.AgentConfig
+import cn.huohuas001.bot.addon.InstalledAddonStore
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.SensitiveFilter
 import cn.huohuas001.bot.provider.*
@@ -40,6 +41,22 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
 
     /** 群 OpenID 不在配置中时自动收录（Spigot 侧写回 config.yml）；返回是否新增成功。 */
     fun addGroupOpenId(groupOpenId: String): Boolean = false
+
+    /**
+     * 把下载到的附属插件写入服务端插件目录。
+     *
+     * 只写文件不做热加载，需要重启服务器才会生效。
+     *
+     * @return 是否写入成功
+     */
+    fun installAddon(fileName: String, bytes: ByteArray): Boolean = false
+
+    /**
+     * 删除已下载的附属插件文件。
+     *
+     * @return 是否删除成功
+     */
+    fun removeAddon(fileName: String): Boolean = false
 
     /** 向配置中的所有 QQ 群发送普通文本。 */
     override fun sendText(text: String) {
@@ -99,6 +116,7 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
             }
         })
         CommandRepositories.initialize(getConfigFile()?.parentFile)
+        InstalledAddonStore.load()
         reloadRuntimeConfig()
         launchQqClient()
         WebUiServer.start()

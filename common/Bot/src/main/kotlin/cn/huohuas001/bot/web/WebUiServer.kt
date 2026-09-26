@@ -2,6 +2,8 @@ package cn.huohuas001.bot.web
 
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.QClient
+import cn.huohuas001.bot.addon.AddonCenterClient
+import cn.huohuas001.bot.addon.InstalledAddonStore
 import cn.huohuas001.bot.provider.BotShared
 import cn.huohuas001.bot.state.GroupDirectory
 import com.alibaba.fastjson.JSON
@@ -90,6 +92,9 @@ object WebUiServer {
                 path == "/api/config" && method == "GET" -> handleGetConfig(exchange)
                 path == "/api/config" && method == "POST" -> handleSaveConfig(exchange)
                 path == "/api/status" && method == "GET" -> handleStatus(exchange)
+                path == "/api/addons" && method == "GET" -> handleAddonList(exchange)
+                path == "/api/addons/install" && method == "POST" -> handleAddonInstall(exchange)
+                path == "/api/addons/remove" && method == "POST" -> handleAddonRemove(exchange)
                 path == "/api/password" && method == "POST" -> handlePassword(exchange)
                 else -> respond(exchange, 404, """{"error":"Not Found"}""")
             }
@@ -190,8 +195,121 @@ object WebUiServer {
         respond(exchange, 200, payload.toJSONString())
     }
 
-    private fun handlePassword(exchange: HttpExchange) {
+    /** 附属插件中心列表（仅 Spigot / Paper）。 */
+    private fun handleAddonList(exchange: HttpExchange) {
         if (!authorize(exchange)) return
+        val query = parseQuery(exchange)
+        val search = query["search"]
+        val addons = AddonCenterClient.listAddons(search)
+        val loaded = BotShared.getPlugin().getServerPluginList().toMutableList()
+        val installedFiles = InstalledAddonStore.files().toMutableList()
+        val records = InstalledAddonStore.all()
+        records.forEach { record ->
+            if (record.file.isNotBlank() && record.file !in installedFiles) installedFiles.add(record.file)
+            if (record.name.isNotBlank() && record.name !in loaded) loaded.add(record.name)
+        }
+        val payload = JSONObject()
+        payload["center"] = AddonCenterClient.CENTER_URL
+        payload["total"] = addons.size
+        payload["installed"] = JSON.toJSON(loaded)
+        payload["installedRecords"] = JSON.toJSON(
+            records.map { record ->
+                mapOf(
+                    "id" to record.id,
+                    "name" to record.name,
+                    "version" to record.version,
+                    "file" to record.file
+                )
+            }
+        )
+        payload["plugins"] = JSON.toJSON(
+            addons.map { entry ->
+                mapOf(
+                    "id" to entry.id,
+                    "name" to entry.name,
+                    "version" to entry.version,
+                    "author" to entry.author,
+                    "description" to entry.description,
+                    "tags" to entry.tags,
+                    "serverType" to entry.serverType,
+                    "fileName" to entry.jarName,
+                    "fileSize" to entry.jarSize,
+                    "downloads" to entry.downloads,
+                    "readme" to entry.readme.take(4000)
+                )
+            }
+        )
+        respond(exchange, 200, payload.toJSONString())
+    }
+
+    /** 下载插件到服务端插件目录；不热加载，需重启生效。 */
+    private fun handleAddonInstall(exchange: HttpExchange) {
+        if (!authorize(exchange)) return
+        val body = parseBody(exchange) ?: return respond(exchange, 400, """{"error":"bad request"}""")
+        val id = body.getString("id").orEmpty().trim()
+        if (id.isEmpty()) return respond(exchange, 400, """{"error":"缺少插件 ID"}""")
+
+        val plugin = BotShared.getPlugin()
+        val detail = AddonCenterClient.detail(id)
+        val downloaded = AddonCenterClient.download(id)
+            ?: return respond(exchange, 502, """{"error":"下载失败，请稍后重试"}""")
+        val target = safeFileName(downloaded.fileName, id)
+        if (!plugin.installAddon(target, downloaded.bytes)) {
+            return respond(exchange, 500, """{"error":"写入插件目录失败"}""")
+        }
+        InstalledAddonStore.record(
+            id = id,
+            name = detail?.name.orEmpty(),
+            version = detail?.version.orEmpty(),
+            file = target
+        )
+        plugin.log_info("已从附属插件中心下载 $target，重启服务器后生效")
+        respond(
+            exchange, 200,
+            JSON.toJSONString(mapOf("ok" to true, "file" to target, "restart" to true))
+        )
+    }
+
+    /** 删除已下载的附属插件文件；同样需要重启服务器。 */
+    private fun handleAddonRemove(exchange: HttpExchange) {
+        if (!authorize(exchange)) return
+        val body = parseBody(exchange) ?: return respond(exchange, 400, """{"error":"bad request"}""")
+        val file = body.getString("file").orEmpty().trim()
+        if (file.isEmpty()) return respond(exchange, 400, """{"error":"缺少文件名"}""")
+        val record = InstalledAddonStore.removeByFile(file)
+            ?: return respond(exchange, 404, """{"error":"未找到该插件的安装记录"}""")
+        val deleted = BotShared.getPlugin().removeAddon(record.file)
+        if (!deleted) {
+            InstalledAddonStore.record(record.id, record.name, record.version, record.file)
+            return respond(exchange, 500, """{"error":"删除文件失败"}""")
+        }
+        BotShared.getPlugin().log_info("已删除附属插件 ${record.file}，重启服务器后生效")
+        respond(exchange, 200, JSON.toJSONString(mapOf("ok" to true, "file" to record.file, "restart" to true)))
+    }
+
+    /** 只保留文件名，避免远端返回的路径影响写入位置。 */
+    private fun safeFileName(rawName: String, id: String): String {
+        val base = rawName.substringAfterLast('/').substringAfterLast('\\').trim()
+        val cleaned = base.replace(Regex("[^A-Za-z0-9._\\-\\u4e00-\\u9fa5]"), "_")
+        if (cleaned.isBlank() || cleaned.contains("..")) return "addon-$id.jar"
+        return if (cleaned.endsWith(".jar", true) || cleaned.endsWith(".zip", true)) cleaned
+        else "$cleaned.jar"
+    }
+
+    private fun parseQuery(exchange: HttpExchange): Map<String, String> {
+        val raw = exchange.requestURI.rawQuery ?: return emptyMap()
+        return raw.split("&")
+            .mapNotNull { part ->
+                if (part.isBlank()) return@mapNotNull null
+                val key = part.substringBefore('=')
+                val value = part.substringAfter('=', "")
+                java.net.URLDecoder.decode(key, "UTF-8") to
+                    java.net.URLDecoder.decode(value, "UTF-8")
+            }
+            .toMap()
+    }
+
+    private fun handlePassword(exchange: HttpExchange) {        if (!authorize(exchange)) return
         val body = parseBody(exchange) ?: return respond(exchange, 400, """{"error":"bad request"}""")
         val newPassword = body.getString("newPassword").orEmpty()
         if (WebUiPassword.changePassword(newPassword)) {
