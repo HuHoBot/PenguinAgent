@@ -37,9 +37,11 @@
 | 平台 | 状态 | JDK 要求 | 产物 |
 |------|------|----------|------|
 | **Spigot / Paper**（api-version 1.18+） | 活跃开发 | JDK 8+ | `HuHoBot-Penguin_Spigot-<版本>.jar` |
-| Nukkit / PMMP | 待适配 | — | — |
+| Nukkit / PMMP | 社区适配版（非本仓库维护） | — | [PenguinAgent-NukkitPlatform](https://github.com/HuHoBot/PenguinAgent-NukkitPlatform) |
 | Velocity / BungeeCord | 待适配 | — | — |
 | Allay | 待适配 | — | — |
+
+> Nukkit-MOT 适配版本维护在独立仓库 [PenguinAgent-NukkitPlatform](https://github.com/HuHoBot/PenguinAgent-NukkitPlatform)，不由本仓库维护，功能与 issue 请前往该仓库反馈。
 
 ---
 
