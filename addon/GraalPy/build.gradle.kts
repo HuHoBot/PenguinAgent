@@ -13,6 +13,14 @@ repositories {
     mavenCentral()
 }
 
+// GraalPy 的 polyglot/truffle 运行时需要 Java 17；主插件仍是 Java 8，
+// 所以这里的 toolchain 只作用于引擎包自己。
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
 val graal = "24.1.2"
 
 dependencies {

@@ -469,7 +469,7 @@ ls build/gather-jar/
 ## Spigot 脚本扩展（JS / Python / Lua）
 
 一个插件是 `addons/` 下的一个目录，不是单个文件。根上直接放的 `.js` / `.lua` / `.py` 不加载。
-Lua 打在主 jar 里；GraalJS（约 37 MB）与 GraalPy（约 180 MB）拆成两个引擎包，不放也能启动：
+Lua 打在主 jar 里；GraalJS（约 34 MB）与 GraalPy（约 125 MB）拆成两个引擎包，不放也能启动：
 
 | 入口 | 引擎 | 放在哪 |
 |------|------|--------|
@@ -495,8 +495,21 @@ plugins/HuHoBotPenguin/addons/hello/
 ```
 
 三种语言都注入 `Bird`、`Bukkit`、`server`、`plugin`、`config`、`kv`、`DATA_DIR`。
-加载失败会撤掉已经登记的 addon。两个目录写成同一个 `name` 会被拒绝。
-`"_enabled": false` 跳过该插件。详细说明见 `docs/spigot-script-addons.md`。
+加载失败会撤掉已经登记的 addon 和它注册过的命令、监听器、定时任务。
+两个目录写成同一个 `name` 会被拒绝。`"_enabled": false` 跳过该插件（算「跳过」不算「失败」）。
+
+两个容易踩的点：
+
+- **Lua 侧列表下标从 1 开始。** 命令参数和 `Bird` 返回的 `List` / `Map` 都会转成真正的 Lua table，
+  所以是 `args[1]`、`#Bird:getDataKeys()`、`pairs(...)`，不是 0 起。JS 和 Python 保持各自的 0 起。
+- **引擎 jar 的文件名带版本。** 和主插件版本不一致时启动会告警，脚本可能以难懂的方式失败，
+  换同一次构建产出的 jar 即可。
+
+详细说明见 [`docs/spigot-script-addons.md`](docs/spigot-script-addons.md)，
+其中「[引擎桥 API](docs/spigot-script-addons.md#11-引擎桥-api)」一节记录了主插件与引擎 jar 之间的反射契约
+（改 `GraalJsBridge` / `GraalPyBridge` 的方法签名时必须同步改 `ScriptAddonLoader`）。
+
+脚本系统借鉴自 [birdlibraryapi](https://github.com/prach1121/birdlibraryapi)（Apache-2.0），详见[许可证](#许可证)一节。
 
 
 ## 版本历史
@@ -664,6 +677,13 @@ plugins/HuHoBotPenguin/addons/hello/
 本项目采用 [GNU Affero General Public License v3.0](LICENSE) 许可证。
 
 ### 第三方资源
+
+**脚本扩展系统**（`addons/<名字>/main.js` / `main.lua` / `main.py` 与 `Bird` 桥）借鉴并移植自
+[birdlibraryapi](https://github.com/prach1121/birdlibraryapi)（Apache-2.0），原作者 prach1121。
+`BirdScriptApi` 由该项目的 `BirdAPI` 移植而来，并按 Spigot 1.16+（不用 Adventure API）与
+HuHoBot 附属插件注册做了适配；`ScriptAddonLoader`、`ScriptPackage`、`AddonManifest`、
+`ScriptLoadResult`、`LoadedScript` 等类同样参考了它的加载与脚本生命周期设计。
+源码文件头部保留了原始出处与许可证声明。
 
 背包查看功能使用 [Faithful 32x](https://faithfulpack.net/) 贴图包（[Faithful License v3](server/Spigot/src/main/resources/inventory/faithful32x/LICENSE.txt)）。
 

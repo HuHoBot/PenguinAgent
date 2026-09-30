@@ -3,7 +3,7 @@ package cn.huohuas001.huhobotPenguin.spigot.scripting;
 import java.io.File;
 
 /**
- * A loaded script. {@code engine} holds the language runtime that ran it:
+ * A loaded script. {@code session} holds the language runtime that ran it:
  * the GraalJS session (loaded from the engines jar) for {@code .js} files, a
  * {@link org.luaj.vm2.Globals} for {@code .lua} files, or the GraalPy session
  * (also loaded from the engines jar) for {@code .py} files.
@@ -14,13 +14,13 @@ public class LoadedScript {
 
     private final String name;
     private final File file;
-    private final Object engine;
+    private final Object session;
     private final BirdScriptApi api;
 
-    public LoadedScript(String name, File file, Object engine, BirdScriptApi api) {
+    public LoadedScript(String name, File file, Object session, BirdScriptApi api) {
         this.name = name;
         this.file = file;
-        this.engine = engine;
+        this.session = session;
         this.api = api;
     }
 
@@ -32,8 +32,8 @@ public class LoadedScript {
         return file;
     }
 
-    public Object engine() {
-        return engine;
+    public Object session() {
+        return session;
     }
 
     public BirdScriptApi api() {

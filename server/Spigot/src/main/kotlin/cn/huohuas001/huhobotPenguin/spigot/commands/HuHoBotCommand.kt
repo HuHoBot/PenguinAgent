@@ -71,24 +71,41 @@ class HuHoBotCommand(private val plugin: HuHoBotSpigot) : TabExecutor {
             return
         }
         val start = System.currentTimeMillis()
-        val file = args.getOrNull(2)
-        if (file != null) {
-            sender.sendMessage(loader.reloadOne(file).formatted() + " ${ChatColor.GRAY}(${System.currentTimeMillis() - start}ms)")
+        val target = args.getOrNull(2)
+        if (target != null) {
+            val took = System.currentTimeMillis() - start
+            sender.sendMessage(
+                String.format(
+                    "%s %s(%dms)",
+                    loader.reloadOne(target).formatted(),
+                    "${ChatColor.GRAY}",
+                    took
+                )
+            )
             return
         }
         val results = loader.reloadAll()
         val took = System.currentTimeMillis() - start
         if (results.isEmpty()) {
-            sender.sendMessage("${ChatColor.YELLOW}${loader.getScriptsFolder().path} 中没有 .js / .py / .lua 脚本")
+            sender.sendMessage(
+                "${ChatColor.YELLOW}${loader.getScriptsFolder().path} 下没有脚本插件目录" +
+                    "（每个插件建一个目录，放 main.lua / main.py / main.js）"
+            )
             return
         }
         val okCount = results.count { it.success() }
-        val failCount = results.size - okCount
-        if (failCount == 0) {
+        // _enabled=false 是有意的跳过，不算失败。
+        val failCount = results.count { !it.success() && !it.skipped() }
+        val skipCount = results.count { it.skipped() }
+        if (failCount == 0 && skipCount == 0) {
             sender.sendMessage("${ChatColor.GREEN}脚本重载完成: 全部 $okCount 个成功 ${ChatColor.GRAY}(${took}ms)")
         } else {
-            sender.sendMessage("${ChatColor.YELLOW}脚本重载完成: ${ChatColor.GREEN}$okCount 成功 ${ChatColor.GRAY}/ ${ChatColor.RED}$failCount 失败 ${ChatColor.GRAY}(${took}ms)")
-            results.filterNot { it.success() }.forEach { sender.sendMessage("  ${it.formatted()}") }
+            val summary = StringBuilder("${ChatColor.YELLOW}脚本重载完成: ${ChatColor.GREEN}$okCount 成功 ${ChatColor.GRAY}/ ")
+            if (failCount > 0) summary.append("${ChatColor.RED}$failCount 失败 ${ChatColor.GRAY}/ ")
+            if (skipCount > 0) summary.append("${ChatColor.YELLOW}$skipCount 跳过 ${ChatColor.GRAY}/ ")
+            summary.append("(${took}ms)")
+            sender.sendMessage(summary.toString())
+            results.filter { !it.success() }.forEach { sender.sendMessage("  ${it.formatted()}") }
         }
     }
 

@@ -14,7 +14,7 @@
 
 ## 1. addon 模块
 
-`settings.gradle.kts` 里的脚本引擎是下面两个。它们不是 Bukkit 插件：没有 `plugin.yml`，也不注册命令。两个 jar 只含 Graal 运行时和桥，不含 Nukkit 代码，所以另一边的服务端也能把同一对 jar 放进自己的 `engines/`。
+`settings.gradle.kts` 里的脚本引擎是下面两个。它们不是 Bukkit 插件：没有 `plugin.yml`，也不注册命令，jar 里只有 Graal 运行时和桥接类，没有其他平台代码。主插件在运行时用自己的 classloader 把它们从 `engines/` 加载进来。
 
 | 模块 | 是什么 | 产物与位置 |
 |------|--------|------------|
@@ -28,9 +28,11 @@
 # addon/GraalPy/build/libs/HuHoBot-Engine-GraalPy-<版本>.jar
 ```
 
-GraalJS 解压后约 37 MB，GraalPy 约 180 MB。两个 jar 各带一份 polyglot / Truffle 运行时，互不依赖，所以只用其中一种时不必放另一个。构建时直接依赖语言实现（`js-language`、`python-language`），不用 `*-community` 那个 POM：它的真正引擎是 runtime scope，Gradle 不传递，shadowJar 会是空壳。
+GraalJS 约 34 MB，GraalPy 约 125 MB。两个 jar 各带一份 polyglot / Truffle 运行时，互不依赖，所以只用其中一种时不必放另一个。构建时直接依赖语言实现（`js-language`、`python-language`），不用 `*-community` 那个 POM：它的真正引擎是 runtime scope，Gradle 不传递，shadowJar 会是空壳。
 
 `engines/` 在插件启动时创建。第一次加载 `.js` 或 `.py` 时，目录里所有 `*.jar` 挂到同一个 `URLClassLoader`（父加载器是插件自己的），结果被缓存。GraalVM 24.1 从**当前线程的 context classloader** 发现语言，`Engine.newBuilder` / `Context.newBuilder` 又没有 classloader 参数，所以建引擎期间线程加载器会被临时换成引擎 jar 的，调用结束再换回来。语言发现本身在引擎 jar 里的桥接类上完成，主插件编译期不依赖 Graal。
+
+引擎 jar 的文件名带构建版本。放进 `engines/` 的 `HuHoBot-Engine-*.jar` 如果和当前插件版本对不上，启动时会写一条警告——这种组合下脚本多半会以难懂的方式失败，换成同一次构建产出的 jar 即可。
 
 不放对应的 jar，插件正常启动，该语言的脚本加载时报「未安装脚本引擎」，其它语言不受影响。
 
@@ -50,6 +52,22 @@ GraalJS 解压后约 37 MB，GraalPy 约 180 MB。两个 jar 各带一份 polygl
 `Bird` 是每个脚本各一份。脚本重载时，这一份登记过的 Bukkit 事件、动态命令、定时任务和 QQ 自定义命令会一起卸掉。
 
 自定义事件总线（`Bird.on` / `Bird.emit`）是唯一的跨脚本通道，而且它是进程内静态的：一个脚本 `emit`，其它脚本用同一个名字 `on` 就能收到。
+
+### 1.1 引擎桥 API
+
+主 jar 里没有 polyglot 运行时，也编译期不引用 GraalVM，所以它和引擎之间是**纯反射契约**：`ScriptAddonLoader` 与 `BirdScriptApi` 只按类名和方法签名去找引擎 jar 里的桥接类。改签名时必须两边同步改，否则运行时才炸。
+
+| 引擎 | 类名 | 主插件调用的方法 |
+|------|------|------------------|
+| GraalJS | `cn.huohuas001.huhobot.graaljs.GraalJsBridge` | `open()` → `Session`；`adapt(Object, Class)`；`Session.bind/eval/close` |
+| GraalPy | `cn.huohuas001.huhobot.graalpy.GraalPyBridge` | `createEngine()`；`providesPython(Object)`；`warmUp(Object)`；`open(Object)` → `Session`；`adapt(Object, Class)`；`Session.bind/eval/evalSource/close` |
+
+约束：
+
+- **`adapt(Object, Class)` 两个引擎签名一致**，`BirdScriptApi` 按 `GraalJsBridge` → `GraalPyBridge` 的顺序找，找到哪个用哪个。脚本回调参数在主插件侧一律声明成 `Object`，Graal 的 host access 交出来的是原始 `Value`，由这两个方法 proxy 成目标函数式接口。
+- **GraalPy 的 `Engine` 是所有 `.py` 脚本共享的**，所以 host access 必须是同一个实例（`HOST_ACCESS`）。GraalVM 要求共享 Engine 的所有 Context 配置完全一致，每次 `new` 一个会被判为「配置不同」直接拒绝。
+- **`createEngine()` 必须在引擎 classloader 里调用**（GraalVM 24.1 从当前线程的 context classloader 发现语言，而 `Engine.newBuilder` 没有 classloader 参数）。主插件在建引擎和建上下文期间会把线程加载器临时换成引擎 jar 的。
+- **`open(...)` 建出的 `Session` 不拥有 Engine**，关掉 Session 不会关掉共享 Engine。Engine 和 `URLClassLoader` 只在插件 `onDisable` 时由 `ScriptAddonLoader.closeEngines()` 关闭。
 
 ---
 
@@ -153,7 +171,7 @@ addons/welcome/
 3. 同样注入 `Bird`、`Bukkit`、`server`、`plugin`、`config`、`kv`、`DATA_DIR`。`requirements.txt` 里的模块会先 `import` 一次，缺了只记警告，然后 `eval(文件)`。顶层即执行。
 4. 脚本错误被包成引擎 jar 里的 `GraalPyBridge.Failure`（主插件 classpath 上没有 `PolyglotException`）。`line()` 有源码行号时，日志会带 `(line N)`。
 
-GraalPy 是 Python 3。Nukkit 侧的 `.py` 也是 GraalPy，但桥和全局对象不同（那边是 `api`，这边是 `Bird`），两边的脚本不能互相拷。
+GraalPy 就是 Python 3，脚本里拿到的全局对象是 `Bird`，与 JS / Lua 完全一致。
 
 ### 3.6 重载
 
@@ -166,13 +184,13 @@ GraalPy 是 Python 3。Nukkit 侧的 `.py` 也是 GraalPy，但桥和全局对�
 
 ### 3.7 失败、重名和禁用
 
-- 入口编译或执行失败：控制台一条 `[名字] ... error`。加载前已经 `registerAddon` 的那份会被 `unregisterAddon` 撤掉，不会在 QQ 菜单里留下一个空插件。其它目录继续加载。
+- 入口编译或执行失败：控制台一条 `[名字] ... error`。加载前已经 `registerAddon` 的那份会被 `unregisterAddon` 撤掉，脚本在这之前登记的命令、事件、定时任务和 QQ 群命令也一并撤销，不会在 QQ 菜单里留下一个空插件。其它目录继续加载。
 - 两个目录的 `metadata.yaml` 写成同一个 `name`：后一个被跳过，日志写「插件名已被另一个目录使用」。重载键是目录名，登记名是 metadata 的 `name`，两者必须一一对应。
 - 脚本跑起来之后抛错（事件、定时任务、命令回调）：`Bird` 捕获后写警告，不会把服务器打崩。
-- `addons/config/<名字>.json` 里 `"_enabled": false`：这个目录不加载，日志记「已禁用」。
+- `addons/config/<名字>.json` 里 `"_enabled": false`：这个目录不加载，日志记「已在配置里禁用」，`/huhobot scripts reload` 把它算作「跳过」而不是「失败」。
 - schema 里某个键的 `default` 是 `null` 或没写：这个键不进配置表，`config.get` 返回 `null`，不会让插件加载失败。
 - 配置或 kv 写盘失败：stderr 打 `[script-config]` 或 `[script-kv]`，不再静默丢掉。
-- 插件 `onDisable`：`unloadAll()`，每个脚本走 `Bird.unregisterAll()`，再关掉对应的引擎上下文。
+- 插件 `onDisable`：`unloadAll()`，每个脚本走 `Bird.unregisterAll()`，再关掉对应的引擎上下文，最后关掉共享的 GraalPy `Engine` 和 `engines/` 的类加载器。
 
 ### 3.8 重载时卸掉什么
 
@@ -184,13 +202,17 @@ GraalPy 是 Python 3。Nukkit 侧的 `.py` 也是 GraalPy，但桥和全局对�
 4. 删掉它登记的 QQ 群命令。
 5. `unregisterAddon`，再按同样的流程重新加载这个目录。
 
-其它目录不受影响。Lua 的 `Globals` 没有要关的资源；JS 和 Python 会关掉自己的 polyglot `Context`。Spigot 的 GraalPy `Engine` 是所有 `.py` 共享的一个，重载单个插件不会把它关掉。
+加载失败时走同一套撤销步骤（第 1~5 步），所以半路抛错的脚本不会把已登记的东西留在服务器上。
+
+其它目录不受影响。Lua 的 `Globals` 没有要关的资源；JS 和 Python 会关掉自己的 polyglot `Context`。Spigot 的 GraalPy `Engine` 是所有 `.py` 共享的一个，重载单个插件不会把它关掉；插件 `onDisable` 时才会连同 `engines/` 的 `URLClassLoader` 一起关掉。
 
 ---
 
 ## 4. 暴露的桥：`Bird`
 
 `Bird` 的类型是 `BirdScriptApi`。JS 和 Python 用点调用，Lua 用冒号调用。参数个数少于重载的会命中更短的那个重载。
+
+回调参数在 Java 侧一律声明成 `Object`，由桥接层转成脚本函数。这一层是必需的：LuaJ 在目标方法有 3 个以上参数且其中含函数式接口时不做自动转换，直接调用会抛 `no coercible public method`。Lua 回调由 `Bird` 内部的动态代理调用，所以 `onCommand`、`onEvent`、`runTask*`、`on`、`fetch` 的全部重载在 Lua 里都能用；返回值（Tab 补全的 table）会自动转回 `List<String>`。传进来的东西不是函数时记一条警告并跳过该项注册，其余脚本继续执行。
 
 ### 4.1 事件
 
@@ -352,7 +374,7 @@ Bird.runCommandAs(玩家, "spawn")     以该玩家身份
 
 ### 4.12 其它
 
-`log(消息)` / `warn(消息)` 写到服务器日志，前缀是 `[文件名]`。`random(min, max)` 含两端。`formatTime(秒)` 返回 `HH:MM:SS`。`getServer()` 返回 Bukkit `Server`。
+`log(消息)` / `warn(消息)` 写到服务器日志，前缀是 `[插件名]`（取自目录名或 metadata 的 `name`，不是入口文件名）。`random(min, max)` 含两端。`formatTime(秒)` 返回 `HH:MM:SS`。`getServer()` 返回 Bukkit `Server`。
 
 ---
 
@@ -392,7 +414,7 @@ var player = Bird.getPlayer("Steve");
 if (player !== null) player.setGameMode(GameMode.CREATIVE);
 ```
 
-加载失败时控制台会看到带原因的 `[welcome.js] Failed to load: ...`。这条脚本不会作为可用 addon 留下，同目录其它脚本照常加载。
+加载失败时控制台会看到带原因的 `[welcome] Failed to load: ...`。这条脚本不会作为可用 addon 留下：它在这之前已经登记的命令、事件监听、定时任务和 QQ 群命令都会被撤销，同目录其它脚本照常加载。
 
 ---
 
@@ -441,7 +463,7 @@ Bird:log("Bukkit 报告在线 " .. players:size())
 
 入口：`plugins/HuHoBotPenguin/addons/welcome/main.py`
 
-需要 `HuHoBot-Engine-GraalPy-<版本>.jar`。这是 Python 3（GraalPy），用点和普通函数，没有 Nukkit 那套 `api.register_event`。
+需要 `HuHoBot-Engine-GraalPy-<版本>.jar`。这是 Python 3（GraalPy），用点和普通函数。
 
 ```python
 def on_join(event):
@@ -468,7 +490,7 @@ def on_motd(result):
 Bird.fetch("https://example.com/motd.txt", on_motd)
 ```
 
-语法错误会带行号，例如 `[welcome.py] Python error: ... (line 4)`。
+语法错误会带行号，例如 `[welcome] Python error: ... (line 4)`。
 
 ---
 

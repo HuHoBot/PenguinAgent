@@ -29,16 +29,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.lang.reflect.Field;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -59,7 +60,13 @@ public class BirdScriptApi {
 
     private final HuHoBotSpigot plugin;
     private final String scriptName;
-    /** GraalJS hands functions over as raw values; this turns them into the interface a method declared. */
+    /** Graal 的两个引擎桥，按顺序尝试；GraalJS / GraalPy 的 adapt 签名一致。 */
+    private static final String[] GRAAL_BRIDGES = {
+            "cn.huohuas001.huhobot.graaljs.GraalJsBridge",
+            "cn.huohuas001.huhobot.graalpy.GraalPyBridge"
+    };
+
+    /** Graal 引擎把脚本函数以原始 value 交出来，这个字段把它转成方法声明的接口。 */
     private volatile java.lang.reflect.Method jsAdapter;
     private final Listener dummyListener = new Listener() {};
     private final List<Runnable> cleanupTasks = new ArrayList<>();
@@ -77,10 +84,10 @@ public class BirdScriptApi {
 
     private final File filesFolder;
 
-    private static final Set<String> BLOCKED_EXTENSIONS = Set.of(
+    private static final Set<String> BLOCKED_EXTENSIONS = new HashSet<>(Arrays.asList(
             "exe", "bat", "cmd", "dll", "so", "autorun", "ps1", "ps2", "psm1",
             "php", "sh", "bash", "vbs", "vbe", "wsf", "wsh", "jse", "jar", "msi", "scr"
-    );
+    ));
 
     public BirdScriptApi(HuHoBotSpigot plugin, String scriptName, File addonsFolder) {
         this.plugin = plugin;
@@ -109,33 +116,112 @@ public class BirdScriptApi {
     }
 
     /**
-     * GraalJS keeps a script function as its own value object instead of converting it,
-     * because its default conversion only ever produces {@code java.util.function.Function}
-     * and that breaks callbacks with any other shape. When such a value reaches a method
-     * declared with a functional interface, adapt it to exactly that interface.
-     * Lua and Python already arrive as the right type and pass through untouched.
+     * 把脚本回调适配成目标函数式接口。
+     *
+     * <p>JavaScript：GraalJS 会把脚本函数保留成自己的值对象（它的默认转换只会产出
+     * {@code java.util.function.Function}），由引擎 jar 里的 {@code GraalJsBridge.adapt} 转换。
+     *
+     * <p>Lua：LuaJ 在方法参数超过 2 个且其中含函数式接口时无法自动转换，会抛
+     * {@code no coercible public method}。因此这里用 {@link java.lang.reflect.Proxy} 手动桥接：
+     * Java 参数转成 LuaValue 调用脚本函数，返回值再转回 Java。
+     *
+     * <p>Python：GraalPy 直接给出目标接口的实例，原样返回。
      */
     private Object adapt(Object value, Class<?> type) {
         if (value == null || type == null || !type.isInterface() || type.isInstance(value)) return value;
+
+        if (value instanceof org.luaj.vm2.LuaValue) {
+            return luaProxy((org.luaj.vm2.LuaValue) value, type);
+        }
+
         java.lang.reflect.Method adapter = jsAdapter;
         if (adapter == null) {
-            try {
-                Class<?> bridge = Class.forName("cn.huohuas001.huhobot.graaljs.GraalJsBridge", false, value.getClass().getClassLoader());
-                adapter = bridge.getMethod("adapt", Object.class, Class.class);
-                jsAdapter = adapter;
-            } catch (ClassNotFoundException absent) {
-                return value;
-            } catch (ReflectiveOperationException error) {
-                warn("无法适配 JavaScript 回调: " + error.getMessage());
-                return value;
-            }
+            adapter = resolveAdapter(value.getClass().getClassLoader());
+            if (adapter == null) return value;
+            jsAdapter = adapter;
         }
         try {
             return adapter.invoke(null, value, type);
         } catch (ReflectiveOperationException error) {
-            warn("无法适配 JavaScript 回调: " + error.getMessage());
+            warn("无法适配 Graal 回调: " + error.getMessage());
             return value;
         }
+    }
+
+    /**
+     * 找 Graal 引擎的 adapt 实现。两个引擎的 host access 都把脚本函数以原始
+     * {@code Value} 交出来（目标类型是 {@code Object}，没有接口可按目标类型转换），
+     * 所以桥接类必须自己 proxy。两个引擎的桥都可能在也可能只有一个，
+     * 因此依次尝试，找到哪个算哪个。
+     */
+    private java.lang.reflect.Method resolveAdapter(ClassLoader loader) {
+        for (String bridge : GRAAL_BRIDGES) {
+            try {
+                Class<?> type = Class.forName(bridge, false, loader);
+                return type.getMethod("adapt", Object.class, Class.class);
+            } catch (ClassNotFoundException | NoSuchMethodException absent) {
+                // 试下一个
+            } catch (Throwable error) {
+                warn("无法加载 " + bridge + ": " + error);
+            }
+        }
+        return null;
+    }
+
+    /** 用动态代理把 LuaJ 的 LuaFunction 桥接成 Java 函数式接口。 */
+    private Object luaProxy(org.luaj.vm2.LuaValue function, Class<?> type) {
+        return java.lang.reflect.Proxy.newProxyInstance(
+                type.getClassLoader(),
+                new Class<?>[]{type},
+                (proxy, method, args) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        String name = method.getName();
+                        if ("toString".equals(name)) return "LuaFunctionProxy";
+                        if ("hashCode".equals(name)) return System.identityHashCode(proxy);
+                        if ("equals".equals(name)) return proxy == args[0];
+                        return null;
+                    }
+                    org.luaj.vm2.LuaValue[] luaArgs = new org.luaj.vm2.LuaValue[args == null ? 0 : args.length];
+                    for (int i = 0; i < luaArgs.length; i++) {
+                        luaArgs[i] = org.luaj.vm2.lib.jse.CoerceJavaToLua.coerce(args[i]);
+                    }
+                    // LuaJ 的可变参数入口是 invoke(LuaValue[])，call() 只有固定元数。
+                    org.luaj.vm2.LuaValue returned = function.invoke(luaArgs).arg1();
+                    return luaToJava(returned, method.getReturnType());
+                });
+    }
+
+    /** 把 Lua 返回值转回 Java：LuaTable→List、LuaString→String、数字→Number、LuaBoolean→boolean、nil→null。 */
+    private static Object luaToJava(org.luaj.vm2.LuaValue value, Class<?> returnType) {
+        if (value == null || value.isnil()) return null;
+        if (value instanceof org.luaj.vm2.LuaTable) {
+            org.luaj.vm2.LuaTable table = (org.luaj.vm2.LuaTable) value;
+            List<Object> list = new ArrayList<>();
+            int length = table.length();
+            for (int i = 1; i <= length; i++) {
+                list.add(luaToJava(table.get(i), Object.class));
+            }
+            return list;
+        }
+        if (value instanceof org.luaj.vm2.LuaString) return value.tojstring();
+        if (value instanceof org.luaj.vm2.LuaNumber) {
+            double d = value.todouble();
+            if (returnType == int.class || returnType == Integer.class) return (int) d;
+            if (returnType == long.class || returnType == Long.class) return (long) d;
+            if (returnType == double.class || returnType == Double.class) return d;
+            if (returnType == float.class || returnType == Float.class) return (float) d;
+            return (int) d;
+        }
+        if (value instanceof org.luaj.vm2.LuaBoolean) return value.toboolean();
+        return value.tojstring();
+    }
+
+    /** 把任意脚本回调转成 Runnable（Lua/JS 走 Proxy，Java 侧本来就是 Runnable）。 */
+    private Runnable toRunnable(Object callback) {
+        if (callback instanceof Runnable) return (Runnable) callback;
+        Object adapted = adapt(callback, Runnable.class);
+        if (adapted instanceof Runnable) return (Runnable) adapted;
+        return () -> warn("任务回调不是可调用的函数: " + callback);
     }
 
     public void log(Object message) {
@@ -148,8 +234,13 @@ public class BirdScriptApi {
 
     // ---------------------------------------------------------------- events
 
-    public void onEvent(String eventClassName, String priority, EventCallback callback) {
-        EventCallback handler = (EventCallback) adapt(callback, EventCallback.class);
+    public void onEvent(String eventClassName, String priority, Object callback) {
+        Object adapted = adapt(callback, EventCallback.class);
+        if (!(adapted instanceof EventCallback)) {
+            warn("事件回调不是可调用的函数: " + eventClassName);
+            return;
+        }
+        EventCallback handler = (EventCallback) adapted;
         try {
             @SuppressWarnings("unchecked")
             Class<? extends Event> eventClass = (Class<? extends Event>) Class.forName(eventClassName);
@@ -184,38 +275,48 @@ public class BirdScriptApi {
         }
     }
 
-    public void onEvent(String eventClassName, EventCallback callback) {
+    public void onEvent(String eventClassName, Object callback) {
         onEvent(eventClassName, "NORMAL", callback);
     }
 
     // ---------------------------------------------------------------- commands
 
-    public void onCommand(String name, CommandCallback callback) {
+    public void onCommand(String name, Object callback) {
         onCommand(name, null, callback, null);
     }
 
-    public void onCommand(String name, String permission, CommandCallback callback) {
+    public void onCommand(String name, String permission, Object callback) {
         onCommand(name, permission, callback, null);
     }
 
-    public void onCommand(String name, CommandCallback callback, TabCompleteCallback tabCompleteCallback) {
+    public void onCommand(String name, Object callback, Object tabCompleteCallback) {
         onCommand(name, null, callback, tabCompleteCallback);
     }
 
-    public void onCommand(String name, String permission, CommandCallback callback, TabCompleteCallback tabCompleteCallback) {
-        callback = (CommandCallback) adapt(callback, CommandCallback.class);
-        tabCompleteCallback = (TabCompleteCallback) adapt(tabCompleteCallback, TabCompleteCallback.class);
+    public void onCommand(String name, String permission, Object callback, Object tabCompleteCallback) {
+        Object adaptedCommand = adapt(callback, CommandCallback.class);
+        if (!(adaptedCommand instanceof CommandCallback)) {
+            warn("命令回调不是可调用的函数: /" + name);
+            return;
+        }
+        Object adaptedTab = tabCompleteCallback == null ? null : adapt(tabCompleteCallback, TabCompleteCallback.class);
+        if (tabCompleteCallback != null && !(adaptedTab instanceof TabCompleteCallback)) {
+            warn("Tab 补全回调不是可调用的函数: /" + name);
+            adaptedTab = null;
+        }
+        CommandCallback commandCallback = (CommandCallback) adaptedCommand;
+        TabCompleteCallback tab = (TabCompleteCallback) adaptedTab;
         CommandMap map = getCommandMap();
         if (map == null) {
             warn("Could not access the CommandMap - command /" + name + " will not work");
             return;
         }
-        BirdDynamicCommand cmd = new BirdDynamicCommand(name, callback);
+        BirdDynamicCommand cmd = new BirdDynamicCommand(name, commandCallback);
         if (permission != null && !permission.isEmpty()) {
             cmd.setPermission(permission);
         }
-        if (tabCompleteCallback != null) {
-            cmd.setTabCompleteCallback(tabCompleteCallback);
+        if (tab != null) {
+            cmd.setTabCompleteCallback(tab);
         }
         map.register(plugin.getName().toLowerCase(), cmd);
         cleanupTasks.add(() -> removeCommand(map, cmd));
@@ -241,31 +342,31 @@ public class BirdScriptApi {
 
     // ---------------------------------------------------------------- scheduler
 
-    public int runTask(Runnable task) {
+    public int runTask(Object task) {
         BukkitTask t = plugin.getServer().getScheduler().runTask(plugin, wrap(task));
         trackTask(t);
         return t.getTaskId();
     }
 
-    public int runTaskLater(Runnable task, long delayTicks) {
+    public int runTaskLater(Object task, long delayTicks) {
         BukkitTask t = plugin.getServer().getScheduler().runTaskLater(plugin, wrap(task), delayTicks);
         trackTask(t);
         return t.getTaskId();
     }
 
-    public int runTaskTimer(Runnable task, long delayTicks, long periodTicks) {
+    public int runTaskTimer(Object task, long delayTicks, long periodTicks) {
         BukkitTask t = plugin.getServer().getScheduler().runTaskTimer(plugin, wrap(task), delayTicks, periodTicks);
         trackTask(t);
         return t.getTaskId();
     }
 
-    public int runTaskAsync(Runnable task) {
+    public int runTaskAsync(Object task) {
         BukkitTask t = plugin.getServer().getScheduler().runTaskAsynchronously(plugin, wrap(task));
         trackTask(t);
         return t.getTaskId();
     }
 
-    public int runTaskTimerAsync(Runnable task, long delayTicks, long periodTicks) {
+    public int runTaskTimerAsync(Object task, long delayTicks, long periodTicks) {
         BukkitTask t = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, wrap(task), delayTicks, periodTicks);
         trackTask(t);
         return t.getTaskId();
@@ -275,8 +376,8 @@ public class BirdScriptApi {
         plugin.getServer().getScheduler().cancelTask(taskId);
     }
 
-    private Runnable wrap(Runnable task) {
-        Runnable adapted = (Runnable) adapt(task, Runnable.class);
+    private Runnable wrap(Object task) {
+        Runnable adapted = toRunnable(task);
         return () -> {
             try {
                 adapted.run();
@@ -322,6 +423,16 @@ public class BirdScriptApi {
     public void tell(Player player, String message) {
         if (player != null) {
             player.sendMessage(colorize(message));
+        }
+    }
+
+    /**
+     * 往任意命令发送者回消息。控制台、命令方块、玩家都走这个，所以脚本在控制台里
+     * 执行命令时也能正常回应——只有 {@link #tell(Player, String)} 的话会直接类型不匹配。
+     */
+    public void tell(org.bukkit.command.CommandSender target, String message) {
+        if (target != null) {
+            target.sendMessage(colorize(message));
         }
     }
 
@@ -865,8 +976,13 @@ public class BirdScriptApi {
     // ---------------------------------------------------------------- custom events
 
     @SuppressWarnings("unchecked")
-    public void on(String eventName, Consumer<Object> callback) {
-        Consumer<Object> listener = (Consumer<Object>) adapt(callback, Consumer.class);
+    public void on(String eventName, Object callback) {
+        Object adapted = adapt(callback, Consumer.class);
+        if (!(adapted instanceof Consumer)) {
+            warn("脚本间事件回调不是可调用的函数: " + eventName);
+            return;
+        }
+        Consumer<Object> listener = (Consumer<Object>) adapted;
         customEventBus.computeIfAbsent(eventName, k -> new CopyOnWriteArrayList<>()).add(listener);
         cleanupTasks.add(() -> {
             CopyOnWriteArrayList<Consumer<Object>> list = customEventBus.get(eventName);
@@ -890,58 +1006,32 @@ public class BirdScriptApi {
 
     // ---------------------------------------------------------------- http
 
-    public void fetch(String url, Consumer<HttpResult> callback) {
+    public void fetch(String url, Object callback) {
         fetchInternal(url, "GET", null, null, callback);
     }
 
-    public void fetch(String url, String method, Consumer<HttpResult> callback) {
+    public void fetch(String url, String method, Object callback) {
         fetchInternal(url, method, null, null, callback);
     }
 
-    public void fetch(String url, String method, String body, Consumer<HttpResult> callback) {
+    public void fetch(String url, String method, String body, Object callback) {
         fetchInternal(url, method, body, null, callback);
     }
 
-    public void fetch(String url, String method, String body, Map<String, String> headers, Consumer<HttpResult> callback) {
+    public void fetch(String url, String method, String body, Map<String, String> headers, Object callback) {
         fetchInternal(url, method, body, headers, callback);
     }
 
     @SuppressWarnings("unchecked")
-    private void fetchInternal(String url, String method, String body, Map<String, String> headers, Consumer<HttpResult> callback) {
-        Consumer<HttpResult> listener = (Consumer<HttpResult>) adapt(callback, Consumer.class);
+    private void fetchInternal(String url, String method, String body, Map<String, String> headers, Object callback) {
+        Object adapted = callback == null ? null : adapt(callback, Consumer.class);
+        if (callback != null && !(adapted instanceof Consumer)) {
+            warn("HTTP 回调不是可调用的函数，已忽略");
+            return;
+        }
+        Consumer<HttpResult> listener = (Consumer<HttpResult>) adapted;
         BukkitTask task = plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            HttpResult result;
-            try {
-                HttpClient client = HttpClient.newBuilder()
-                        .connectTimeout(Duration.ofSeconds(10))
-                        .build();
-                HttpRequest.Builder builder = HttpRequest.newBuilder()
-                        .uri(URI.create(url))
-                        .timeout(Duration.ofSeconds(10));
-
-                boolean hasContentType = false;
-                if (headers != null) {
-                    for (Map.Entry<String, String> e : headers.entrySet()) {
-                        builder.header(e.getKey(), e.getValue());
-                        if (e.getKey().equalsIgnoreCase("Content-Type")) hasContentType = true;
-                    }
-                }
-
-                String m = (method == null || method.isEmpty()) ? "GET" : method.toUpperCase();
-                HttpRequest.BodyPublisher publisher = body != null
-                        ? HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)
-                        : HttpRequest.BodyPublishers.noBody();
-                if (body != null && !hasContentType) {
-                    builder.header("Content-Type", "application/json");
-                }
-                builder.method(m, publisher);
-
-                HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-                result = new HttpResult(response.statusCode(), response.body());
-            } catch (Exception e) {
-                result = new HttpResult(0, "Request failed: " + e.getMessage());
-            }
-
+            HttpResult result = httpExchange(url, method, body, headers);
             HttpResult finalResult = result;
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 try {
@@ -955,6 +1045,68 @@ public class BirdScriptApi {
         trackTask(task);
     }
 
+    /**
+     * 执行一次 HTTP 请求。用 {@link HttpURLConnection} 而不是 {@code java.net.http}，
+     * 因为主插件要跑在 Java 8 上；用完立即 disconnect，避免连接池堆积。
+     */
+    private HttpResult httpExchange(String url, String method, String body, Map<String, String> headers) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setConnectTimeout(10_000);
+            connection.setReadTimeout(10_000);
+            connection.setRequestMethod((method == null || method.isEmpty()) ? "GET" : method.toUpperCase());
+            connection.setRequestProperty("Accept", "*/*");
+
+            boolean hasContentType = false;
+            if (headers != null) {
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) continue;
+                    connection.setRequestProperty(entry.getKey(), entry.getValue());
+                    if ("Content-Type".equalsIgnoreCase(entry.getKey())) hasContentType = true;
+                }
+            }
+            if (body != null && !hasContentType) {
+                connection.setRequestProperty("Content-Type", "application/json");
+            }
+            if (body != null) {
+                byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                connection.setDoOutput(true);
+                connection.setFixedLengthStreamingMode(payload.length);
+                OutputStream out = connection.getOutputStream();
+                try {
+                    out.write(payload);
+                } finally {
+                    out.close();
+                }
+            }
+
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 200 && status < 400
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+            String text = "";
+            if (stream != null) {
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                try {
+                    byte[] chunk = new byte[4096];
+                    int read;
+                    while ((read = stream.read(chunk)) > 0) {
+                        buffer.write(chunk, 0, read);
+                    }
+                } finally {
+                    stream.close();
+                }
+                text = new String(buffer.toByteArray(), StandardCharsets.UTF_8);
+            }
+            return new HttpResult(status, text);
+        } catch (Exception e) {
+            return new HttpResult(0, "Request failed: " + e.getMessage());
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
     public void sendDiscordWebhook(String webhookUrl, String message) {
         sendDiscordWebhook(webhookUrl, message, null, null);
     }
@@ -964,7 +1116,7 @@ public class BirdScriptApi {
         if (username != null) json.append(",\"username\":\"").append(jsonEscape(username)).append("\"");
         if (avatarUrl != null) json.append(",\"avatar_url\":\"").append(jsonEscape(avatarUrl)).append("\"");
         json.append("}");
-        fetchInternal(webhookUrl, "POST", json.toString(), null, result -> {
+        fetchInternal(webhookUrl, "POST", json.toString(), null, (Consumer<HttpResult>) result -> {
             if (!result.ok) {
                 warn("Discord webhook failed (" + result.status + "): " + result.body);
             }
@@ -982,7 +1134,7 @@ public class BirdScriptApi {
         String json = "{\"embeds\":[{\"title\":\"" + jsonEscape(title)
                 + "\",\"description\":\"" + jsonEscape(description)
                 + "\",\"color\":" + color + "}]}";
-        fetchInternal(webhookUrl, "POST", json, null, result -> {
+        fetchInternal(webhookUrl, "POST", json, null, (Consumer<HttpResult>) result -> {
             if (!result.ok) {
                 warn("Discord embed webhook failed (" + result.status + "): " + result.body);
             }
@@ -1162,28 +1314,45 @@ public class BirdScriptApi {
         for (Runnable r : cleanupTasks) {
             try {
                 r.run();
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                plugin.getLogger().warning("[" + scriptName + "] 清理时出错: " + e.getMessage());
             }
         }
         cleanupTasks.clear();
         for (String key : new ArrayList<>(botCommandKeys)) {
             try {
                 plugin.unregisterBotCommand(key);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                plugin.getLogger().warning("[" + scriptName + "] 注销 QQ 群命令 " + key + " 时出错: " + e.getMessage());
             }
         }
         botCommandKeys.clear();
     }
 
+    /**
+     * 取 Bukkit 的 CommandMap。字段 {@code commandMap} 声明在 CraftServer 上，但
+     * 服务端实现可能把它放在父类里，所以沿继承链往上找；找不到就明确告警一次，
+     * 而不是让每个 onCommand 静默失效。
+     */
     private static CommandMap getCommandMap() {
         if (commandMap != null) return commandMap;
         try {
-            Field f = Bukkit.getServer().getClass().getDeclaredField("commandMap");
-            f.setAccessible(true);
-            commandMap = (CommandMap) f.get(Bukkit.getServer());
+            Class<?> type = Bukkit.getServer().getClass();
+            while (type != null) {
+                try {
+                    Field f = type.getDeclaredField("commandMap");
+                    f.setAccessible(true);
+                    commandMap = (CommandMap) f.get(Bukkit.getServer());
+                    return commandMap;
+                } catch (NoSuchFieldException tryParent) {
+                    type = type.getSuperclass();
+                }
+            }
+            // getCommandMap 是静态的，拿不到实例 logger，这里退回 Bukkit 的。
+            Bukkit.getLogger().severe("无法访问 CommandMap：当前服务端实现里找不到 commandMap 字段，脚本命令将无法注册");
         } catch (Exception e) {
-            e.printStackTrace();
+            Bukkit.getLogger().severe("无法访问 CommandMap：" + e);
         }
-        return commandMap;
+        return null;
     }
 }

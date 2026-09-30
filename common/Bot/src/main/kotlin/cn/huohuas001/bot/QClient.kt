@@ -12,6 +12,7 @@ import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.BotShared
 import cn.huohuas001.bot.state.CommandRepositories
 import cn.huohuas001.bot.state.GroupDirectory
+import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.bot.tools.QqBotConsoleOutputFilter
 import com.alibaba.fastjson.JSON
 import io.github.kloping.qqbot.Starter
@@ -32,6 +33,8 @@ import java.util.concurrent.TimeUnit
 object QClient {
     private const val KEYBOARD_RECALL_DELAY_SECONDS = 30L
     private const val GROUP_NAME_RETRY_MILLIS = 30_000L
+    private const val GROUP_PANELS_SYNC_RETRY_MILLIS = 1_000L
+    private const val GROUP_PANELS_SYNC_MAX_ATTEMPTS = 120
 
     private val groupNameAttempts = ConcurrentHashMap<String, Long>()
 
@@ -43,8 +46,39 @@ object QClient {
     private lateinit var starter: Starter
     private lateinit var groupMessageHandler: GroupMessageHandler
 
+    @Volatile
+    private var groupPanelsSyncPending = false
+
+    @Volatile
+    private var groupPanelsSyncRetry: Cancelable? = null
+
     /** 获取 QQ Bot Starter 实例（供 Agent 群管理 API 使用）。 */
     fun getStarter(): Starter? = if (::starter.isInitialized) starter else null
+
+    /** QQ 是否已完成鉴权：contextManager 只在鉴权成功后才会被赋值。 */
+    private fun isQqAuthenticated(): Boolean = try {
+        starter.APPLICATION.INSTANCE.contextManager != null
+    } catch (_: Throwable) {
+        false
+    }
+
+    /** 鉴权未完成时按秒重试面板同步，超过上限就放弃并告警。 */
+    private fun scheduleGroupPanelsSyncRetry() {
+        if (groupPanelsSyncRetry != null) return
+        var attempts = 0
+        groupPanelsSyncRetry = BotShared.getPlugin().submitTimer(GROUP_PANELS_SYNC_RETRY_MILLIS, GROUP_PANELS_SYNC_RETRY_MILLIS) {
+            if (!groupPanelsSyncPending) return@submitTimer
+            attempts++
+            if (isQqAuthenticated()) {
+                syncGroupPanels()
+            } else if (attempts >= GROUP_PANELS_SYNC_MAX_ATTEMPTS) {
+                groupPanelsSyncPending = false
+                groupPanelsSyncRetry?.cancel()
+                groupPanelsSyncRetry = null
+                BotShared.getPlugin().log_warning("面板同步: 等待 QQ 鉴权超时，已放弃本次同步")
+            }
+        }
+    }
 
     /**
      * 注册指令处理器,收到群消息后会自动分发
@@ -73,7 +107,21 @@ object QClient {
     }
 
     fun syncGroupPanels() {
-        if (!::starter.isInitialized || !::groupMessageHandler.isInitialized) return
+        if (!::starter.isInitialized || !::groupMessageHandler.isInitialized) {
+            groupPanelsSyncPending = true
+            return
+        }
+        // 脚本在启动早期就会登记 QQ 群命令，那时会顺带触发面板同步；但
+        // contextManager 只在 QQ 鉴权成功后才被赋值，提前访问必然 NPE。
+        // 这里先挂起，等鉴权完成再补同步。
+        if (!isQqAuthenticated()) {
+            groupPanelsSyncPending = true
+            scheduleGroupPanelsSyncRetry()
+            return
+        }
+        groupPanelsSyncPending = false
+        groupPanelsSyncRetry?.cancel()
+        groupPanelsSyncRetry = null
         val plugin = BotShared.getPlugin()
         val allCommands = groupMessageHandler.registeredCommands()
         val commandList = plugin.getCommandList()

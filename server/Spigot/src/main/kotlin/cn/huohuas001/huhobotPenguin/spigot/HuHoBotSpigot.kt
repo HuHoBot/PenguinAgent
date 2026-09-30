@@ -90,7 +90,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     /**
-     * 加载 plugins/HuHoBotPenguin/addons 下的 .js / .py / .lua 脚本扩展。
+     * 加载 plugins/HuHoBotPenguin/addons 下每个目录一个的脚本扩展。
      * Lua 用 LuaJ，打在主 jar 里。JS 用 GraalJS、Python 用 GraalPy，但这两个引擎都在独立 jar 里，
      * 需要放到 plugins/HuHoBotPenguin/engines/，否则对应脚本加载失败、插件照常运行。
      */
@@ -99,7 +99,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         scriptAddonLoader = loader
         try {
             val results = loader.loadAll()
-            val failed = results.count { !it.success() }
+            // _enabled=false 和「目录里没有 main.*」都是有意的跳过，不计入失败。
+            val failed = results.count { !it.success() && !it.skipped() }
             if (failed > 0) {
                 log_warning("脚本扩展加载失败 $failed/${results.size} 个，坏脚本已跳过，插件继续运行")
             }
@@ -110,8 +111,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     override fun onDisable() {
+        val loader = scriptAddonLoader
         try {
-            scriptAddonLoader?.unloadAll()
+            loader?.unloadAll()
+            // 引擎和它们的类加载器是跨脚本共享的，最后一并关掉，否则重载会越积越多。
+            loader?.closeEngines()
         } catch (error: Throwable) {
             log_error("卸载脚本扩展失败: ${error.message}")
         }

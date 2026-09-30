@@ -20,11 +20,10 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
     implementation("org.bstats:bstats-bukkit:3.2.1")
-    compileOnly("org.spigotmc:spigot-api:1.20.4-R0.1-SNAPSHOT")
+    compileOnly("org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-    implementation("org.bstats:bstats-bukkit:3.2.1")
 
     // 脚本扩展引擎。
     // LUA：LuaJ，打进主 jar。
@@ -36,7 +35,7 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(8)
 }
 
 tasks {

@@ -1,64 +1,76 @@
 package cn.huohuas001.huhobotPenguin.spigot.scripting;
 
 /**
- * Outcome of loading one script file. Adapted from BirdLibraryApi
+ * Outcome of loading one addon directory. Adapted from BirdLibraryApi
  * (https://github.com/prach1121/birdlibraryapi, Apache-2.0).
+ *
+ * <p>{@code skipped} is deliberately distinct from {@code failed}: an addon that
+ * declares {@code _enabled: false} in its manifest is intentionally not loaded,
+ * so it must not be reported to the operator as a failure.
  */
 public class ScriptLoadResult {
 
-    private final String fileName;
+    private final String name;
     private final boolean success;
-    private final String errorMessage;
+    private final boolean skipped;
+    private final String message;
     private final int line;
-    private final int column;
 
-    public ScriptLoadResult(String fileName, boolean success, String errorMessage, int line, int column) {
-        this.fileName = fileName;
+    private ScriptLoadResult(String name, boolean success, boolean skipped, String message, int line) {
+        this.name = name;
         this.success = success;
-        this.errorMessage = errorMessage;
+        this.skipped = skipped;
+        this.message = message;
         this.line = line;
-        this.column = column;
     }
 
-    public static ScriptLoadResult ok(String fileName) {
-        return new ScriptLoadResult(fileName, true, null, -1, -1);
+    public static ScriptLoadResult ok(String name) {
+        return new ScriptLoadResult(name, true, false, null, -1);
     }
 
-    public static ScriptLoadResult error(String fileName, String message) {
-        return new ScriptLoadResult(fileName, false, message, -1, -1);
+    /** Intentionally not loaded, e.g. {@code _enabled: false}. Not an error. */
+    public static ScriptLoadResult skipped(String name, String reason) {
+        return new ScriptLoadResult(name, false, true, reason, -1);
     }
 
-    public static ScriptLoadResult error(String fileName, String message, int line, int column) {
-        return new ScriptLoadResult(fileName, false, message, line, column);
+    public static ScriptLoadResult error(String name, String message) {
+        return new ScriptLoadResult(name, false, false, message, -1);
     }
 
-    public static ScriptLoadResult notFound(String fileName) {
-        return new ScriptLoadResult(fileName, false, "File not found", -1, -1);
+    public static ScriptLoadResult error(String name, String message, int line) {
+        return new ScriptLoadResult(name, false, false, message, line);
     }
 
-    public String fileName() {
-        return fileName;
+    public static ScriptLoadResult notFound(String name) {
+        return new ScriptLoadResult(name, false, false, "找不到该脚本插件目录", -1);
+    }
+
+    public String name() {
+        return name;
     }
 
     public boolean success() {
         return success;
     }
 
-    public String errorMessage() {
-        return errorMessage;
+    public boolean skipped() {
+        return skipped;
+    }
+
+    public String message() {
+        return message;
     }
 
     public String formatted() {
         if (success) {
-            return "§a✔ " + fileName;
+            return "§a✔ " + name;
         }
-        StringBuilder sb = new StringBuilder("§c✘ " + fileName + " §7- §c" + errorMessage);
+        if (skipped) {
+            return "§e⏭ " + name + " §7- §e" + message;
+        }
+        StringBuilder sb = new StringBuilder("§c✘ " + name + " §7- §c" + message);
         if (line >= 0) {
-            sb.append(" §7(line ").append(line);
-            if (column >= 0) {
-                sb.append(", col ").append(column);
-            }
-            sb.append(")");
+            sb.append(" §7(line ").append(line).append(")");
         }
         return sb.toString();
     }
