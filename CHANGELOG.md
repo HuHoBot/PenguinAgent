@@ -1,5 +1,40 @@
 # Changelog
 
+## v1.15.0（2026-09-30）
+
+### 新功能
+
+- feat: 脚本扩展系统（仅 Spigot）— 用 JavaScript / Lua / Python 写脚本插件，无需编译
+- feat: 目录式脚本插件 — `addons/<名字>/` 下放 `main.js` / `main.lua` / `main.py` 加 `metadata.yaml` 即一个插件
+- feat: `Bird` 桥 — 脚本可注册 Bukkit 事件、游戏内命令（含 Tab 补全）、定时任务、HTTP 回调、QQ 群命令
+- feat: `/huhobot scripts reload [目录名]` — 重载全部或单个脚本插件
+- feat: 脚本配置与数据 — `_conf_schema.json` 声明配置默认值，`config` / `kv` 两套键值空间，`setData` 持久化
+- feat: 跨脚本事件总线 — `Bird.on` / `Bird.emit`
+- feat: 引擎按需安装 — LuaJ 打进主 jar；GraalJS、GraalPy 拆成 `addon-GraalJs` / `addon-GraalPy`，从 `plugins/HuHoBotPenguin/engines/` 加载，不放也能启动
+- feat: 扩展注册 API 支持注销 — `AddonManager.unregister`，重载时真正撤掉 QQ 面板上的旧命令
+
+### 变更
+
+- change: 脚本加载失败或重载时撤销该脚本登记的全部内容（命令、监听器、定时任务、QQ 群命令、addon 元数据）
+- change: `_enabled: false` 与「目录里没有入口」记为「跳过」而不是「失败」
+- change: 插件停用时关闭共享的 GraalPy `Engine` 与引擎 `URLClassLoader`
+- change: 主插件保持 Java 8 字节码与 Spigot 1.16.5 基线，Java 9+ API 只允许出现在两个引擎包里
+
+### Bug 修复
+
+- fix: LuaJ 在目标方法有 3 个以上参数且含函数式接口时不做自动转换（`no coercible public method`），改为在桥接层用动态代理接管，Lua 侧全部重载可用
+- fix: LuaJ 把 Java `List` / `Map` 变成 userdata 导致 `#` / 下标 / `pairs` 全部失效，Lua 绑定层改为转成真正的 table（下标 1 起）
+- fix: Lua 侧宿主对象（`Player` 等）回调时未解包导致 `argument type mismatch`
+- fix: 脚本重载时同分重载靠反射返回顺序选择，结果不确定，改为按参数类型具体程度择优
+- fix: `Bird.tell` 缺少 `CommandSender` 重载，从控制台执行命令时无法回应
+- fix: `CommandMap` 反射只查当前类，字段在父类时所有 `onCommand` 静默失效
+- fix: 脚本加载失败时未回滚已登记的内容，半路失败的脚本会留下幽灵命令与监听器
+- fix: 启动早期脚本登记 QQ 群命令会触发面板同步，此时 QQ 尚未鉴权导致 `contextManager` 为空
+- fix: GraalPy 首次运行时 home 尚未解压完就加载 `.py` 脚本，导致标准库模块全部找不到
+- fix: 共享 Engine 的多个 Context 使用不同 host access 实例被 GraalVM 拒绝
+
+---
+
 ## v1.4.0（2026-08-29）
 
 ### 新功能
