@@ -197,7 +197,12 @@ class ConfigManager(
             "player-events.quit.format",
             "[游戏] {name} 离开了服务器"
         )!!,
-        alwaysForward = plugin.config.getBoolean("player-events.always-forward", false)
+        alwaysForward = plugin.config.getBoolean("player-events.always-forward", false),
+        deathEnabled = plugin.config.getBoolean("player-events.death.enabled", true),
+        deathFormat = plugin.config.getString(
+            "player-events.death.format",
+            "[游戏] {message}"
+        )!!
     )
 
     fun markdownFiles(): Map<String, String> {
@@ -391,6 +396,8 @@ class ConfigManager(
             "player-events.quit.enabled" to "是否转发玩家退服通知",
             "player-events.quit.format" to "退服通知格式，可用占位符：{name}、{player}、{server}、{platform}",
             "player-events.always-forward" to "是否忽略平台事件的隐藏/取消/登录状态判断，始终转发进退服事件",
+            "player-events.death.enabled" to "是否转发玩家死亡播报",
+            "player-events.death.format" to "死亡播报格式，可用占位符：{name}、{player}、{server}、{platform}、{message}（中文死亡描述）",
             "markdown.queryOnline" to "查在线命令使用的 Markdown 模板文件名",
             "motd.server-ip" to "MOTD 查询的服务器地址",
             "motd.server-port" to "MOTD 查询的服务器端口",
@@ -449,7 +456,8 @@ class ConfigManager(
             "我的背包",
             "我的末影箱",
             "背包查看",
-            "末影箱查看"
+            "末影箱查看",
+            "强制解绑"
         )
 
         private val DEFAULT_VALUES: Map<String, Any> = buildMap {
@@ -472,6 +480,8 @@ class ConfigManager(
             put("player-events.quit.enabled", true)
             put("player-events.quit.format", "[游戏] {name} 离开了服务器")
             put("player-events.always-forward", false)
+            put("player-events.death.enabled", true)
+            put("player-events.death.format", "[游戏] {message}")
 
             put("markdown.queryOnline", "online.md")
 

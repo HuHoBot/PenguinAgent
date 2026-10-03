@@ -91,7 +91,9 @@ object WebUiSchema {
             FieldSpec("player-events.join.enabled", "进服通知", "boolean", "玩家进服时在群内发送通知"),
             FieldSpec("player-events.join.format", "进服格式", "text", "占位符：{name}", placeholder = "[游戏] {name} 加入了服务器"),
             FieldSpec("player-events.quit.enabled", "退服通知", "boolean", "玩家退服时在群内发送通知"),
-            FieldSpec("player-events.quit.format", "退服格式", "text", "占位符：{name}", placeholder = "[游戏] {name} 离开了服务器")
+            FieldSpec("player-events.quit.format", "退服格式", "text", "占位符：{name}", placeholder = "[游戏] {name} 离开了服务器"),
+            FieldSpec("player-events.death.enabled", "死亡播报", "boolean", "玩家死亡时在群内播报死亡描述"),
+            FieldSpec("player-events.death.format", "死亡播报格式", "text", "占位符：{name}、{message}（中文死亡描述）", placeholder = "[游戏] {message}")
         )
     )
 

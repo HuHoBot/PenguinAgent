@@ -17,7 +17,14 @@ class PlayerEventFormat(
     val quitEnabled: Boolean,
     val quitFormat: String,
     /** 是否忽略平台事件的隐藏、取消或登录状态判断，始终转发进退服事件。 */
-    val alwaysForward: Boolean = false
+    val alwaysForward: Boolean = false,
+    /** 是否把玩家死亡播报到 QQ 群。 */
+    val deathEnabled: Boolean = false,
+    /**
+     * 死亡播报格式，可用 {name}、{player}、{server}、{platform}、{killer}、{message}。
+     * {message} 是中文死亡描述（不含死者名，如「被苦力怕杀死了」），{killer} 是击杀者名。
+     */
+    val deathFormat: String = "[游戏] {name} 死亡了"
 )
 
 class Motd(
@@ -130,6 +137,26 @@ interface ConfigProvider {
 
     fun formatPlayerQuitMessage(name: String): String =
         formatPlayerEventMessage(getPlayerEventFormat().quitFormat, name)
+
+    /**
+     * 格式化死亡播报。
+     *
+     * @param deathMessage 中文死亡描述（Spigot 侧由 DeathMessage 生成），替换格式中的 {message}
+     * @param killerName 击杀者名，替换格式中的 {killer}；环境死亡等没有击杀者时填「未知」
+     */
+    fun formatPlayerDeathMessage(name: String, deathMessage: String?, killerName: String? = null): String {
+        val message = deathMessage?.takeIf(String::isNotBlank)?.let { filterText(it) }.orEmpty()
+        val killer = killerName?.takeIf(String::isNotBlank) ?: "未知"
+        val result = getPlayerEventFormat().deathFormat
+            .replace("{message}", message)
+            .replace("{killer}", killer)
+            .replace("{name}", name)
+            .replace("{player}", name)
+            .replace("{server}", getServerName())
+            .replace("{platform}", getPlatform())
+            .trim()
+        return applyPlaceholders(name, convertAmpersandColors(result))
+    }
 
     fun formatPlayerEventMessage(format: String, name: String): String {
         val result = format

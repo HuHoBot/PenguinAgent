@@ -3,6 +3,7 @@ package cn.huohuas001.huhobotPenguin.spigot.events
 import cn.huohuas001.bot.QClient
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.AsyncPlayerChatEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -21,5 +22,14 @@ class GameChat : Listener {
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
         QClient.broadcastPlayerQuit(event.player.name)
+    }
+
+    @EventHandler
+    fun onPlayerDeath(event: PlayerDeathEvent) {
+        QClient.broadcastPlayerDeath(
+            event.entity.name,
+            DeathMessage.describe(event),
+            DeathMessage.killerOf(event)
+        )
     }
 }

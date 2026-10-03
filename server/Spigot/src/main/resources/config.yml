@@ -34,6 +34,10 @@ player-events:
     enabled: true
     # 可用占位符：{name}、{player}、{server}、{platform}
     format: "[游戏] {name} 离开了服务器"
+  death:
+    enabled: true
+    # 可用占位符：{name}、{player}、{server}、{platform}、{killer}（击杀者）、{message}（中文死亡描述）
+    format: "[游戏] {message}"
 
 # 配置键对应插件数据目录 Markdown/ 下的文件。
 markdown:
