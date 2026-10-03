@@ -35,6 +35,8 @@ object QClient {
     private const val GROUP_NAME_RETRY_MILLIS = 30_000L
     private const val GROUP_PANELS_SYNC_RETRY_MILLIS = 1_000L
     private const val GROUP_PANELS_SYNC_MAX_ATTEMPTS = 120
+    /** 写接口限频 10 QPM，两次同步至少隔 6 秒。 */
+    private const val GROUP_PANELS_SYNC_MIN_INTERVAL_MS = 6_000L
 
     private val groupNameAttempts = ConcurrentHashMap<String, Long>()
 
@@ -51,6 +53,16 @@ object QClient {
 
     @Volatile
     private var groupPanelsSyncRetry: Cancelable? = null
+
+    /** 面板同步串行化：同一时刻只跑一次，期间的请求收敛成一次补跑。 */
+    private val groupPanelsSyncRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val groupPanelsSyncQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    @Volatile
+    private var groupPanelsSyncThrottled: Cancelable? = null
+
+    @Volatile
+    private var lastGroupPanelsSyncAt = 0L
 
     /** 获取 QQ Bot Starter 实例（供 Agent 群管理 API 使用）。 */
     fun getStarter(): Starter? = if (::starter.isInitialized) starter else null
@@ -106,7 +118,49 @@ object QClient {
         AddonManager.register(addon, addonCommands)
     }
 
+    /**
+     * 面板同步入口。
+     *
+     * 写接口（PUT/POST/DELETE）官方限频 10 QPM，而每注册/注销一条 QQ 群命令都会触发一次
+     * 同步——脚本插件批量加载时是突发调用。这里做两件事：
+     * 1. 同一时刻只跑一次同步，期间再来请求只记一个「待补跑」标记，收敛成一次；
+     * 2. 两次同步之间至少间隔 [GROUP_PANELS_SYNC_MIN_INTERVAL_MS]，避免突发撞限频
+     *    （限频会返回 40030009）或自己和自己撞出 30019。
+     */
     fun syncGroupPanels() {
+        if (!groupPanelsSyncRunning.compareAndSet(false, true)) {
+            groupPanelsSyncQueued.set(true)
+            return
+        }
+        try {
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastGroupPanelsSyncAt
+            if (lastGroupPanelsSyncAt > 0L && elapsed < GROUP_PANELS_SYNC_MIN_INTERVAL_MS) {
+                // 太频繁，排到最小间隔之后补跑
+                groupPanelsSyncQueued.set(true)
+                scheduleGroupPanelsSyncThrottle(GROUP_PANELS_SYNC_MIN_INTERVAL_MS - elapsed)
+                return
+            }
+            syncGroupPanelsOnce()
+            lastGroupPanelsSyncAt = System.currentTimeMillis()
+        } finally {
+            groupPanelsSyncRunning.set(false)
+        }
+        if (groupPanelsSyncQueued.compareAndSet(true, false)) {
+            scheduleGroupPanelsSyncThrottle(GROUP_PANELS_SYNC_MIN_INTERVAL_MS)
+        }
+    }
+
+    /** 节流后的补跑；同时只会有一个待跑定时器。 */
+    private fun scheduleGroupPanelsSyncThrottle(delayMs: Long) {
+        if (groupPanelsSyncThrottled != null) return
+        groupPanelsSyncThrottled = BotShared.getPlugin().submitLater(delayMs.coerceAtLeast(0L)) {
+            groupPanelsSyncThrottled = null
+            syncGroupPanels()
+        }
+    }
+
+    private fun syncGroupPanelsOnce() {
         if (!::starter.isInitialized || !::groupMessageHandler.isInitialized) {
             groupPanelsSyncPending = true
             return

@@ -21,6 +21,8 @@ object MenuManager {
     private const val MAX_DESCRIPTION_DISPLAY_WIDTH = 30
     private const val MAX_TARGETS_PER_REQUEST = 20
     private const val MAX_DUPLICATE_DELETES_PER_SYNC = 10
+    /** 官方文档：指令面板写操作限频 10 QPM。 */
+    private const val PANEL_UPDATE_RETRY_DELAY_MS = 1_000L
     private val LEGACY_REMARKS = setOf(PANEL_REMARK, "HuHoBot 指令面板")
 
     fun syncGroupPanels(
@@ -69,7 +71,8 @@ object MenuManager {
 
             if (primary != null) {
                 // 原位更新不会消耗新的“面板数量”名额，是避免 30013 的关键。
-                updatePanel(authHeader, primary.id, panel)
+                // 但原位更新必须回传当前 version，否则会撞 30019。
+                updatePanelWithVersion(authHeader, primary, limitedItems)
                 syncPanelTargets(authHeader, primary, groups)
 
                 val duplicates = managed.drop(1)
@@ -181,9 +184,12 @@ object MenuManager {
         return result.toString()
     }
 
-    private fun panelPayload(items: List<JSONObject>): JSONObject = JSONObject().apply {
+    private fun panelPayload(items: List<JSONObject>, version: Int? = null): JSONObject = JSONObject().apply {
         put("remark", PANEL_REMARK)
         put("items", JSONArray(items))
+        // 原位更新必须带上读到的当前版本号，否则 QQ 侧按乐观并发判定为
+        // 30019「面板版本冲突，请重试」。
+        if (version != null) put("version", version)
     }
 
     /** 完整分页读取；旧实现只看第一页，历史面板可能因此永远无法被清理。 */
@@ -233,7 +239,9 @@ object MenuManager {
         val panel = value.getJSONObject("panel")
         val remark = panel?.getString("remark") ?: value.getString("remark").orEmpty()
         val targets = value.getJSONArray("group_openids")?.mapNotNull { it?.toString() }.orEmpty()
-        return PanelRecord(id, remark, targets)
+        // version 在详情响应里顶层和 panel 内各有一份，两个位置都认
+        val version = value.getInteger("version") ?: panel?.getInteger("version")
+        return PanelRecord(id, remark, targets, version)
     }
 
     private fun getPanel(authHeader: String, panelId: String): PanelRecord? {
@@ -248,14 +256,41 @@ object MenuManager {
         return parsePanelRecord(value)
     }
 
-    private fun updatePanel(authHeader: String, panelId: String, panel: JSONObject) {
-        val response = request(
+    private fun updatePanel(authHeader: String, panelId: String, panel: JSONObject): ApiResponse =
+        request(
             method = "PUT",
             endpoint = "/v2/panels/$panelId",
             authHeader = authHeader,
             body = JSONObject().apply { put("panel", panel) }
         )
-        response.requireSuccess("更新指令面板 $panelId")
+
+    /**
+     * 原位更新面板，带上读到的版本号。
+     *
+     * 报 30019（面板版本冲突）或 40030009（面板操作进行中）时，重新读一次版本再试一次
+     * ——两次调用之间面板可能被别处改过，这是官方让「请重试」的场景。
+     */
+    private fun updatePanelWithVersion(
+        authHeader: String,
+        record: PanelRecord,
+        items: List<JSONObject>
+    ): Boolean {
+        val plugin = BotShared.getPlugin()
+        val response = updatePanel(authHeader, record.id, panelPayload(items, record.version))
+        if (response.success) return true
+        if (!response.isRetryableConflict) {
+            response.requireSuccess("更新指令面板 ${record.id}")
+            return false
+        }
+        plugin?.log_warning(
+            "指令面板 ${record.id} 版本冲突（version=${record.version}），" +
+                "重新读取版本后重试一次"
+        )
+        Thread.sleep(PANEL_UPDATE_RETRY_DELAY_MS)
+        val fresh = getPanel(authHeader, record.id)
+        val retried = updatePanel(authHeader, record.id, panelPayload(items, fresh?.version))
+        retried.requireSuccess("重试更新指令面板 ${record.id}")
+        return true
     }
 
     private fun syncPanelTargets(
@@ -355,18 +390,32 @@ object MenuManager {
     private data class PanelRecord(
         val id: String,
         val remark: String,
-        val groupOpenIds: List<String>
+        val groupOpenIds: List<String>,
+        /** 面板当前版本号；原位更新时必须回传，null 表示接口没给。 */
+        val version: Int? = null
     )
 
     private data class ApiResponse(val status: Int, val body: String) {
         val success: Boolean get() = status in 200..299
 
+        /**
+         * 这两种都值得原样重试：
+         * 30019 面板版本冲突（读到的 version 已过期）、40030009 面板操作进行中。
+         * 官方对两者的排查建议都是「请稍后重试」。
+         */
+        val isRetryableConflict: Boolean
+            get() = body.contains("30019") || body.contains("30009")
+
         fun requireSuccess(action: String) {
             if (!success) {
-                val hint = if (body.contains("30013")) {
-                    "；请同时检查面板总数、单面板条目数、命令名（显示宽度 14）和描述（显示宽度 30）"
-                } else {
-                    ""
+                val hint = when {
+                    body.contains("30013") ->
+                        "；请同时检查面板总数、单面板条目数、命令名（显示宽度 14）和描述（显示宽度 30）"
+                    body.contains("30019") ->
+                        "；面板版本冲突，请稍后重试"
+                    body.contains("30009") ->
+                        "；面板操作进行中，官方写操作限频 10 QPM，请稍后重试"
+                    else -> ""
                 }
                 throw IllegalStateException("$action 失败，HTTP $status: $body$hint")
             }
