@@ -273,7 +273,6 @@ object QClient {
         )
         val markdown = Markdown().setContent(content)
         val payload = V2MsgData()
-            .setContent(content)
             .setMsg_type(2)
             .setMarkdown(markdown)
         Thread {
@@ -288,35 +287,17 @@ object QClient {
     }
 
     /**
-     * 根据 Minecraft 玩家名查找绑定信息（跨群搜索）。
+     * 根据 Minecraft 玩家名查找绑定信息（绑定全局共享，无需逐群搜索）。
      * 返回 BindingInfo + QQ 昵称。
      */
     private fun findBindingByPlayerName(playerName: String): BindingLookupResult? {
-        val plugin = BotShared.getPlugin()
-        for (groupId in plugin.getGroupOpenIdList()) {
-            val entry = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
-            if (entry != null) {
-                val qqName = entry.value.qqUsername.ifEmpty {
-                    NicknameManager.getNickname(entry.key)
-                        ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
-                        ?: "QQ用户"
-                }
-                return BindingLookupResult(entry.value, qqName)
-            }
+        val entry = CommandRepositories.bindings.findByPlayerName(playerName) ?: return null
+        val qqName = entry.value.qqUsername.ifEmpty {
+            NicknameManager.getNickname(entry.key)
+                ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
+                ?: "QQ用户"
         }
-        // 也搜索所有群（包括未配置的群）
-        for (groupId in CommandRepositories.bindings.allBindings().keys) {
-            val entry = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
-            if (entry != null) {
-                val qqName = entry.value.qqUsername.ifEmpty {
-                    NicknameManager.getNickname(entry.key)
-                        ?: NicknameManager.all().firstOrNull { it.second == entry.key }?.first
-                        ?: "QQ用户"
-                }
-                return BindingLookupResult(entry.value, qqName)
-            }
-        }
-        return null
+        return BindingLookupResult(entry.value, qqName)
     }
 
     private data class BindingLookupResult(
@@ -345,18 +326,11 @@ object QClient {
             }
         }
 
-        // 匹配绑定的 MC 玩家名：@PlayerName 或 PlayerName → <@openid>
-        val plugin = BotShared.getPlugin()
-        for (groupId in plugin.getGroupOpenIdList()) {
-            val bindings = CommandRepositories.bindings.allInGroup(groupId)
-            for ((_, info) in bindings) {
-                val mcName = info.playerName
-                val pattern = Regex("(?<![<a-zA-Z0-9])@?${Regex.escape(mcName)}(?![>a-zA-Z0-9])")
-                result = result.replace(pattern) { _ ->
-                    val entry = CommandRepositories.bindings.findByPlayerName(groupId, mcName)
-                    if (entry != null) "<@${entry.key}>" else mcName
-                }
-            }
+        // 匹配绑定的 MC 玩家名：@PlayerName 或 PlayerName → <@openid>（绑定全局共享）
+        for ((openId, info) in CommandRepositories.bindings.allBindings()) {
+            val mcName = info.playerName
+            val pattern = Regex("(?<![<a-zA-Z0-9])@?${Regex.escape(mcName)}(?![>a-zA-Z0-9])")
+            result = result.replace(pattern) { _ -> "<@$openId>" }
         }
         // 处理直接输入的 @openid：尝试转为昵称，找不到就去掉
         result = result.replace(Regex("@([0-9A-Fa-f]{20,})(?=\\s|\$)")) { match ->
@@ -383,13 +357,26 @@ object QClient {
         sendTextToGroups(plugin.formatPlayerQuitMessage(escapeMarkdown(playerName)), "发送玩家退服通知")
     }
 
+    /** 按配置向所有 QQ 群发送玩家死亡播报。 */
+    fun broadcastPlayerDeath(playerName: String, deathMessage: String?, killerName: String? = null) {
+        if (!::starter.isInitialized) return
+        val plugin = BotShared.getPlugin()
+        if (!plugin.getPlayerEventFormat().deathEnabled) return
+        val text = plugin.formatPlayerDeathMessage(
+            escapeMarkdown(playerName),
+            deathMessage?.let(::escapeMarkdown),
+            killerName?.let(::escapeMarkdown)
+        )
+        sendTextToGroups(text, "发送玩家死亡播报")
+    }
+
     /** 向指定 QQ 群发送文本消息（始终使用 markdown 模式）。 */
     fun sendTextToGroup(groupOpenId: String, content: String) {
         if (!::starter.isInitialized) return
         if (content.isBlank()) return
         val plugin = BotShared.getPlugin()
         val markdown = Markdown().setContent(content)
-        val payload = V2MsgData().setContent(content).setMsg_type(2).setMarkdown(markdown)
+        val payload = V2MsgData().setMsg_type(2).setMarkdown(markdown)
         Thread {
             try {
                 starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
@@ -403,7 +390,7 @@ object QClient {
         if (content.isBlank()) return
         val plugin = BotShared.getPlugin()
         val markdown = Markdown().setContent(content)
-        val payload = V2MsgData().setContent(content).setMsg_type(2).setMarkdown(markdown)
+        val payload = V2MsgData().setMsg_type(2).setMarkdown(markdown)
         Thread {
             plugin.getGroupOpenIdList().forEach { groupId ->
                 try {
@@ -424,8 +411,8 @@ object QClient {
         }
 
         val markdown = Markdown().setContent(markdownContent)
+        // 官方要求：传了 markdown 后 content 必须为空，否则服务端按纯文本处理并丢弃 keyboard
         val payload = V2MsgData()
-            .setContent(markdownContent)
             .setMsg_type(2)
             .setMarkdown(markdown)
         if (keyboard != null) {
@@ -454,8 +441,8 @@ object QClient {
         if (markdownContent.isBlank()) return null
 
         val markdown = Markdown().setContent(markdownContent)
+        // 官方要求：传了 markdown 后 content 必须为空，否则服务端按纯文本处理并丢弃 keyboard
         val payload = V2MsgData()
-            .setContent(markdownContent)
             .setMsg_type(2)
             .setMarkdown(markdown)
         if (keyboard != null) {
@@ -551,8 +538,8 @@ object QClient {
             markdown.setKeyboard(keyboard)
         }
 
+        // 官方要求：传了 markdown 后 content 必须为空，否则服务端按纯文本处理并丢弃 keyboard
         val payload = V2MsgData()
-            .setContent(markdownContent)
             .setMsg_type(2)
             .setMarkdown(markdown)
             .setMsg_id(messageId)
@@ -593,8 +580,8 @@ object QClient {
             markdown.setKeyboard(keyboard)
         }
 
+        // 官方要求：传了 markdown 后 content 必须为空，否则服务端按纯文本处理并丢弃 keyboard
         val payload = V2MsgData()
-            .setContent(markdownContent)
             .setMsg_type(2)
             .setMarkdown(markdown)
             .setMsg_id(event.rawMessage.id)
@@ -692,7 +679,6 @@ object QClient {
         val content = plugin.applyPlaceholders(playerName, plugin.formatGameMessage(safeName, filtered))
         val markdown = Markdown().setContent(content)
         val payload = V2MsgData()
-            .setContent(content)
             .setMsg_type(2)
             .setMarkdown(markdown)
         plugin.getGroupOpenIdList().forEach { groupId ->

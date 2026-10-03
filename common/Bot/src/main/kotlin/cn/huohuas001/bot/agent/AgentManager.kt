@@ -466,8 +466,8 @@ object AgentManager {
         val memberOpenId = interaction.groupMemberOpenid ?: ""
         plugin.log_info("Agent 审批回调: group=$groupOpenId, member=$memberOpenId, data=$data")
 
-        // event.response(0) 调用 QQ API 确认交互，但该端点返回 405（jsoup 在抛异常前打日志），
-        // 不影响审批功能，跳过调用以消除日志噪音。
+        // event.response(0) 由 AgentInteractionListener 统一调用：官方要求收到互动事件后必须回应，
+        // 否则客户端会一直 loading 直到超时，用户看到「请求第三方失败 / 请求超时」。
 
         val parts = data.split(":")
         if (parts.size < 4) return
