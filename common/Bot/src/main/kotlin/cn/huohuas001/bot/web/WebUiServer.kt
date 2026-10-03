@@ -92,6 +92,9 @@ object WebUiServer {
                 path == "/api/config" && method == "GET" -> handleGetConfig(exchange)
                 path == "/api/config" && method == "POST" -> handleSaveConfig(exchange)
                 path == "/api/status" && method == "GET" -> handleStatus(exchange)
+                path == "/api/qr/status" && method == "GET" -> handleQrStatus(exchange)
+                path == "/api/qr/start" && method == "POST" -> handleQrStart(exchange)
+                path == "/api/qr/cancel" && method == "POST" -> handleQrCancel(exchange)
                 path == "/api/addons" && method == "GET" -> handleAddonList(exchange)
                 path == "/api/addons/install" && method == "POST" -> handleAddonInstall(exchange)
                 path == "/api/addons/remove" && method == "POST" -> handleAddonRemove(exchange)
@@ -195,6 +198,38 @@ object WebUiServer {
         respond(exchange, 200, payload.toJSONString())
     }
 
+    // ---------------------------------------------------------------- 扫码授权
+
+    /** 读取扫码授权状态；前端每 2 秒轮询一次，本方法只做内存读取不做网络请求。 */
+    private fun handleQrStatus(exchange: HttpExchange) {
+        if (!authorize(exchange)) return
+        val qr = BotShared.getPlugin().getQrAuthState()
+        val payload = JSONObject()
+        payload["supported"] = qr.supported
+        payload["state"] = qr.state
+        payload["qrUrl"] = qr.qrUrl
+        payload["qrImage"] = qr.qrImageBase64
+        payload["message"] = qr.message
+        payload["refreshCount"] = qr.refreshCount
+        payload["appId"] = qr.appId
+        payload["qqConnected"] = QClient.getStarter() != null
+        respond(exchange, 200, payload.toJSONString())
+    }
+
+    /** 开启（或复用进行中的）扫码授权任务；控制台与网页共用同一次授权任务。 */
+    private fun handleQrStart(exchange: HttpExchange) {
+        if (!authorize(exchange)) return
+        val ok = BotShared.getPlugin().startQrAuth()
+        respond(exchange, 200, JSON.toJSONString(mapOf("ok" to ok)))
+    }
+
+    /** 取消进行中的扫码授权任务。 */
+    private fun handleQrCancel(exchange: HttpExchange) {
+        if (!authorize(exchange)) return
+        val ok = BotShared.getPlugin().cancelQrAuth()
+        respond(exchange, 200, JSON.toJSONString(mapOf("ok" to ok)))
+    }
+
     /** 附属插件中心列表（仅 Spigot / Paper）。 */
     private fun handleAddonList(exchange: HttpExchange) {
         if (!authorize(exchange)) return
@@ -203,10 +238,36 @@ object WebUiServer {
         val addons = AddonCenterClient.listAddons(search)
         val loaded = BotShared.getPlugin().getServerPluginList().toMutableList()
         val installedFiles = InstalledAddonStore.files().toMutableList()
-        val records = InstalledAddonStore.all()
+        val records = InstalledAddonStore.all().toMutableList()
         records.forEach { record ->
             if (record.file.isNotBlank() && record.file !in installedFiles) installedFiles.add(record.file)
             if (record.name.isNotBlank() && record.name !in loaded) loaded.add(record.name)
+        }
+
+        // 扫描 plugins 目录下的 jar 文件，为已安装但没有本地记录的插件补充合成记录，
+        // 让前端能显示删除按钮（手动安装的插件没有 InstalledAddonStore 记录）
+        val pluginsDir = BotShared.getPlugin().getConfigFile()?.parentFile?.parentFile
+        val jarFiles = pluginsDir?.listFiles { file -> file.extension.equals("jar", true) }?.map { it.name } ?: emptyList()
+        val recordNames = records.map { it.name.lowercase() }.toSet()
+        val loadedLower = loaded.map { it.lowercase() }.toSet()
+        for (entry in addons) {
+            val name = entry.name.lowercase()
+            if (name in loadedLower && name !in recordNames) {
+                val matchedFile = (installedFiles + jarFiles).firstOrNull { file ->
+                    file.lowercase().contains(name)
+                }
+                if (matchedFile != null) {
+                    records.add(
+                        InstalledAddonStore.Record(
+                            id = entry.id,
+                            name = entry.name,
+                            version = entry.version,
+                            file = matchedFile,
+                            installedAt = 0L
+                        )
+                    )
+                }
+            }
         }
         val payload = JSONObject()
         payload["center"] = AddonCenterClient.CENTER_URL

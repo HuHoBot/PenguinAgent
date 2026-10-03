@@ -305,6 +305,10 @@ function renderSection(section) {
     form.innerHTML = "";
     form.dataset.section = section.key;
 
+    if (section.key === "bot") {
+        form.appendChild(renderQrConnectCard());
+    }
+
     for (const field of section.fields) {
         form.appendChild(renderField(field));
     }
@@ -931,6 +935,174 @@ async function saveConfig() {
     }
 }
 
+/* ───────────────────────── 扫码连接 ───────────────────────── */
+
+let qrPollTimer = null;
+let qrSuccessHandled = false;
+
+/** 「QQ 机器人」分节顶部的扫码入口卡片。 */
+function renderQrConnectCard() {
+    const wrap = document.createElement("div");
+    wrap.className = "field-card qr-connect-card";
+    const text = document.createElement("div");
+    text.className = "field-text";
+    text.innerHTML =
+        `<div class="field-label">扫码连接</div>` +
+        `<div class="field-desc">手机 QQ 扫码即可自动填写 AppID / Secret 并连接机器人，无需手动配置；也可继续使用下方手动填写或控制台扫码，三种方式效果相同</div>`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-primary";
+    btn.textContent = "打开扫码连接";
+    btn.addEventListener("click", () => openQrModal());
+    attachRipple(btn);
+    wrap.appendChild(text);
+    wrap.appendChild(btn);
+    return wrap;
+}
+
+async function openQrModal() {
+    qrSuccessHandled = false;
+    $("#qr-modal").classList.remove("hidden");
+    clearInterval(qrPollTimer);
+    qrPollTimer = setInterval(pollQrState, 2000);
+    try {
+        let data = await api("/api/qr/status");
+        // 空闲 / 已取消 / 上次失败 / 上次成功：进入页面直接（重新）开启授权任务，
+        // 否则会看到上一次残留的旧二维码和旧状态
+        if (["idle", "cancelled", "failed", "success"].includes(data.state)) {
+            await api("/api/qr/start", { method: "POST" });
+            data = await api("/api/qr/status");
+        }
+        renderQrState(data);
+    } catch (e) {
+        renderQrState({ supported: true, state: "failed", message: e.message });
+    }
+}
+
+function closeQrModal() {
+    clearInterval(qrPollTimer);
+    qrPollTimer = null;
+    $("#qr-modal").classList.add("hidden");
+}
+
+async function pollQrState() {
+    try {
+        renderQrState(await api("/api/qr/status"));
+    } catch (_) {
+        // 网络抖动忽略，下一轮再试
+    }
+}
+
+async function qrRetry() {
+    try {
+        await api("/api/qr/start", { method: "POST" });
+        clearInterval(qrPollTimer);
+        qrPollTimer = setInterval(pollQrState, 2000);
+        renderQrState(await api("/api/qr/status"));
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+
+async function qrCancel() {
+    try {
+        await api("/api/qr/cancel", { method: "POST" });
+        renderQrState(await api("/api/qr/status"));
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+
+/** 授权成功：提示 + 重新拉取配置，让 AppID 等字段立即显示新值，然后自动关闭弹层。 */
+function onQrSuccess() {
+    if (qrSuccessHandled) return;
+    qrSuccessHandled = true;
+    showToast("扫码授权成功，已自动写入凭据并连接", "success");
+    loadConfig().catch(() => {});
+    // 停留片刻让用户看清成功状态，随后自动关闭
+    setTimeout(closeQrModal, 1500);
+}
+
+function renderQrState(data) {
+    const img = $("#qr-image");
+    const placeholder = $("#qr-placeholder");
+    const stateEl = $("#qr-state");
+    const linkWrap = $("#qr-link-wrap");
+    const link = $("#qr-link");
+    const cancelBtn = $("#qr-cancel-btn");
+    const retryBtn = $("#qr-retry-btn");
+
+    cancelBtn.classList.add("hidden");
+    retryBtn.classList.add("hidden");
+    stateEl.className = "qr-state";
+
+    if (!data || data.supported === false) {
+        img.classList.add("hidden");
+        placeholder.classList.remove("hidden");
+        placeholder.textContent = (data && data.message) || "当前平台不支持扫码授权";
+        linkWrap.classList.add("hidden");
+        clearInterval(qrPollTimer);
+        qrPollTimer = null;
+        return;
+    }
+
+    if (data.qrImage) {
+        img.src = "data:image/png;base64," + data.qrImage;
+        img.classList.remove("hidden");
+        placeholder.classList.add("hidden");
+    } else {
+        img.classList.add("hidden");
+        placeholder.classList.remove("hidden");
+        placeholder.textContent =
+            data.state === "waiting" || data.state === "expired"
+                ? "正在获取二维码…"
+                : (data.message || "等待开始");
+    }
+
+    if (data.qrUrl) {
+        link.href = data.qrUrl;
+        linkWrap.classList.remove("hidden");
+    } else {
+        linkWrap.classList.add("hidden");
+    }
+
+    switch (data.state) {
+        case "waiting":
+            stateEl.textContent = data.message || "等待扫码授权…";
+            cancelBtn.classList.remove("hidden");
+            break;
+        case "expired":
+            stateEl.textContent = data.message || "二维码已过期，正在刷新…";
+            stateEl.classList.add("warn");
+            cancelBtn.classList.remove("hidden");
+            break;
+        case "success":
+            stateEl.textContent = "✅ " + (data.message || "授权成功，正在连接…");
+            stateEl.classList.add("ok");
+            clearInterval(qrPollTimer);
+            qrPollTimer = null;
+            onQrSuccess();
+            break;
+        case "failed":
+            stateEl.textContent = "❌ " + (data.message || "授权失败");
+            stateEl.classList.add("err");
+            retryBtn.classList.remove("hidden");
+            clearInterval(qrPollTimer);
+            qrPollTimer = null;
+            break;
+        case "cancelled":
+            stateEl.textContent = "已取消扫码授权";
+            retryBtn.classList.remove("hidden");
+            clearInterval(qrPollTimer);
+            qrPollTimer = null;
+            break;
+        case "idle":
+        default:
+            stateEl.textContent = data.message || "尚未开始";
+            retryBtn.classList.remove("hidden");
+    }
+}
+
 /* ───────────────────────── 状态面板 ───────────────────────── */
 
 async function loadStatus() {
@@ -995,8 +1167,19 @@ function init() {
         loadStatus().catch((e) => showToast(e.message, "error"));
     });
 
+    // 扫码连接弹层
+    $("#qr-close-btn").addEventListener("click", closeQrModal);
+    $("#qr-cancel-btn").addEventListener("click", qrCancel);
+    $("#qr-retry-btn").addEventListener("click", qrRetry);
+    $("#qr-modal").addEventListener("click", (e) => {
+        if (e.target === $("#qr-modal")) closeQrModal();
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !$("#qr-modal").classList.contains("hidden")) closeQrModal();
+    });
+
     // 静态按钮点击反馈
-    [$("#login-btn"), $("#save-btn"), $("#logout-btn"), $("#status-btn")].forEach(attachRipple);
+    [$("#login-btn"), $("#save-btn"), $("#logout-btn"), $("#status-btn"), $("#qr-cancel-btn"), $("#qr-retry-btn")].forEach(attachRipple);
 
     if (state.token) {
         showMain();

@@ -99,17 +99,18 @@ textarea.input { resize: vertical; min-height: 80px; font-family: ui-monospace, 
 /* 切换开关 */
 .switch {
     position: relative;
+    display: inline-block;
     width: 44px;
     height: 24px;
     flex-shrink: 0;
 }
 
-.switch input { opacity: 0; width: 0; height: 0; }
+.switch input { display: none; }
 
 .switch .track {
     position: absolute;
     inset: 0;
-    background: var(--border);
+    background: #3d4454;
     border-radius: 24px;
     transition: background 0.15s;
     cursor: pointer;
@@ -712,3 +713,117 @@ select.input { transition: background 0.15s, color 0.15s, border-color 0.15s, tr
     .content { padding: 20px 16px; }
     .object-row .row-fields { grid-template-columns: 1fr; }
 }
+
+/* ───────── 扫码连接弹层 ───────── */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    padding: 16px;
+}
+
+.modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: min(420px, 100%);
+    padding: 18px 20px 20px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.modal-close:hover {
+    color: var(--text);
+    background: var(--bg-elevated);
+}
+
+.qr-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.qr-image-box {
+    width: 240px;
+    height: 240px;
+    max-width: 100%;
+    background: #ffffff;
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qr-image-box img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+.qr-placeholder {
+    color: #555;
+    font-size: 13px;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.qr-state {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: center;
+    min-height: 18px;
+}
+
+.qr-state.ok { color: var(--success); }
+.qr-state.warn { color: var(--warning); }
+.qr-state.err { color: var(--danger); }
+
+.qr-link-wrap a {
+    color: var(--accent);
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.qr-link-wrap a:hover { text-decoration: underline; }
+
+.qr-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.qr-connect-card .btn { align-self: flex-start; }

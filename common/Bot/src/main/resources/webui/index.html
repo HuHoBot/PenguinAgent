@@ -56,6 +56,30 @@
         </div>
     </div>
 
+    <!-- 扫码连接弹层 -->
+    <div id="qr-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">扫码连接 QQ 机器人</h3>
+                <button id="qr-close-btn" class="modal-close" type="button" aria-label="关闭">&times;</button>
+            </div>
+            <div class="qr-stage">
+                <div class="qr-image-box">
+                    <img id="qr-image" class="hidden" alt="扫码二维码">
+                    <div id="qr-placeholder" class="qr-placeholder">正在获取二维码…</div>
+                </div>
+                <div id="qr-state" class="qr-state"></div>
+                <div id="qr-link-wrap" class="qr-link-wrap hidden">
+                    <a id="qr-link" href="#" target="_blank" rel="noopener">在新窗口打开授权链接</a>
+                </div>
+            </div>
+            <div class="qr-actions">
+                <button id="qr-cancel-btn" class="btn btn-ghost hidden" type="button">取消授权</button>
+                <button id="qr-retry-btn" class="btn btn-primary hidden" type="button">重新获取二维码</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
 
     <script src="/app.js"></script>

@@ -7,6 +7,7 @@ import cn.huohuas001.bot.events.commands.SensitiveFilter
 import cn.huohuas001.bot.provider.*
 import cn.huohuas001.bot.state.CommandRepositories
 import cn.huohuas001.bot.update.UpdateChecker
+import cn.huohuas001.bot.web.QrAuthState
 import cn.huohuas001.bot.web.WebUiServer
 import com.alibaba.fastjson.JSONObject
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
@@ -115,17 +116,19 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
                 }
             }
         })
-        CommandRepositories.initialize(getConfigFile()?.parentFile)
+        CommandRepositories.initialize(getConfigFile()?.parentFile) { log_info(it) }
         InstalledAddonStore.load()
         reloadRuntimeConfig()
-        launchQqClient()
+        // WebUI 先启动：未配置机器人凭据时也要能打开管理页面完成扫码授权。
         WebUiServer.start()
+        launchQqClient()
         UpdateChecker.checkOnStartup(this)
     }
 
     /** 平台停止时调用，释放 SDK 日志桥接和公共运行时资源。 */
     fun shutdownRuntime() {
         try {
+            cancelQrAuth()
             QClient.shutdown()
         } finally {
             WebUiServer.stop()
@@ -206,6 +209,23 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
      * 由各平台实现；未实现时返回 false。
      */
     fun applyWebUiConfigChanges(changes: JSONObject): Boolean = false
+
+    // ---------------------------------------------------------------- WebUI 扫码授权
+
+    /**
+     * WebUI 扫码授权：读取当前授权任务状态快照。
+     * 由各平台实现；未实现时返回 [QrAuthState.UNSUPPORTED]。
+     */
+    fun getQrAuthState(): QrAuthState = QrAuthState.UNSUPPORTED
+
+    /**
+     * WebUI 扫码授权：开启一次授权任务；已有进行中的任务时复用同一个任务
+     * （控制台与网页共用）。由各平台实现；未实现时返回 false。
+     */
+    fun startQrAuth(): Boolean = false
+
+    /** WebUI 扫码授权：取消进行中的授权任务。由各平台实现。 */
+    fun cancelQrAuth(): Boolean = false
 
     /** 异步启动 QQ 客户端，避免阻塞各服务端平台的主线程。 */
     fun launchQqClient() {

@@ -145,36 +145,33 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     /**
      * 覆写公共运行时的 QQ 启动逻辑：
-     * 若 appid/secret 均为空，阻塞控制台等待扫码登录，成功后自动写入 config.yml。
+     * 凭据为空时不再阻塞主线程，改为在后台开启扫码授权会话
+     * （控制台与 WebUI 共用同一个会话），WebUI 照常启动。
      */
     override fun launchQqClient() {
         val appId = getBotAppId()
         val secret = getBotSecret()
         if (appId.isBlank() || secret.isBlank()) {
-            // 首次启动：扫码登录（阻塞主线程直到成功）
-            val credentials = QrLoginManager.doQrLogin(this)
-            if (credentials != null) {
-                QrLoginManager.writeCredentials(this, credentials)
-            } else {
-                log_error("扫码登录失败，QQ 机器人未启动")
-                return
-            }
-        }
-        // 使用（可能刚写入的）凭据启动客户端
-        val finalAppId = getBotAppId()
-        val finalSecret = getBotSecret()
-        if (finalAppId.isBlank() || finalSecret.isBlank()) {
-            log_warning("未配置 bot.app-id 或 bot.secret，QQ 机器人未启动")
+            log_info("未配置 bot.app-id / bot.secret，已开启扫码授权：扫描控制台二维码，或打开 WebUI「QQ 机器人」页面扫码")
+            QrLoginManager.start(this)
             return
         }
         submitAsync {
             try {
-                QClient.launchClient(finalAppId, finalSecret, getQqBotLogFilePattern())
+                QClient.launchClient(appId, secret, getQqBotLogFilePattern())
             } catch (error: Exception) {
                 log_error("QQ 机器人启动失败: ${error.message}")
             }
         }
     }
+
+    // ---------------------------------------------------------------- WebUI 扫码授权桥接
+
+    override fun getQrAuthState(): cn.huohuas001.bot.web.QrAuthState = QrLoginManager.state()
+
+    override fun startQrAuth(): Boolean = QrLoginManager.start(this)
+
+    override fun cancelQrAuth(): Boolean = QrLoginManager.cancel()
 
     /**
      * 完整重启：注销 MC 命令 → 重新加载配置 → 重新注册命令 → 重启 QQ 客户端。
