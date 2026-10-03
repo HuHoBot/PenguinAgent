@@ -40,7 +40,7 @@ class PublicCommands : CommandSupport() {
         if (plugin.getChatFormat().postChat) {
             // 绑定：如果发送者绑定了角色，使用游戏ID作为发送者名
             val senderId = userId(event)
-            val binding = CommandRepositories.bindings.getBinding(groupId(event), senderId)
+            val binding = CommandRepositories.bindings.getBinding(senderId)
             val senderName = if (binding != null) {
                 when (binding.mcDisplayNameMode) {
                     "MC" -> binding.playerName

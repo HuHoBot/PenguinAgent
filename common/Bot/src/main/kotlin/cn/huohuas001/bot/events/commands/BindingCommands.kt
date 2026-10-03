@@ -14,10 +14,9 @@ class BindingCommands : CommandSupport() {
     @Commands(command = "绑定", describe = "绑定 QQ 号到 Minecraft 玩家")
     fun bind(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val userId = userId(event)
-        val groupId = groupId(event)
 
-        // 检查是否已绑定
-        val existing = CommandRepositories.bindings.getBinding(groupId, userId)
+        // 绑定以 openid 为准：任意群绑定成功后，所有群都视为已绑定
+        val existing = CommandRepositories.bindings.getBinding(userId)
         if (existing != null) {
             reply(plugin, event, "你已绑定角色：${QClient.escapeMarkdown(existing.playerName)}，请先解除绑定再重新绑定")
             return
@@ -29,8 +28,8 @@ class BindingCommands : CommandSupport() {
             return
         }
 
-        // 检查该玩家名是否已被其他用户绑定
-        val conflict = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
+        // MC 玩家名全局唯一，避免多人顶替同一个角色
+        val conflict = CommandRepositories.bindings.findByPlayerName(playerName)
         if (conflict != null) {
             reply(plugin, event, "游戏ID「$playerName」已被其他用户绑定")
             return
@@ -40,12 +39,7 @@ class BindingCommands : CommandSupport() {
 
         if (!plugin.getBindingRequireGameVerification()) {
             // 无需游戏内验证，直接绑定
-            val conflictByPlayer = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
-            if (conflictByPlayer != null) {
-                reply(plugin, event, "游戏ID「$playerName」已被其他用户绑定")
-                return
-            }
-            val ok = BindingCommands.Companion.completeBind(groupId, userId, playerName, qqUsername)
+            val ok = completeBind(groupId(event), userId, playerName, qqUsername)
             if (ok) {
                 syncWhitelistAdd(plugin, playerName)
             } else {
@@ -55,7 +49,7 @@ class BindingCommands : CommandSupport() {
         }
 
         // 需要游戏内验证
-        val code = PendingBindingStore.create(groupId, userId, playerName, qqUsername)
+        val code = PendingBindingStore.create(groupId(event), userId, playerName, qqUsername)
         val safeName = playerName.replace("_", "\\_")
         reply(plugin, event, "请使用角色 $safeName 进入服务器执行 /qqbind $code\n验证码 5 分钟内有效")
     }
@@ -63,26 +57,57 @@ class BindingCommands : CommandSupport() {
     @Commands(command = "解除绑定", describe = "解除 QQ 绑定")
     fun unbind(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val userId = userId(event)
-        val groupId = groupId(event)
 
-        val existing = CommandRepositories.bindings.getBinding(groupId, userId)
+        val existing = CommandRepositories.bindings.getBinding(userId)
         if (existing == null) {
             reply(plugin, event, "你还没有绑定任何角色")
             return
         }
 
-        CommandRepositories.bindings.removeBinding(groupId, userId)
-        reply(plugin, event, "已解除角色绑定：${QClient.escapeMarkdown(existing.playerName)}")
+        // 解绑会连带移出白名单，先发确认键盘，30 秒内未确认视为取消
+        UnbindConfirmation.request(plugin, groupId(event), userId, existing.playerName)
+    }
 
-        // 白名单同步
-        syncWhitelistRemove(plugin, existing.playerName)
+    /**
+     * 管理员强制解绑：撤销冒名顶替的绑定。
+     *
+     * 支持用 MC 玩家名、openid、QQ 昵称指定目标，也支持直接 @某人。
+     */
+    @Commands(command = "强制解绑", describe = "管理员强制解除某人的绑定", onlyAdmin = true)
+    fun forceUnbind(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+
+        val bindings = CommandRepositories.bindings
+        val candidates = resolveTargetCandidates(params)
+        if (candidates.isEmpty()) {
+            reply(plugin, event, "用法: /强制解绑 <MC玩家名 | @某人 | openid | QQ昵称>")
+            return
+        }
+
+        val entry = candidates.firstNotNullOfOrNull { bindings.find(it) }
+        if (entry == null) {
+            reply(plugin, event, "未找到「${params.trim()}」的绑定记录")
+            return
+        }
+
+        val (openId, info) = entry
+        bindings.removeBinding(openId)
+        val qqName = info.qqUsername.ifBlank { "未知昵称" }
+        reply(
+            plugin, event,
+            "已强制解除绑定：${QClient.escapeMarkdown(info.playerName)}\n" +
+                "QQ：$qqName\nopenid：$openId"
+        )
+        plugin.log_info("管理员 ${userId(event)} 强制解除了 ${info.playerName}（openid=$openId）")
+
+        // 白名单同步：与用户自行解绑保持一致
+        syncWhitelistRemove(plugin, info.playerName)
     }
 
     @Commands(command = "MC显示名称", describe = "切换 QQ→游戏 显示名称")
     fun setMcDisplayName(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val userId = userId(event)
-        val groupId = groupId(event)
-        val binding = CommandRepositories.bindings.getBinding(groupId, userId)
+        val binding = CommandRepositories.bindings.getBinding(userId)
         if (binding == null) {
             reply(plugin, event, "你还没有绑定角色，请先使用 /绑定 <游戏ID>")
             return
@@ -94,7 +119,7 @@ class BindingCommands : CommandSupport() {
             return
         }
 
-        CommandRepositories.bindings.updateSettings(groupId, userId, qqMode = null, mcMode = mode)
+        CommandRepositories.bindings.updateSettings(userId, qqMode = null, mcMode = mode)
         val modeDesc = if (mode == "MC") "游戏ID" else "QQ昵称"
         reply(plugin, event, "QQ→游戏 方向的发送者名称已切换为：$modeDesc")
     }
@@ -102,8 +127,7 @@ class BindingCommands : CommandSupport() {
     @Commands(command = "QQ显示名称", describe = "切换游戏→QQ 显示名称")
     fun setQqDisplayName(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val userId = userId(event)
-        val groupId = groupId(event)
-        val binding = CommandRepositories.bindings.getBinding(groupId, userId)
+        val binding = CommandRepositories.bindings.getBinding(userId)
         if (binding == null) {
             reply(plugin, event, "你还没有绑定角色，请先使用 /绑定 <游戏ID>")
             return
@@ -115,7 +139,7 @@ class BindingCommands : CommandSupport() {
             return
         }
 
-        CommandRepositories.bindings.updateSettings(groupId, userId, qqMode = mode, mcMode = null)
+        CommandRepositories.bindings.updateSettings(userId, qqMode = mode, mcMode = null)
         val modeDesc = if (mode == "MC") "游戏ID" else "QQ昵称"
         reply(plugin, event, "游戏→QQ 方向的发送者名称已切换为：$modeDesc")
     }
@@ -173,17 +197,22 @@ class BindingCommands : CommandSupport() {
     }
 
     companion object {
-        /** 完成绑定验证后由游戏端 /qqbind 调用：保存绑定并通知 QQ 群。 */
+        /**
+         * 完成绑定验证后由游戏端 /qqbind 调用：保存绑定并通知 QQ 群。
+         *
+         * 冲突检查按 MC 玩家名全局进行——同一角色不允许被两个 openid 绑定，
+         * 这也是防止未验证模式下冒名顶替的关键。
+         */
         fun completeBind(
             groupId: String,
             openId: String,
             playerName: String,
             qqUsername: String
         ): Boolean {
-            val conflict = CommandRepositories.bindings.findByPlayerName(groupId, playerName)
+            val conflict = CommandRepositories.bindings.findByPlayerName(playerName)
             if (conflict != null) return false
 
-            CommandRepositories.bindings.setBinding(groupId, openId, playerName, qqUsername)
+            CommandRepositories.bindings.setBinding(openId, playerName, qqUsername)
             NicknameManager.put(qqUsername, openId)
             val safeName = QClient.escapeMarkdown(playerName)
             QClient.sendTextToGroup(groupId, "<@$openId> 成功绑定游戏账号：$safeName")

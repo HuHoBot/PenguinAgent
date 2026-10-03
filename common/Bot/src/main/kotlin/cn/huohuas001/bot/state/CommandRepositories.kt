@@ -19,8 +19,8 @@ object CommandRepositories {
 
     /** 在插件数据目录中加载状态；没有数据目录时退化为内存存储。 */
     @Synchronized
-    fun initialize(dataDirectory: File?) {
-        val snapshot = stateFile.initialize(dataDirectory)
+    fun initialize(dataDirectory: File?, log: (String) -> Unit = {}) {
+        val snapshot = stateFile.initialize(dataDirectory, log)
         administrators.replaceAll(snapshot.administrators)
         authentication.replaceAll(snapshot.authenticatedUsers)
         groupSettings.replaceAll(snapshot.administratorModes, snapshot.fullForwarding)

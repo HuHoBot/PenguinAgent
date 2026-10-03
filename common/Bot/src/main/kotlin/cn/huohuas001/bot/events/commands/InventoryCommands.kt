@@ -39,7 +39,7 @@ class InventoryCommands : CommandSupport() {
     }
 
     private fun boundPlayer(event: GroupMessageEvent): String? =
-        CommandRepositories.bindings.getBinding(groupId(event), userId(event))?.playerName
+        CommandRepositories.bindings.getBinding(userId(event))?.playerName
 
     private fun requestedPlayer(
         plugin: HuHoBot,

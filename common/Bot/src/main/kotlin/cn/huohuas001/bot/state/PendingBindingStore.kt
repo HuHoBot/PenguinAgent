@@ -27,11 +27,11 @@ object PendingBindingStore {
 
     /**
      * 创建一个新的待验证绑定请求，返回生成的验证码。
-     * 如果该用户已有待验证请求则先移除旧的。
+     * 绑定以 openid 为准，所以同一 openid 在任何群发起的旧请求都会被撤销。
      */
     fun create(groupId: String, openId: String, playerName: String, qqUsername: String): String {
         // 移除该用户旧的待验证请求
-        pending.entries.removeIf { it.value.groupId == groupId && it.value.openId == openId }
+        pending.entries.removeIf { it.value.openId == openId }
 
         val code = generateCode()
         pending[code] = PendingBinding(groupId, openId, playerName, qqUsername)

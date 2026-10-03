@@ -77,7 +77,7 @@ object CustomCommandRegistry {
             .replace("{group}", groupId)
             .replace("{user}", userId)
         // {name} = 绑定的 MC 玩家名，未绑定则返回 QQ 用户名
-        val binding = CommandRepositories.bindings.getBinding(groupId, userId)
+        val binding = CommandRepositories.bindings.getBinding(userId)
         val mcName = binding?.playerName
             ?: NicknameManager.getNickname(userId)
             ?: userId
