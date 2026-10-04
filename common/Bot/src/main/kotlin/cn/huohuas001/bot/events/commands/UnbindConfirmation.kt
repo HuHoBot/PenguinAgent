@@ -131,13 +131,20 @@ object UnbindConfirmation {
             "已解除角色绑定：${QClient.escapeMarkdown(current.playerName)}"
         )
 
-        // 白名单同步：与用户自行解绑保持一致
         val plugin = try {
             BotShared.getPlugin()
         } catch (_: Exception) {
             null
+        } ?: return true
+
+        // 强制绑定下必须立刻断开在线会话，否则玩家能解绑后继续留在服务器里
+        if (plugin.isForceBindEnabled()) {
+            plugin.kickUnboundPlayer(current.playerName)
+            return true
         }
-        val whitelist = plugin?.getWhiteList() ?: return true
+
+        // 白名单同步：与用户自行解绑保持一致
+        val whitelist = plugin.getWhiteList()
         if (whitelist.delCommand.isNotBlank()) {
             val command = whitelist.delCommand.replace("{name}", current.playerName)
             plugin.sendCommand(command).whenComplete { _, error ->

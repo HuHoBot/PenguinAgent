@@ -14,6 +14,13 @@ class BindingCommands : CommandSupport() {
     @Commands(command = "绑定", describe = "绑定 QQ 号到 Minecraft 玩家")
     fun bind(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val userId = userId(event)
+        val argument = params.trim()
+
+        // 强制绑定：玩家进服被踢出时拿到的 5 位验证码，直接完成绑定
+        if (argument.isNotBlank() && plugin.isForceBindEnabled() && isForceCode(argument)) {
+            bindWithForceCode(plugin, event, userId, argument)
+            return
+        }
 
         // 绑定以 openid 为准：任意群绑定成功后，所有群都视为已绑定
         val existing = CommandRepositories.bindings.getBinding(userId)
@@ -22,7 +29,7 @@ class BindingCommands : CommandSupport() {
             return
         }
 
-        val playerName = params.trim()
+        val playerName = argument
         if (playerName.isBlank()) {
             reply(plugin, event, "用法: /绑定 <游戏ID>\n示例: /绑定 Steve")
             return
@@ -52,6 +59,55 @@ class BindingCommands : CommandSupport() {
         val code = PendingBindingStore.create(groupId(event), userId, playerName, qqUsername)
         val safeName = playerName.replace("_", "\\_")
         reply(plugin, event, "请使用角色 $safeName 进入服务器执行 /qqbind $code\n验证码 5 分钟内有效")
+    }
+
+    /** 5 位纯数字且当前确有强制绑定验证码在等待，才走验证码绑定流程。 */
+    private fun isForceCode(argument: String): Boolean =
+        argument.length == 5 && argument.all { it.isDigit() }
+
+    /**
+     * 强制绑定下的验证码绑定：验证码已由玩家进服时签发，
+     * 这里只需核对验证码与角色占用，直接落库并放行。
+     */
+    private fun bindWithForceCode(
+        plugin: HuHoBot,
+        event: GroupMessageEvent,
+        userId: String,
+        code: String
+    ) {
+        val pending = PendingBindingStore.consumeForceCode(code)
+        if (pending == null) {
+            reply(plugin, event, "验证码无效或已过期，请重新进入服务器获取新的验证码")
+            return
+        }
+
+        val playerName = pending.playerName
+        val qqUsername = event.sender?.username ?: "未知用户"
+
+        // 验证码已被别人抢先使用，或该 openid 已绑定其它角色
+        val bound = CommandRepositories.bindings.getBinding(userId)
+        if (bound != null) {
+            reply(plugin, event, "你已绑定角色：${QClient.escapeMarkdown(bound.playerName)}，请先解除绑定再重新绑定")
+            return
+        }
+        val conflict = CommandRepositories.bindings.findByPlayerName(playerName)
+        if (conflict != null) {
+            reply(plugin, event, "该验证码已被使用，游戏ID「$playerName」已绑定其他用户")
+            return
+        }
+
+        val ok = completeBind(groupId(event), userId, playerName, qqUsername)
+        if (!ok) {
+            reply(plugin, event, "绑定失败，该角色可能已被绑定")
+            return
+        }
+
+        val safeName = QClient.escapeMarkdown(playerName)
+        reply(
+            plugin, event,
+            "绑定成功：${safeName}\n请重新进入服务器即可正常游玩"
+        )
+        plugin.log_info("强制绑定：$userId 绑定角色 $playerName 成功")
     }
 
     @Commands(command = "解除绑定", describe = "解除 QQ 绑定")
@@ -99,6 +155,12 @@ class BindingCommands : CommandSupport() {
                 "QQ：$qqName\nopenid：$openId"
         )
         plugin.log_info("管理员 ${userId(event)} 强制解除了 ${info.playerName}（openid=$openId）")
+
+        // 强制绑定下同步断开在线会话；syncWhitelistRemove 内部已按开关跳过白名单操作
+        if (plugin.isForceBindEnabled()) {
+            plugin.kickUnboundPlayer(info.playerName)
+            return
+        }
 
         // 白名单同步：与用户自行解绑保持一致
         syncWhitelistRemove(plugin, info.playerName)
@@ -178,6 +240,8 @@ class BindingCommands : CommandSupport() {
 
     /** 白名单同步：绑定时自动添加白名单。 */
     private fun syncWhitelistAdd(plugin: HuHoBot, playerName: String) {
+        // 强制绑定本身就是准入控制，与白名单叠加会把未绑定玩家挡在白名单阶段
+        if (plugin.isForceBindEnabled()) return
         val whitelist = plugin.getWhiteList()
         if (whitelist.addCommand.isBlank()) return
         val command = plugin.applyPlaceholders(playerName, whitelist.addCommand.replace("{name}", playerName))
@@ -188,6 +252,7 @@ class BindingCommands : CommandSupport() {
 
     /** 白名单同步：解除绑定时自动移除白名单。 */
     private fun syncWhitelistRemove(plugin: HuHoBot, playerName: String) {
+        if (plugin.isForceBindEnabled()) return
         val whitelist = plugin.getWhiteList()
         if (whitelist.delCommand.isBlank()) return
         val command = plugin.applyPlaceholders(playerName, whitelist.delCommand.replace("{name}", playerName))

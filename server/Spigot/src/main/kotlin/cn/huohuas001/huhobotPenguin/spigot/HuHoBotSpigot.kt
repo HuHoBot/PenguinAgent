@@ -17,6 +17,7 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.CommandOutputAppender
 import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.SendCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
+import cn.huohuas001.huhobotPenguin.spigot.events.ForceBindGuard
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotRecvMsg
@@ -35,6 +36,7 @@ import io.github.kloping.qqbot.entities.ex.Keyboard
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import org.bukkit.Bukkit
+import org.bukkit.ChatColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandMap
 import org.bukkit.command.PluginCommand
@@ -63,6 +65,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         initializeInventoryRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
         initializeRuntime()
+        scheduleForceBindCheck()
         logCommandExecutor()
         val command = HuHoBotCommand(this)
         getCommand("huhobot")?.apply {
@@ -70,6 +73,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             tabCompleter = command
         } ?: log_error("无法注册 /huhobot 命令，请检查 plugin.yml")
         server.pluginManager.registerEvents(GameChat(), this)
+        server.pluginManager.registerEvents(ForceBindGuard(this), this)
         val atCommand = AtCommand()
         getCommand("at")?.apply {
             setExecutor(atCommand)
@@ -141,6 +145,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         initializeInventoryRenderer()
         reloadRuntimeConfig()
         logCommandExecutor()
+        // 配置里开着强制绑定但 QQ 不可用时，自动改回关闭，避免把玩家挡在门外
+        ensureForceBindAvailable()
     }
 
     /**
@@ -162,6 +168,19 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             } catch (error: Exception) {
                 log_error("QQ 机器人启动失败: ${error.message}")
             }
+        }
+    }
+
+    /**
+     * 启动后确认强制绑定是否可用。
+     *
+     * QQ 客户端是异步启动的，刚开启时通常还没连上，所以这里延迟一段时间再检查；
+     * 连上则保持开启，未连上则由 [ensureForceBindAvailable] 自动关闭。
+     */
+    private fun scheduleForceBindCheck() {
+        if (!configManager.isForceBindEnabled()) return
+        submitLater(FORCE_BIND_CHECK_DELAY_MS) {
+            ensureForceBindAvailable()
         }
     }
 
@@ -831,6 +850,50 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun getBindingRequireGameVerification(): Boolean = configManager.bindingRequireGameVerification()
 
+    override fun isForceBindEnabled(): Boolean = configManager.isForceBindEnabled()
+
+    override fun getForceBindGroups(): List<String> = configManager.forceBindGroups()
+
+    /**
+     * 解绑后立即踢出在线玩家（仅强制绑定开启时由调用方触发）。
+     *
+     * 不这样做的话，玩家可以先绑定进服、再在 QQ 里解绑，之后继续留在服务器里，
+     * 直到下次进服才被守卫拦下。
+     */
+    override fun kickUnboundPlayer(playerName: String): Boolean {
+        val target = server.getPlayerExact(playerName) ?: return false
+        val separator = "${ChatColor.DARK_GRAY}${ChatColor.STRIKETHROUGH}${"─".repeat(30)}"
+        val reason = buildString {
+            appendLine(separator)
+            appendLine("${ChatColor.RED}${ChatColor.BOLD}绑定已解除")
+            appendLine(separator)
+            appendLine("${ChatColor.GRAY}你的 QQ 绑定已被解除，本次游戏会话已结束。")
+            appendLine("${ChatColor.GRAY}重新进入服务器时需要重新绑定。")
+        }
+        // 放到下一 tick，避免在消息回调里直接改变玩家状态
+        server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
+        log_info("强制绑定: $playerName 已解除绑定，踢出在线会话")
+        return true
+    }
+
+    /**
+     * 强制绑定的前置条件是 QQ 机器人可用：玩家被踢出后要能在 QQ 群完成绑定。
+     *
+     * QQ 连接失败时若仍开着强制绑定，所有未绑定玩家都会被挡在门外且无法完成绑定，
+     * 因此这里直接把开关改回 false 并落盘。
+     *
+     * @return 强制绑定最终是否处于开启状态
+     */
+    fun ensureForceBindAvailable(): Boolean {
+        if (!configManager.isForceBindEnabled()) return false
+        if (QClient.getStarter() != null) return true
+
+        log_error("QQ 机器人未连接，无法完成强制绑定的验证码流程，已自动关闭 binding.force-bind")
+        config.set("binding.force-bind", false)
+        saveConfig()
+        return false
+    }
+
     override fun getCommandBlacklist(): List<String> = configManager.commandBlacklist()
 
     override fun getWebUiPort(): Int = config.getInt("webui-port", 5678)
@@ -1079,3 +1142,6 @@ private object BStatsReporter {
         Metrics(plugin, SERVICE_ID)
     }
 }
+
+/** 启动后延迟多久检查 QQ 是否连上（QQ 客户端为异步启动，留出连接时间）。 */
+private const val FORCE_BIND_CHECK_DELAY_MS = 15_000L
