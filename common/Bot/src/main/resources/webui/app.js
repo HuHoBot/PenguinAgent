@@ -296,10 +296,9 @@ function renderSection(section) {
     }
     $("#save-btn").classList.remove("hidden");
     $("#config-section-title").textContent = section.title;
-    $("#config-section-desc").textContent = section.fields
-        .map((f) => f.description)
-        .filter(Boolean)
-        .join("；");
+    // 分节介绍由后端手写；没有介绍时留空，不再把字段说明拼成一长串
+    $("#config-section-desc").textContent = section.description || "";
+    $("#config-section-desc").classList.toggle("hidden", !section.description);
 
     const form = $("#config-form");
     form.innerHTML = "";
