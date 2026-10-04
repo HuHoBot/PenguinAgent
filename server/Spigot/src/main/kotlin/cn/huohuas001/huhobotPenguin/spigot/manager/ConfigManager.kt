@@ -365,6 +365,9 @@ class ConfigManager(
     fun forceBindGroups(): List<String> =
         plugin.config.getStringList("binding.force-bind-groups").map { it.trim() }.filter { it.isNotEmpty() }
 
+    fun verifyExemptPlayers(): List<String> =
+        plugin.config.getStringList("binding.verify-exempt").map { it.trim() }.filter { it.isNotEmpty() }
+
     fun customInventoryBackgroundEnabled(): Boolean =
         plugin.config.getBoolean("inventory.render.custom-background.enabled", false)
 
@@ -396,7 +399,7 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 9
+        private const val CURRENT_CONFIG_VERSION = 10
         private const val CONFIG_VERSION_PATH = "config-version"
 
         private val COMMANDS_HIDDEN_FROM_MENU = setOf("blockMotd", "unblockMotd")
@@ -421,10 +424,13 @@ class ConfigManager(
         /**
          * 定点补充说明：给已有注释的配置项再加一行补充。
          *
-         * 用于说明某项在特定开关下不生效，避免用户同时维护两个互斥配置。
+         * 用于说明某项在特定开关下的实际作用范围，避免用户同时维护互斥配置。
+         * 以【注意】开头，升级器会在内容变化时替换旧的那行。
          */
         private val EXTRA_NOTES: Map<String, String> = mapOf(
-            "binding.require-game-verification" to "强制绑定启用时本条配置无效"
+            "binding.require-game-verification" to
+                "【注意】强制绑定开启时，被踢出的玩家用 5 位验证码直接完成绑定，不经过本流程；" +
+                "但免验证玩家主动绑定时仍走普通流程，是否需要游戏内 /qqbind 验证由本项决定"
         )
 
         /** 每个配置项的注释说明，用于自动追加时生成可读的 YAML。 */
@@ -460,9 +466,10 @@ class ConfigManager(
             "admin.openids" to "手动添加的管理员 OpenId 列表",
             "features.full-amount" to "是否默认开启全量聊天转发",
             "features.enable-auth" to "是否启用 QQ 头像认证功能",
-            "binding.require-game-verification" to "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作；强制绑定启用时本条配置无效",
+            "binding.require-game-verification" to "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作；强制绑定下仅影响走普通流程的绑定（如免验证玩家主动绑定）",
             "binding.force-bind" to "强制绑定：未绑定玩家进游戏会被踢出并拿到 5 位验证码，必须先在 QQ 群执行 /绑定 <验证码> 才能进入；开启后请勿再叠加白名单插件或 Minecraft 自带白名单",
             "binding.force-bind-groups" to "强制绑定提示里展示的 QQ 群号列表，留空则不提示具体群号",
+            "binding.verify-exempt" to "免验证名单：这些玩家无需 QQ 绑定即可进入服务器（受限于设备或环境无法使用 QQ 的人），每行一个玩家名",
             "inventory.render.custom-background.enabled" to "是否启用用户自定义背包底图",
             "inventory.render.custom-background.inventory-file" to "背包底图文件名，文件放在 inventory/backgrounds/ 目录",
             "inventory.render.custom-background.ender-chest-file" to "末影箱底图文件名；留空时复用背包底图",
@@ -508,7 +515,9 @@ class ConfigManager(
             "我的末影箱",
             "背包查看",
             "末影箱查看",
-            "强制解绑"
+            "强制解绑",
+            "添加免验证",
+            "取消免验证"
         )
 
         private val DEFAULT_VALUES: Map<String, Any> = buildMap {
@@ -561,6 +570,7 @@ class ConfigManager(
             put("binding.require-game-verification", true)
             put("binding.force-bind", false)
             put("binding.force-bind-groups", emptyList<String>())
+            put("binding.verify-exempt", emptyList<String>())
             put("inventory.render.custom-background.enabled", false)
             put("inventory.render.custom-background.inventory-file", "inventory.png")
             put("inventory.render.custom-background.ender-chest-file", "")

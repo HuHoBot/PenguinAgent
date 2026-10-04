@@ -166,6 +166,58 @@ class BindingCommands : CommandSupport() {
         syncWhitelistRemove(plugin, info.playerName)
     }
 
+    @Commands(command = "添加免验证", describe = "把玩家加入免验证名单，无需 QQ 绑定即可进入", onlyAdmin = true)
+    fun addVerifyExempt(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+
+        val playerName = params.trim()
+        if (playerName.isBlank()) {
+            reply(plugin, event, "用法: /添加免验证 <MC玩家名>")
+            return
+        }
+        if (!playerName.matches(Regex("[A-Za-z0-9_]{1,16}"))) {
+            reply(plugin, event, "玩家名格式不正确（只允许字母、数字与下划线）")
+            return
+        }
+        if (plugin.isVerifyExempt(playerName)) {
+            reply(plugin, event, "「$playerName」已在免验证名单中")
+            return
+        }
+
+        val updated = plugin.addVerifyExemptPlayer(playerName)
+        if (!updated) {
+            reply(plugin, event, "写入免验证名单失败，请查看控制台日志")
+            return
+        }
+        val safeName = QClient.escapeMarkdown(playerName)
+        reply(plugin, event, "已添加免验证：$safeName\n该玩家无需 QQ 绑定即可进入服务器")
+        plugin.log_info("管理员 ${userId(event)} 添加免验证玩家 $playerName")
+    }
+
+    @Commands(command = "取消免验证", describe = "从免验证名单中移除玩家", onlyAdmin = true)
+    fun removeVerifyExempt(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+
+        val playerName = params.trim()
+        if (playerName.isBlank()) {
+            reply(plugin, event, "用法: /取消免验证 <MC玩家名>")
+            return
+        }
+        if (!plugin.isVerifyExempt(playerName)) {
+            reply(plugin, event, "「$playerName」不在免验证名单中")
+            return
+        }
+
+        val updated = plugin.removeVerifyExemptPlayer(playerName)
+        if (!updated) {
+            reply(plugin, event, "写入免验证名单失败，请查看控制台日志")
+            return
+        }
+        val safeName = QClient.escapeMarkdown(playerName)
+        reply(plugin, event, "已取消免验证：$safeName\n若开启了强制绑定，该玩家下次进服需要完成 QQ 绑定")
+        plugin.log_info("管理员 ${userId(event)} 取消免验证玩家 $playerName")
+    }
+
     @Commands(command = "MC显示名称", describe = "切换 QQ→游戏 显示名称")
     fun setMcDisplayName(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
         val userId = userId(event)

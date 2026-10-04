@@ -281,6 +281,29 @@ interface ConfigProvider {
     /** 强制绑定提示里展示的 QQ 群号列表；留空则不提示具体群号。 */
     fun getForceBindGroups(): List<String> = emptyList()
 
+    /** 免验证名单：这些玩家无需 QQ 绑定即可进入服务器。 */
+    fun getVerifyExemptPlayers(): List<String> = emptyList()
+
+    /** 该玩家是否在免验证名单中（大小写不敏感）。 */
+    fun isVerifyExempt(playerName: String): Boolean =
+        getVerifyExemptPlayers().any { it.equals(playerName, ignoreCase = true) }
+
+    /**
+     * 把玩家加入免验证名单并持久化。
+     *
+     * 由各平台实现（需要写配置的能力）；未实现时返回 false。
+     *
+     * @return 是否写入成功
+     */
+    fun addVerifyExemptPlayer(playerName: String): Boolean = false
+
+    /**
+     * 从免验证名单移除玩家并持久化。
+     *
+     * @return 是否写入成功
+     */
+    fun removeVerifyExemptPlayer(playerName: String): Boolean = false
+
     /**
      * 强制绑定场景下，玩家解除绑定后立即断开其在线连接。
      *

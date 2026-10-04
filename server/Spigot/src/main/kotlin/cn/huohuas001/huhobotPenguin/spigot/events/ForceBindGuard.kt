@@ -28,6 +28,9 @@ class ForceBindGuard(private val plugin: HuHoBotSpigot) : Listener {
         if (!plugin.isForceBindEnabled()) return
 
         val player = event.player
+        // 免验证名单：受限于设备或环境无法使用 QQ 的人，由管理员人工审查后放行
+        if (plugin.isVerifyExempt(player.name)) return
+
         // 已绑定（openid 对应的角色名匹配）直接放行
         if (CommandRepositories.bindings.findByPlayerName(player.name) != null) return
 

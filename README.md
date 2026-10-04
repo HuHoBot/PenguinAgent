@@ -516,7 +516,21 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.17.0（最新）
+### v1.18.0（最新）
+
+**新功能：**
+- feat: 免验证名单 — 名单内的玩家无需 QQ 绑定即可进入服务器，适用于受限于设备或环境无法使用 QQ 的人员（`binding.verify-exempt`）
+- feat: 新增管理员命令 `/添加免验证 <玩家名>` 与 `/取消免验证 <玩家名>`，即时生效无需重启
+- feat: WebUI「绑定」页可编辑免验证名单
+
+**优化：**
+- opt: 免验证玩家解绑后不再被踢出（他们本来就能免绑定进服）
+- opt: 配置项补充说明改为按位置替换，说明文字更新后旧行会被覆盖
+
+**Bug 修复：**
+- fix: 「强制绑定开启时游戏内验证配置无效」的说法有误 — 免验证玩家主动绑定仍走普通流程，仍由 `binding.require-game-verification` 决定
+
+### v1.17.0
 
 **新功能：**
 - feat: 强制绑定 — 未绑定的玩家进服务器立刻被踢出并拿到 5 位验证码，在 QQ 群执行 `/绑定 <验证码>` 完成绑定后重新进入即可游玩（`binding.force-bind` / `binding.force-bind-groups`）

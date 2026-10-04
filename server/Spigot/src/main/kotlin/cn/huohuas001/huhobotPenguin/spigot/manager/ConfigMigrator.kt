@@ -67,15 +67,28 @@ internal object ConfigMigrator {
             commented += path
         }
 
-        // 定点补充：给已有注释的键再加一行说明（如"强制绑定启用时本条配置无效"）。
-        // 与上面的补注释不同，这里不受"上方已有注释就跳过"的限制，
-        // 但同一行说明已存在时不会重复写入。
+        /**
+         * 定点补充：给已有注释的键再加一行说明。
+         *
+         * 替换判定按位置而非文案：键上方紧邻的注释行如果**不是**该键的字段说明
+         * （[comments] 里登记的那句），就认为它是上一版留下的补充说明，直接替换。
+         * 这样以后再改补充说明的内容，旧的那行会被覆盖而不是越堆越多。
+         */
         for ((path, note) in extraNotes) {
             if (note.isBlank()) continue
             val located = locate(lines, path) ?: continue
-            val line = " ".repeat(located.indent) + "# $note"
-            if (lines.contains(line)) continue
-            lines.add(located.index, line)
+            val description = comments[path].orEmpty()
+            val above = located.index - 1
+            val staleIndex = above
+                .takeIf { it >= 0 && lines[it].trimStart().startsWith("#") }
+                ?.takeIf { lines[it].trim() != "# $description" }
+
+            if (staleIndex != null) {
+                lines[staleIndex] = " ".repeat(located.indent) + "# $note"
+                continue
+            }
+            if (lines.any { it.trim() == "# $note" }) continue
+            lines.add(located.index, " ".repeat(located.indent) + "# $note")
             commented += path
         }
 

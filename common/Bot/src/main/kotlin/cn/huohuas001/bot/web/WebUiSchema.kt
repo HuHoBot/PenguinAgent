@@ -230,9 +230,10 @@ object WebUiSchema {
             "开启强制绑定后，未绑定玩家进服务器会被踢出并拿到验证码，须在 QQ 群执行 /绑定 <验证码> 才能进入；" +
             "启用强制绑定时不要再叠加白名单插件或 Minecraft 自带白名单。",
         fields = listOf(
-            FieldSpec("binding.require-game-verification", "游戏内验证", "boolean", "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作。强制绑定启用时本条配置无效"),
+            FieldSpec("binding.require-game-verification", "游戏内验证", "boolean", "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作。强制绑定下被踢出的玩家用验证码直接绑定，但免验证玩家主动绑定时仍由本项决定"),
             FieldSpec("binding.force-bind", "强制绑定", "boolean", "未绑定的玩家进服务器会被踢出并拿到 5 位验证码，必须先在 QQ 群执行 /绑定 <验证码> 才能进入。若要开启，请勿再叠加白名单插件或 Minecraft 自带白名单"),
-            FieldSpec("binding.force-bind-groups", "强制绑定 QQ 群号", "list", "强制绑定提示里展示的 QQ 群号，可填多个；留空则不提示具体群号")
+            FieldSpec("binding.force-bind-groups", "强制绑定 QQ 群号", "list", "强制绑定提示里展示的 QQ 群号，可填多个；留空则不提示具体群号"),
+            FieldSpec("binding.verify-exempt", "免验证名单", "list", "这些玩家无需 QQ 绑定即可进入服务器，适用于受限于设备或环境无法使用 QQ 的人员，由管理员人工审查后添加（也可在 QQ 群用 /添加免验证 <玩家名>）")
         )
     )
 
