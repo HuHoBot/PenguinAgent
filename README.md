@@ -514,8 +514,117 @@ plugins/HuHoBotPenguin/addons/hello/
 
 ## 版本历史
 
+> 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.9.0（最新）
+### v1.17.0（最新）
+
+**新功能：**
+- feat: 强制绑定 — 未绑定的玩家进服务器立刻被踢出并拿到 5 位验证码，在 QQ 群执行 `/绑定 <验证码>` 完成绑定后重新进入即可游玩（`binding.force-bind` / `binding.force-bind-groups`）
+- feat: 解绑后立即断开在线会话，不必等到下次进服才被拦下
+- feat: 配置文件文本级自动升级 — 新增配置项连同注释补进旧 `config.yml`，配置版本号升到 9
+
+**优化：**
+- opt: 绑定时的游戏内验证改为默认开启（已显式配置 `false` 的服务器不受影响）
+- opt: 强制绑定开启时跳过绑定/解绑的白名单同步
+- opt: WebUI 每个分节改用手写介绍文案，不再把字段说明拼成一长串
+- opt: 踢出提示改为带颜色的完整信息，不再额外发送标题
+
+**Bug 修复：**
+- fix: 旧配置文件补不上新配置项 — `config.contains()` 会回落到 jar 模板默认值，导致模板新增的键永远补不进去
+- fix: 补注释时产生重复注释
+- fix: 强制绑定提示里的服务器名称不再带中括号
+
+### v1.16.0
+
+**新功能：**
+- feat: 玩家死亡播报转发到 QQ 群（`player-events.death.*`），死亡原因自动生成中文描述，覆盖 14 种死法
+- feat: WebUI「QQ 机器人」页面新增扫码连接入口，手机 QQ 扫码自动写入 AppID / Secret 并连接
+- feat: 新增管理员命令 `/强制解绑` — 支持 MC 玩家名、`@某人`、openid、QQ 昵称
+- feat: `/解除绑定` 增加二次确认（内联键盘，30 秒未选择视为取消）
+
+**优化：**
+- opt: 绑定改为按 openid 全局共享 — 一个群绑定后所有群通用，MC 玩家名全局唯一
+- opt: 换绑角色时保留已切换的显示名称偏好
+- opt: WebUI 先于 QQ 连接启动，未配置凭据时也能打开管理页面
+
+**Bug 修复：**
+- fix: QQ 扫码登录改为后台会话制，不再在主线程 `while(true)` 阻塞
+- fix: 内联键盘不渲染（漏调 `RowBuilder.build()` 导致 `rows` 为空）
+- fix: 按钮点击无响应、客户端提示「请求第三方失败 / 请求超时」（未按官方要求回应互动事件）
+- fix: 绑定数据自动从旧的按群分组格式迁移为按 openid 索引
+
+### v1.15.1
+
+**Bug 修复：**
+- fix: QQ 指令面板同步报 30019「面板版本冲突」— 原位更新按官方文档补传 `panel.version`，冲突时重读版本重试
+- fix: 面板同步并发自撞与撞限频 — 同步入口串行化，两次同步最小间隔 6 秒（官方写接口 10 QPM）
+- improve: 面板同步错误提示区分 30013 / 30019 / 40030009 并给出排查建议
+
+### v1.15.0
+
+**新功能：**
+- feat: 脚本扩展系统（仅 Spigot）— 用 JavaScript / Lua / Python 写脚本插件，无需编译
+- feat: 目录式脚本插件 — `addons/<名字>/` 下放 `main.js` / `main.lua` / `main.py` 加 `metadata.yaml`
+- feat: `Bird` 桥 — 脚本可注册 Bukkit 事件、游戏内命令（含 Tab 补全）、定时任务、HTTP 回调、QQ 群命令
+- feat: `/huhobot scripts reload [目录名]`
+- feat: 脚本配置与数据 — `_conf_schema.json` 声明默认值，`config` / `kv` 键值空间，`setData` 持久化
+- feat: 跨脚本事件总线 — `Bird.on` / `Bird.emit`
+- feat: 引擎按需安装 — LuaJ 打进主 jar；GraalJS、GraalPy 拆成独立包从 `engines/` 加载
+
+**Bug 修复：**
+- fix: LuaJ 重载解析、容器转 userdata、宿主对象回调解包等一批绑定层问题
+- fix: 脚本重载时同分重载选择不确定，改为按参数类型具体程度择优
+- fix: 脚本加载失败时未回滚已登记内容，重载不再留下幽灵命令
+
+### v1.14.0
+
+**新功能：**
+- feat: WebUI 附属插件中心 — 从附属插件中心 API 拉取列表、搜索、看详情、一键下载安装、删除已下载插件
+- feat: 群列表为空或未收录时，收到任意消息即自动把群 OpenID 写入 `bot.groups`
+
+**优化：**
+- opt: WebUI 体验优化 — Toast 改为顶部飘窗、面板错峰淡入、点击涟漪反馈、群名称加载态
+- opt: 群服互通默认格式恢复为 `[游戏] {name}: {message}` / `[QQ] {name}: {message}`
+- opt: 绑定后不再自动把 QQ→游戏显示名切成 MC 名，需要时用 `/MC显示名称 MC` 切换
+- opt: PlaceholderAPI 解析改用在线玩家实例，玩家类占位符可正常返回
+
+### v1.13.0
+
+**新功能：**
+- feat(#7): QQ 群接入简化 — WebUI 群列表显示群名称与 OpenID 尾号、可点击复制，名称缓存 30 分钟并持久化
+- feat(#8): 版本更新提醒 — 启动与 `/版本` 检查 GitHub 正式 Release，走 gh-proxy 代理国内可用
+- feat(#9): 接入 PlaceholderAPI — 纯反射接入无编译期依赖，覆盖双向转发与各类模板
+- feat(#10): Agent 获取类工具结果不再刷屏 — 新增 `agent.hide-fetch-results`（默认开启）
+
+### v1.12.0
+
+**新功能：**
+- feat: 集成 bStats 统计（插件 ID `34268`），库重定位到 `cn.huohuas001.bstats`，不与其他插件冲突
+
+### v1.11.0
+
+**新功能：**
+- feat: 所有带键盘的消息发送后 30 秒自动撤回，点击按钮后可立即撤回对应卡片
+- feat: AI Agent 手动审批 30 秒未处理自动拒绝并撤回卡片，超时后继续执行后续流程并说明操作已被拒绝
+
+**Bug 修复：**
+- fix: qqpd-bot-java 消息撤回接口始终返回失败（`RestApi` 依赖未绑定导致 DELETE 请求被跳过）
+- fix: 撤回失败时输出 HTTP 状态码与响应体
+
+### v1.10.0
+
+**新功能：**
+- feat(inventory): 背包与末影箱渲染整合（6 项）— 3D 玩家模型渲染、离线背包快照、默认皮肤库解析、护甲材质与附魔光泽资源
+- feat(bot): QQ 命令面板与命令体验整合（#6）— 面板分页、重复面板清理、20 条上限截断、命令按权限分组、`pushMenu` / `priority` 支持
+
+**Bug 修复：**
+- fix: 背包查询名字大小写不匹配时正确解析在线玩家
+- fix: 末影箱渲染失败与无离线快照的错误提示区分
+- fix: `onServerThread` 增加 10s 超时，背包快照序列化移出主线程
+- fix: 瘦手臂（slim）胸甲 UV 宽度修正
+- fix: `registerBotCommand` / `unregisterBotCommand` 面板同步改为异步
+
+### v1.9.0
 
 **新功能：**
 - feat: 首次启动自动扫码登录 — 控制台打印二维码，手机 QQ 扫码后自动写入 AppID/Secret 到 config.yml
