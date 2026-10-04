@@ -516,7 +516,13 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.18.0（最新）
+### v1.18.1（最新）
+
+**Bug 修复：**
+- fix: 末地烛等 5 个物品在背包图片里形状变形 — 这些物品的原版图标本来就是 3D 方块模型渲染，之前被当成平面贴图铺平画了出来（末地烛被掰弯、脚手架显示为问号方块）
+- fix: 末地烛、雪、传送植物、传送花、脚手架改用按原版方块模型烘焙的图标
+
+### v1.18.0
 
 **新功能：**
 - feat: 免验证名单 — 名单内的玩家无需 QQ 绑定即可进入服务器，适用于受限于设备或环境无法使用 QQ 的人员（`binding.verify-exempt`）
