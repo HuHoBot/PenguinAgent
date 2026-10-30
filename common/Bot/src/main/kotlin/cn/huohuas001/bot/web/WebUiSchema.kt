@@ -193,7 +193,17 @@ object WebUiSchema {
             FieldSpec("agent.api-key", "接口密钥", "password", "AI 接口密钥"),
             FieldSpec("agent.model", "模型名", "text", "使用的模型", placeholder = "gpt-4o-mini"),
             FieldSpec("agent.command-mode", "命令执行模式", "select", "manual=手动审批；auto=自动执行", options = listOf("manual", "auto")),
-            FieldSpec("agent.hide-fetch-results", "不在群聊输出获取类结果", "boolean", "开启后获取插件列表、命令帮助、服务器日志等结果只交给 AI，不在群里发卡片")
+            FieldSpec("agent.hide-fetch-results", "不在群聊输出获取类结果", "boolean", "开启后获取插件列表、命令帮助、服务器日志等结果只交给 AI，不在群里发卡片"),
+        FieldSpec("agent.think", "深度思考", "boolean", "原生推理模型用：开启后才向接口附加思考参数，需同时配好推理设置与参数名；与思考引导互斥，开启思考引导后本项不生效"),
+        FieldSpec("agent.think-visibility", "思考展示方式", "select", "思考过程往哪儿送：log=只写日志（默认）/ group=只发 QQ 群 / both=都发", options = listOf("log", "group", "both")),
+        FieldSpec("agent.think-param", "思考参数名", "select", "按模型厂商选择传给接口的思考参数名", options = listOf("reasoning_effort", "effort", "thinking_level", "reasoning.effort", "thinking.type", "thinking_budget", "enable_thinking")),
+        FieldSpec("agent.think-level", "推理设置", "text", "档位 none/minimal/low/medium/high/xhigh/max，也可填整数 token 预算或 true/false；留空不附加思考参数", placeholder = "medium"),
+        FieldSpec("agent.think-guide", "思考引导", "boolean", "非推理模型用：追加提示词让模型用 [思考] 模拟深度思考；与深度思考互斥，开启后深度思考相关设置不生效"),
+        FieldSpec("agent.think-guide-prompt", "思考引导提示词", "textarea", "留空则使用代码内置默认值"),
+        FieldSpec("agent.context.compress.target", "压缩目标 token", "number", "上下文压缩后的目标 token 数，兼作压缩结果的校验上限"),
+        FieldSpec("agent.context.compress.keep", "压缩保留条数", "number", "压缩时原样保留的最近消息条数"),
+        FieldSpec("agent.context.compress.prompt", "压缩提示词", "textarea", "支持 {target} 占位符，留空则使用代码内置默认值"),
+        FieldSpec("agent.context.truncate.drop", "默认删除条数", "number", "/删除信息 未指定条数时默认删除的条数")
         )
     )
 

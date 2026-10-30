@@ -19,5 +19,7 @@ internal data class StoredCommandSettings(
     val administratorModes: Map<String, AdministratorAccessMode> = emptyMap(),
     val fullForwarding: Map<String, Boolean> = emptyMap(),
     /** openid → 绑定记录；同一 openid 在所有群共享同一条记录。 */
-    val bindings: Map<String, BindingInfo> = emptyMap()
+    val bindings: Map<String, BindingInfo> = emptyMap(),
+    /** `groupOpenId:memberOpenId` → member_role，供 Agent 审批鉴权使用的被动角色缓存。 */
+    val memberRoles: Map<String, String> = emptyMap()
 )

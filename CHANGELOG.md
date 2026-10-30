@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.19.0（2026-10-30）
+
+### 新功能
+
+- feat: Agent 深度思考 — 原生推理模型开启后按厂商适配思考参数（`agent.think` / `agent.think-level` / `agent.think-param`），支持 `reasoning_effort`、`effort`、`thinking_level`、`reasoning.effort`、`thinking.type`、`thinking_budget`、`enable_thinking`；档位类型与参数不匹配时不使请求失败，只把提示写进日志
+- feat: Agent 思考引导 — 给不具备原生推理能力的模型追加提示词，用 `[思考]` / `[/思考]` 标签模拟深度思考，程序把标签内容取出来当思考过程、从正文里剥离；与深度思考互斥，开启后 `think` / `think-level` / `think-param` 一律不生效
+- feat: 思考展示方式 `agent.think-visibility` — `log` 只写日志（默认，避免刷屏）/ `group` 作为「思考」卡片发群 / `both` 两边都发
+- feat: Agent 上下文压缩与截断 — 新增 `/压缩`、`/压缩token <数值>`、`/压缩保留 <条数>`、`/删除信息 [条数]`；压缩把较早的对话换成结构化摘要，保留最近若干条消息；裁剪与压缩都避开 `tool_calls` 与 `tool` 的配对边界，不会切出接口会拒绝的孤立消息
+- feat: 上下文用量按接口返回的 `usage.prompt_tokens` 判断，接口不返回时退回本地估算
+- feat: 群成员角色被动缓存 — 群消息 `author.member_role` 自动写入状态文件新增的 `[member-roles]` 段，用于 Agent 审批鉴权
+- feat: WebUI 新增深度思考、思考引导、上下文压缩相关配置项，修改后写入 `config.yml` 并刷新配置缓存，无需重启
+
+### 改进
+
+- change: Agent 审批权限改为三级判定 — 插件管理员名单（发起者 / 全局管理员 / 本群管理员）→ 被动角色缓存 → 群成员信息接口（白名单能力，失败一次即停用）
+- change: 同一会话只允许一个 `runLoop` 执行，`/agent` 与审批回调不再可能并发写同一份消息列表
+- change: `/agent` 复用会话改为按群隔离，多群部署时不再复用别的群的会话
+- change: 互动事件（解绑确认、Agent 审批）按结果回不同 code：真正处理成功才回 0，无权限 / 已过期 / 被他人点击回非零，客户端不再弹误导性的「操作成功」
+- change: 昵称映射改为「有变化才保存」，一条消息里出现多个新昵称只在循环结束后落盘一次
+- change: WebUI 自己持有请求线程池并在 `stop()` 与启动失败分支显式关闭，插件重载不再泄漏线程
+- change: 群成员信息接口加 5 秒连接 / 读取超时
+- change: 命令面板最多展示 20 条，`压缩`、`压缩token`、`压缩保留`、`删除信息` 与 `blockMotd`、`unblockMotd` 一并移出面板菜单
+
+### Bug 修复
+
+- fix: 普通成员点击解绑确认的「确定 / 取消」提示无权限 — 按钮权限由「仅管理者可操作」改为「所有人可操作」，身份边界改由服务端严格校验（#31）
+- fix: 拿不到点击者 openid 时曾经放行他人解绑 — 改为一律拒绝，且身份不符时不消费待确认项，发起者仍可在有效期内操作
+- fix: 他人点击解绑按钮时，提示消息现在 @ 点击者本人：「@xxx 这不是你的绑定信息，请让发起者本人操作」
+- fix: `/stop` 之后复用会话会被立刻判定为已停止，新任务不执行 — 复用前复位 `stopped`
+- fix: 身份校验通过后才原子消费待确认项，避免同一张卡片被连点两次重复执行
+- fix: 配置里遗留的 `commands.深度思考 / 思考展示 / 思考程度 / 思考引导` 会被自动清理
+
+### 升级提示
+
+- 配置版本升到 11。启动时自动补上 `agent.think`、`agent.think-visibility`、`agent.think-level`、`agent.think-param`、`agent.think-guide`、`agent.think-guide-prompt`、`agent.context.compress.target`、`agent.context.compress.keep`、`agent.context.compress.prompt`、`agent.context.truncate.drop`
+- 深度思考与思考引导默认都关闭，升级后行为与 1.18.1 一致
+- 深度思考相关设置只在配置文件 / WebUI 调整，QQ 群不再提供设置命令
+
+---
+
 ## v1.18.1（2026-10-04）
 
 ### Bug 修复

@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.agent
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.InteractionOutcome
 import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.state.CommandRepositories
 import com.alibaba.fastjson.JSONArray
@@ -35,6 +36,13 @@ object AgentManager {
 
     private val sessions = ConcurrentHashMap<String, AgentSession>()
 
+    /**
+     * 群成员信息查询接口是 QQ 白名单能力，普通 bot 调用会报 11253。
+     * 一旦确认不可用就不再重试，避免每次审批回调都白等一次网络请求。
+     */
+    @Volatile
+    private var platformRoleApiDisabled = false
+
     // ---------------------------------------------------------------- 命令入口
 
     /** 处理 /agent 命令，启动一个 AI 会话。 */
@@ -48,7 +56,6 @@ object AgentManager {
             sendGroupMessage(event, "用法：/agent <任务描述>")
             return
         }
-        sendGroupMessage(event, "已收到任务，AI 助手开始处理…")
 
         val groupOpenId = event.metadata?.getString("group_openid")
             ?: event.groupOpenId
@@ -63,9 +70,18 @@ object AgentManager {
             task
         }.trim()
 
-        // 查找同一用户现有的会话，复用上下文（包括已完成的会话，直到用户手动 /newsession 清除）
+        // 查找同一用户在本群现有的会话，复用上下文（包括已完成的会话，直到用户手动 /newsession 清除）。
+        // 必须按群隔离：bot 绑多个群时，跨群复用会把任务卡片发到另一个群，
+        // 点审批时又会被"群不匹配"拦下，同时上下文也串到了别的群。
         val existing = sessions.values.firstOrNull {
-            it.requestUserId == requestUserId && it.awaitingApproval == null
+            it.requestUserId == requestUserId && it.groupOpenId == groupOpenId && it.awaitingApproval == null
+        }
+
+        // 会话正在执行时不能复用：往同一个 messages 里追加消息会和正在跑的循环抢列表。
+        // 这里明确拒绝，而不是悄悄再开一个会话，避免同一个群里出现两份并行的 AI 对话。
+        if (existing != null && existing.isRunning) {
+            sendGroupMessage(event, "上一个任务还在执行中，请等它结束，或用 /stop 停止后再发起新任务")
+            return
         }
 
         val session: AgentSession
@@ -75,6 +91,9 @@ object AgentManager {
             session = existing
             isNewSession = false
             session.finished = false
+            // /stop 只置位 stopped，会话本身保留（对话历史不清除）。
+            // 复用前必须复位，否则新任务会在 runLoop 入口被立刻判定为"已停止"而直接结束。
+            session.stopped = false
             session.memberNames.putAll(mentionMapValues(event))
             session.messages.add(userMessage("请帮我：$fullTask"))
         } else {
@@ -109,6 +128,7 @@ object AgentManager {
             session.messages.add(userMessage("请帮我：$fullTask"))
         }
 
+        sendGroupMessage(event, "已收到任务，AI 助手开始处理…")
         plugin.submitAsync { runLoop(plugin, session, config) }
     }
 
@@ -144,7 +164,27 @@ object AgentManager {
 
     private fun runLoop(plugin: HuHoBot, session: AgentSession, config: AgentConfig) {
         if (session.finished) return
-        val client = AgentApiClient(config.baseUrl, config.apiKey, config.model)
+        // 同一会话只允许一个 runLoop 在跑：/agent 与审批回调都会触发，
+        // 重复进入会让两个循环并发写 messages，裁出孤立 tool 消息或重复执行命令。
+        if (!session.tryBeginRun()) {
+            plugin.log_warning("Agent 会话已在执行中，忽略重复的 runLoop：${session.sessionId}")
+            return
+        }
+        try {
+            runLoopBody(plugin, session, config)
+        } finally {
+            session.endRun()
+        }
+    }
+
+    private fun runLoopBody(plugin: HuHoBot, session: AgentSession, config: AgentConfig) {
+        // 只有开了深度思考、且没开思考引导时才向接口附加思考参数；
+        // 深度思考与思考引导互斥，开启思考引导后深度思考相关设置一律不生效
+        val client = if (config.effectiveThink) {
+            AgentApiClient(config.baseUrl, config.apiKey, config.model, config.thinkLevel, config.thinkParam)
+        } else {
+            AgentApiClient(config.baseUrl, config.apiKey, config.model)
+        }
         val tools = AgentTools.buildTools()
         var steps = 0
 
@@ -161,18 +201,39 @@ object AgentManager {
             }
 
             val result = try {
-                client.chat(trimContext(session.messages), tools)
+                client.chat(prepareMessages(session, config), tools)
             } catch (error: Throwable) {
                 plugin.log_error("Agent AI 调用失败: ${error.message}")
                 sendToGroup(plugin, session, AgentMessageFormatter.error(error.message ?: "未知错误"))
                 finish(plugin, session)
                 return
             }
+            client.thinkingWarning?.let { plugin.log_info("Agent 思考参数提示：$it") }
+            result.usage?.let { session.lastPromptTokens = it.promptTokens }
+            plugin.log_info(
+                "Agent 诊断: think=${config.think}, guide=${config.thinkGuide}, vis=${config.thinkVisibility}, " +
+                    "promptLen=${config.effectiveThinkGuidePrompt.length}, " +
+                    "rawLen=${client.lastRawContent?.length ?: -1}, " +
+                    "rawHasThink=${client.lastRawContent?.contains("[思考]")}, " +
+                    "reasoningLen=${result.reasoning?.length ?: -1}, tools=${result.toolCalls?.size ?: 0}"
+            )
 
-            // 推理模型的思考过程：仅当模型支持 reasoning 时输出，否则不输出思考
+            // 思考过程往哪儿送由 think-visibility 决定：只写日志 / 只发群 / 都发。
+            // 推理模型与思考引导（[思考]）产出的思考内容都走这一条路径。
             val reasoning = result.reasoning?.trim().orEmpty()
             if (reasoning.isNotEmpty()) {
-                sendToGroup(plugin, session, AgentMessageFormatter.thinking(reasoning))
+                when (config.thinkVisibility) {
+                    AgentThinkVisibility.LOG ->
+                        plugin.log_info("Agent 思考过程（仅日志）：\n$reasoning")
+
+                    AgentThinkVisibility.GROUP ->
+                        sendToGroup(plugin, session, AgentMessageFormatter.thinking(reasoning))
+
+                    AgentThinkVisibility.BOTH -> {
+                        plugin.log_info("Agent 思考过程（仅日志）：\n$reasoning")
+                        sendToGroup(plugin, session, AgentMessageFormatter.thinking(reasoning))
+                    }
+                }
             }
 
             val toolCalls = result.toolCalls
@@ -456,43 +517,65 @@ object AgentManager {
 
     // ---------------------------------------------------------------- 审批回调
 
-    /** 处理 QQ 按钮点击回调。 */
-    fun onInteraction(plugin: HuHoBot, event: InterActionEvent) {
+    /**
+     * 处理 QQ 按钮点击回调。
+     *
+     * 回应时机由本方法决定：[respond] 必须在做出判断后立刻调用，
+     * 但要在执行服务器命令之前调用，否则按钮会一直 loading。
+     * 真正处理成功才回 0，被拒绝的分支回非零，避免客户端弹出误导性的「操作成功」。
+     *
+     * @return 是否接管了这次互动（决定监听器是否还要兜底回应）
+     */
+    fun onInteraction(plugin: HuHoBot, event: InterActionEvent, respond: (Int) -> Unit): Boolean {
         val interaction = event.interAction
-        val data = interaction?.data?.resolved?.button_data ?: return
-        if (!data.startsWith(ACTION_PREFIX)) return
+        val data = interaction?.data?.resolved?.button_data ?: return false
+        if (!data.startsWith(ACTION_PREFIX)) return false
 
-        val groupOpenId = interaction.groupOpenid ?: return
+        val groupOpenId = interaction.groupOpenid ?: return true
         val memberOpenId = interaction.groupMemberOpenid ?: ""
         plugin.log_info("Agent 审批回调: group=$groupOpenId, member=$memberOpenId, data=$data")
 
-        // event.response(0) 由 AgentInteractionListener 统一调用：官方要求收到互动事件后必须回应，
-        // 否则客户端会一直 loading 直到超时，用户看到「请求第三方失败 / 请求超时」。
-
         val parts = data.split(":")
-        if (parts.size < 4) return
+        if (parts.size < 4) {
+            respond(InteractionOutcome.SILENT.code)
+            return true
+        }
         val approvalId = parts[2]
         val decision = parts[3]
 
-        val session = sessions.values.firstOrNull { it.awaitingApproval?.approvalId == approvalId } ?: return
-        val pending = session.awaitingApproval ?: return
+        val session = sessions.values.firstOrNull { it.awaitingApproval?.approvalId == approvalId }
+        if (session == null) {
+            // 已处理过或已超时撤回，属正常情况，不必打扰任何人
+            respond(InteractionOutcome.SILENT.code)
+            return true
+        }
+        val pending = session.awaitingApproval ?: run {
+            respond(InteractionOutcome.SILENT.code)
+            return true
+        }
 
         if (session.stopped) {
             session.awaitingApproval = null
+            respond(InteractionOutcome.SILENT.code)
             pending.messageId?.let { QClient.recallMessage(groupOpenId, it) }
-            return
+            return true
         }
 
         if (session.groupOpenId != groupOpenId) {
             plugin.log_warning("Agent 审批群不匹配，已忽略 approvalId=$approvalId")
+            respond(InteractionOutcome.SILENT.code)
             sendToGroup(plugin, session, AgentMessageFormatter.noPermissionNotice())
-            return
+            return true
         }
         if (!isApprovalAuthorized(plugin, session, groupOpenId, memberOpenId)) {
+            plugin.log_warning("Agent 审批被无权限成员点击：approvalId=$approvalId, member=$memberOpenId")
+            respond(InteractionOutcome.SILENT.code)
             sendToGroup(plugin, session, AgentMessageFormatter.noPermissionNotice())
-            return
+            return true
         }
 
+        // 走到这里才算真的批或拒，客户端可以提示「操作成功」
+        respond(InteractionOutcome.HANDLED.code)
         session.awaitingApproval = null
         pending.messageId?.let { QClient.recallMessage(groupOpenId, it) }
 
@@ -516,9 +599,17 @@ object AgentManager {
         if (config != null && config.usable) {
             plugin.submitAsync { runLoop(plugin, session, config) }
         }
+        return true
     }
 
-    /** 仅管理员（群主/群管理员由按钮权限平台保证）与发起者可审批。 */
+    /**
+     * 审批权限，按优先级依次判断：
+     * 1. 插件自有管理员名单：任务发起者、bot 全局管理员、本群手动管理员（主要依据）；
+     * 2. 被动缓存：群消息事件 author 自带的 member_role（QQ 已开放，成员@过机器人即可确认）；
+     * 3. 主动查询：群成员信息接口（白名单能力，普通 bot 拿不到，仅作兜底）。
+     *
+     * 按钮互动事件（INTERACTION_CREATE）不带角色，所以 QQ 侧身份只能靠 2/3 两条路补。
+     */
     private fun isApprovalAuthorized(
         plugin: HuHoBot,
         session: AgentSession,
@@ -530,11 +621,38 @@ object AgentManager {
             plugin.log_warning("Agent 审批: group_member_openid 为空，无法验证权限")
             return false
         }
+        // 主要：插件自有的管理员名单
         if (memberOpenId == session.requestUserId) return true
         if (memberOpenId in plugin.getAdminList()) return true
         if (CommandRepositories.administrators.contains(groupId, memberOpenId)) return true
-        plugin.log_warning("Agent 审批: $memberOpenId 不在管理员列表中")
+        // 次要一：被动缓存（群消息 author.member_role）
+        if (CommandRepositories.memberRoles.isGroupAdmin(groupId, memberOpenId)) {
+            plugin.log_info("Agent 审批: $memberOpenId 命中被动角色缓存（${CommandRepositories.memberRoles.role(groupId, memberOpenId)}），放行")
+            return true
+        }
+        // 次要二：主动查询群成员信息接口
+        if (isGroupAdminByPlatform(plugin, groupId, memberOpenId)) return true
+        plugin.log_warning("Agent 审批: $memberOpenId 非管理员名单成员，且无法确认为本群群主/群管理员")
         return false
+    }
+
+    /**
+     * 主动查询该成员在本群的身份。
+     *
+     * 该接口是白名单能力，普通 bot 返回 11253；一旦失败就置位 [platformRoleApiDisabled] 不再重试。
+     */
+    private fun isGroupAdminByPlatform(plugin: HuHoBot, groupId: String, memberOpenId: String): Boolean {
+        if (platformRoleApiDisabled) return false
+        val starter = QClient.getStarter() ?: return false
+        val role = GroupManagementApi.getMemberRole(starter, groupId, memberOpenId)
+        if (role == null) {
+            platformRoleApiDisabled = true
+            plugin.log_info("Agent 审批: 群成员信息接口不可用（白名单能力），后续仅用被动缓存与管理员名单判定")
+            return false
+        }
+        val admin = role == "owner" || role == "admin"
+        plugin.log_info("Agent 审批: $memberOpenId 主动查询到本群身份=$role，${if (admin) "放行" else "拒绝"}")
+        return admin
     }
 
     // ---------------------------------------------------------------- 工具方法
@@ -598,20 +716,35 @@ object AgentManager {
         return chunks
     }
 
-    /** 上下文窗口裁剪：保留首条 system 与最近的消息，避免无限增长。 */
-    private fun trimContext(messages: List<JSONObject>): List<JSONObject> {
-        if (messages.size <= MAX_CONTEXT_MESSAGES) return messages
-        return listOf(messages.first()) + messages.takeLast(MAX_CONTEXT_MESSAGES - 1)
+    /** 上下文窗口裁剪：保留首条 system 与最近的消息，且不拆散 tool 调用组。 */
+    private fun prepareMessages(session: AgentSession, config: AgentConfig): List<JSONObject> {
+        val trimmed = AgentContextManager.trimByCount(session.messages, MAX_CONTEXT_MESSAGES)
+        return if (config.thinkGuide) {
+            AgentThinking.withGuide(trimmed, config.effectiveThinkGuidePrompt)
+        } else {
+            trimmed
+        }
     }
 
     private fun finish(plugin: HuHoBot, session: AgentSession) {
         session.finished = true
-        // 不立即移除会话：保留上下文供同一用户后续追问，由 cleanupExpired() 按超时清理
+        // 刻意不在这里移除会话：对话历史按设计长期保留，供同一用户后续追问，
+        // 只有用户手动 /newsession 才会清空。会话数量因此随"用过的群 + 用户"增长，属预期行为。
     }
 
+    /**
+     * 查找指定群中某用户现有的会话，供上下文压缩一类的管理命令使用。
+     *
+     * 这里按群 + 用户一起匹配，和 clearSession/stopAgent 保持一致；
+     * /agent 复用会话时只按用户匹配，跨群会复用到别的群的会话，那条路径不做改动。
+     */
+    fun findSession(groupOpenId: String, requestUserId: String): AgentSession? =
+        sessions.values.firstOrNull {
+            it.requestUserId == requestUserId && it.groupOpenId == groupOpenId
+        }
+
     /** 手动清除同一用户在指定群的会话上下文。 */
-    fun clearSession(plugin: HuHoBot, groupOpenId: String, requestUserId: String) {
-        val removed = sessions.entries.removeIf { (_, session) ->
+    fun clearSession(plugin: HuHoBot, groupOpenId: String, requestUserId: String) {        val removed = sessions.entries.removeIf { (_, session) ->
             session.requestUserId == requestUserId
                 && session.groupOpenId == groupOpenId
         }

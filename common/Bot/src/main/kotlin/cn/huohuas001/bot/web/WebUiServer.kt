@@ -12,6 +12,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -33,6 +34,14 @@ object WebUiServer {
     private var httpServer: HttpServer? = null
     private val running = AtomicBoolean(false)
 
+    /**
+     * 处理请求的线程池。
+     *
+     * HttpServer.stop() 只停监听，不会关闭外部传进来的 executor，
+     * 所以这里必须自己持有引用，在 [stop] 里显式关闭，否则每次插件重载都会漏 2 个线程。
+     */
+    private var executor: ExecutorService? = null
+
     /** token -> 过期时间戳 */
     private val tokens = ConcurrentHashMap<String, Long>()
 
@@ -44,7 +53,9 @@ object WebUiServer {
             val plugin = BotShared.getPlugin()
             val port = plugin.getWebUiPort()
             val server = HttpServer.create(InetSocketAddress(port), 0)
-            server.executor = Executors.newFixedThreadPool(2)
+            val pool = Executors.newFixedThreadPool(2)
+            server.executor = pool
+            executor = pool
             server.createContext("/", WebUiServer::handle)
             server.start()
             httpServer = server
@@ -57,6 +68,9 @@ object WebUiServer {
                 plugin.log_info("WebUI 管理密码: 已设置（可用 /hb password 修改）")
             }
         } catch (error: Exception) {
+            // 启动失败时把已经建好的线程池一并收掉，避免泄漏
+            executor?.shutdownNow()
+            executor = null
             BotShared.getPlugin().log_warning("WebUI 启动失败（端口可能被占用）: ${error.message}")
         }
     }
@@ -70,6 +84,9 @@ object WebUiServer {
         } catch (_: Exception) {
         }
         httpServer = null
+        // HttpServer.stop() 不会关闭外部传入的 executor，必须显式关闭
+        executor?.shutdownNow()
+        executor = null
         running.set(false)
         tokens.clear()
     }

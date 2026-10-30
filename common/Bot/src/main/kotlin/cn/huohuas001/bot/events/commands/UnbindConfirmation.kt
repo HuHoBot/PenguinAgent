@@ -1,6 +1,7 @@
 package cn.huohuas001.bot.events.commands
 
 import cn.huohuas001.bot.HuHoBot
+import cn.huohuas001.bot.InteractionOutcome
 import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.provider.BotShared
@@ -77,52 +78,84 @@ object UnbindConfirmation {
         }, TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
-    /** 处理按钮点击；返回 true 表示该回调属于本流程。 */
-    fun onInteraction(groupOpenId: String, userOpenId: String, buttonData: String): Boolean {
-        if (!buttonData.startsWith(ACTION_PREFIX)) return false
+    /**
+     * 处理按钮点击。
+     *
+     * 回应时机由本方法决定：[respond] 在判断出结果后立刻调用，早于撤回消息等耗时操作。
+     * 被他人点击时回非零，避免点击者客户端弹出误导性的「操作成功」。
+     *
+     * @return 是否接管了这次互动（不属于本流程时返回 null）
+     */
+    fun onInteraction(
+        groupOpenId: String,
+        userOpenId: String,
+        buttonData: String,
+        respond: (Int) -> Unit
+    ): InteractionOutcome? {
+        if (!buttonData.startsWith(ACTION_PREFIX)) return null
 
         // buttonData 形如 huhobot:unbind:<confirmId>:yes|:no，confirmId 本身不含冒号
         val payload = buttonData.removePrefix(ACTION_PREFIX)
         val confirmed = payload.endsWith(":yes")
         val confirmId = payload.removeSuffix(":yes").removeSuffix(":no")
-        if (confirmId.isBlank()) return true
+        if (confirmId.isBlank()) {
+            respond(InteractionOutcome.SILENT.code)
+            return InteractionOutcome.SILENT
+        }
 
-        val request = pending.remove(confirmId)
+        // 先取不删：身份不符时不能把待确认项消费掉，否则任何群成员都能点掉别人的确认卡片
+        val request = pending[confirmId]
         if (request == null) {
             // 已处理过或已超时撤回，属正常情况
             logDebug("解绑确认 $confirmId 不存在或已过期")
-            return true
+            respond(InteractionOutcome.SILENT.code)
+            return InteractionOutcome.SILENT
         }
 
-        // 只有发起者本人能决定；SDK 偶尔不带 memberOpenid，此时不校验身份
+        // 只有发起者本人能决定。SDK 偶尔不带 memberOpenid，这种拿不到点击者身份的情况一律拒绝：
+        // 解绑会连带移出白名单、强制绑定下还会踢掉在线会话，绝不能因为身份缺失就放行。
         val sameGroup = request.groupOpenId == groupOpenId
-        val sameUser = userOpenId.isBlank() || request.userOpenId == userOpenId
+        val sameUser = userOpenId.isNotBlank() && request.userOpenId == userOpenId
         if (!sameGroup || !sameUser) {
             logInfo("解绑确认被他人点击：发起者=${request.userOpenId}，点击者=$userOpenId")
-            QClient.recallMessage(request.groupOpenId, request.messageId.orEmpty())
-            QClient.sendTextToGroup(request.groupOpenId, "这不是你的确认消息，请让发起者本人操作")
-            return true
+            respond(InteractionOutcome.SILENT.code)
+            // 不撤回卡片、不消费待确认项，发起者本人仍可在有效期内点确定。
+            // 消息开头 @ 点击者本人：markdown 里必须写成 <@openid> 才会触发 QQ 的 @ 通知；
+            // 拿不到点击者 openid（SDK 偶尔不带）或不在同一个群时无从 @，退回纯文本提示。
+            val mention = if (sameGroup && userOpenId.isNotBlank()) "<@$userOpenId> " else ""
+            QClient.sendTextToGroup(
+                request.groupOpenId,
+                "${mention}这不是你的绑定信息，请让发起者本人操作"
+            )
+            return InteractionOutcome.SILENT
         }
 
+        // 校验通过后再原子消费，避免同一张卡片被连点两次
+        if (!pending.remove(confirmId, request)) {
+            respond(InteractionOutcome.SILENT.code)
+            return InteractionOutcome.SILENT
+        }
+
+        respond(InteractionOutcome.HANDLED.code)
         QClient.recallMessage(request.groupOpenId, request.messageId.orEmpty())
 
         if (!confirmed) {
             QClient.sendTextToGroup(request.groupOpenId, "已取消解绑")
-            return true
+            return InteractionOutcome.HANDLED
         }
 
         // 二次校验：期间可能已经自行解绑或换绑
         val current = CommandRepositories.bindings.getBinding(request.userOpenId)
         if (current == null) {
             QClient.sendTextToGroup(request.groupOpenId, "你已经没有任何绑定，无需解绑")
-            return true
+            return InteractionOutcome.HANDLED
         }
         if (!current.playerName.equals(request.playerName, ignoreCase = true)) {
             QClient.sendTextToGroup(
                 request.groupOpenId,
                 "绑定关系已变更，请重新执行 /解除绑定"
             )
-            return true
+            return InteractionOutcome.HANDLED
         }
 
         CommandRepositories.bindings.removeBinding(request.userOpenId)
@@ -135,12 +168,12 @@ object UnbindConfirmation {
             BotShared.getPlugin()
         } catch (_: Exception) {
             null
-        } ?: return true
+        } ?: return InteractionOutcome.HANDLED
 
         // 强制绑定下必须立刻断开在线会话，否则玩家能解绑后继续留在服务器里
         if (plugin.isForceBindEnabled()) {
             plugin.kickUnboundPlayer(current.playerName)
-            return true
+            return InteractionOutcome.HANDLED
         }
 
         // 白名单同步：与用户自行解绑保持一致
@@ -151,9 +184,17 @@ object UnbindConfirmation {
                 if (error != null) plugin.log_error("解绑后移除白名单失败: ${error.message}")
             }
         }
-        return true
+        return InteractionOutcome.HANDLED
     }
 
+    /**
+     * 确认键盘。
+     *
+     * 按钮权限用 2（所有人可操作）：解绑确认是面向普通用户的自助操作，
+     * 用 1（仅管理者可操作）会让非管理员根本点不动自己的解绑按钮。
+     * 身份边界不依赖客户端按钮权限，而是由 [onInteraction] 里对发起者的严格校验保证：
+     * 非发起者点击只会收到"这不是你的绑定信息"（并 @ 点击者），拿不到身份的点击一律拒绝。
+     */
     private fun buildKeyboard(confirmId: String): Keyboard {
         val builder = Keyboard.KeyboardBuilder.create()
         val row = builder.addRow()
@@ -164,7 +205,7 @@ object UnbindConfirmation {
             .setStyle(1)
             .setActionType(1)
             .setActionData("$ACTION_PREFIX$confirmId:yes")
-            .setPermissionType(1)
+            .setPermissionType(2)
             .setUnSupportTips("请升级QQ客户端后再操作")
             .build()
 
@@ -174,7 +215,7 @@ object UnbindConfirmation {
             .setStyle(0)
             .setActionType(1)
             .setActionData("$ACTION_PREFIX$confirmId:no")
-            .setPermissionType(1)
+            .setPermissionType(2)
             .setUnSupportTips("请升级QQ客户端后再操作")
             .build()
 

@@ -101,6 +101,17 @@ agent:
   api-key: ""         # AI 接口密钥
   model: "gpt-4o-mini"
   command-mode: "manual"  # manual=手动审批 / auto=自动执行
+  think: false            # 深度思考：原生推理模型用，是否向接口附加思考参数
+  think-visibility: "log" # 思考展示：log=只写日志 / group=只发群 / both=都发
+  think-level: ""         # 推理设置：档位 medium / 整数 token 预算 / true|false
+  think-param: "reasoning_effort"   # 按厂商选参数名
+  think-guide: false      # 思考引导：非推理模型用；开启后深度思考相关设置不生效
+  context:
+    compress:
+      target: 4000        # 压缩后的目标 token 数
+      keep: 20            # 压缩时保留的最近消息条数
+    truncate:
+      drop: 10            # /删除信息 的默认条数
 ```
 
 完整配置说明请参考 WebUI 或 `config.yml` 中的注释。
@@ -326,6 +337,20 @@ QQ 群中的 @消息会自动解析为 `§9@玩家名§r`（蓝色高亮），�
 | `agent <任务描述>` | 触发 AI Agent 执行任务 |
 | `newsession` | 清除 AI 会话上下文 |
 | `stop` | 紧急停止所有 AI 任务 |
+| `压缩` | 把较早的对话压缩成摘要，保留最近若干条 |
+| `压缩token [数值]` | 查看或设置压缩后的目标 token 数 |
+| `压缩保留 [条数]` | 查看或设置压缩时保留的最近消息条数 |
+| `删除信息 [条数]` | 删除上下文中最早的消息（不指定条数时用配置默认值） |
+
+### 深度思考与上下文压缩
+
+**深度思考与思考引导互斥**：`agent.think` 给原生推理模型用，开启后向接口附加思考参数（需同时配好 `think-level` 与 `think-param`）；`agent.think-guide` 给不具备原生推理能力的模型用，追加提示词让模型用 `[思考]` 模拟思考。**只要开启了思考引导，深度思考相关设置（`think` / `think-level` / `think-param`）全部不生效**，避免两种方式叠加。`agent.think-visibility` 决定思考内容送到哪里（两种方式共用）——`log` 只写日志（默认，避免刷屏）、`group` 作为「思考」卡片发到 QQ 群、`both` 两边都发。这几项只在配置文件（或 WebUI）里调整，QQ 群里不再提供设置命令。
+
+**思考参数按厂商适配**：`think-level` 填档位（`none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）或整数 token 预算，`think-param` 填参数名（`reasoning_effort`、`effort`、`thinking_level`、`reasoning.effort`、`thinking.type`、`thinking_budget`、`enable_thinking`）。档位和参数对不上时不会让请求失败，只在日志里给出提示。
+
+**思考引导**给不具备原生推理能力的模型使用：追加一段提示词要求模型把分析写进 `[思考]` 标签，程序再把标签内容取出来当思考过程、从正文里剥离。它和深度思考互斥，原生推理模型请直接用深度思考，不要再开引导。
+
+**上下文压缩**把较早的对话换成一份结构化摘要（保留任务目标、关键事实、已执行操作、决策理由、待办、踩过的坑、实体对照），压缩用的提示词可在 `agent.context.compress.prompt` 里改，支持 `{target}` 占位符。裁剪会避开 `tool_calls` 与 `tool` 消息的配对，不会切出接口会拒绝的孤立消息。
 
 ### 命令面板
 
@@ -516,7 +541,37 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.18.1（最新）
+### v1.19.0（最新）
+
+**新功能：**
+- feat: Agent 深度思考 — 原生推理模型开启后按厂商适配思考参数（`agent.think` / `think-level` / `think-param`），支持 `reasoning_effort`、`effort`、`thinking_level`、`reasoning.effort`、`thinking.type`、`thinking_budget`、`enable_thinking`，档位与参数不匹配时只记日志、不让请求失败
+- feat: Agent 思考引导 — 给不具备原生推理能力的模型追加提示词，用 `[思考]` 标签模拟深度思考；与深度思考互斥，开启后深度思考相关设置不再生效
+- feat: 思考展示方式 `agent.think-visibility` — `log` 只写日志 / `group` 发到 QQ 群 / `both` 都发
+- feat: Agent 上下文压缩 — 新增管理员命令 `/压缩`、`/压缩token`、`/压缩保留`、`/删除信息`；压缩目标 token 与保留条数可配置，压缩提示词支持 `{target}` 占位符
+- feat: 群成员角色被动缓存 — 群消息里 `member_role` 自动落盘到状态文件 `[member-roles]` 段，审批鉴权不再只依赖插件管理员名单
+- feat: WebUI 新增深度思考、思考引导、上下文压缩相关配置项，改动即时写入 `config.yml` 并刷新缓存
+
+**优化：**
+- opt: 同一 Agent 会话禁止并发 `runLoop`，避免上下文串写和同一条审批被执行两次
+- opt: `/agent` 复用会话改为按群隔离，多群场景不再串上下文或把卡片发到别的群
+- opt: 上下文裁剪与压缩避开 `tool_calls` 与 `tool` 消息的配对，不再切出会被接口拒绝的孤立消息
+- opt: 昵称映射改为「有变化才落盘」，一条消息里多个 @ 只写一次状态文件
+- opt: 互动事件按结果回不同的 code，无权限、已过期、被他人点击时不再弹「操作成功」
+- opt: WebUI 停止时显式关闭线程池，插件重载不再泄漏线程
+- opt: 群成员信息接口加 5 秒超时，确认不可用（11253）后不再重试
+
+**Bug 修复：**
+- fix: 普通成员点解绑确认的「确定/取消」提示无权限 — 按钮权限改为所有人可操作，身份边界由服务端严格校验（#31）
+- fix: 拿不到点击者 openid 时曾放行他人解绑 — 改为一律拒绝，且不消费待确认项
+- fix: 他人点击解绑按钮时，提示消息现在 @ 点击者本人：「@xxx 这不是你的绑定信息，请让发起者本人操作」
+- fix: `/stop` 后复用会话会被立刻判定为已停止，导致新任务不执行
+- fix: 内部状态文件写入失败时昵称映射全部丢失 — 改为按实际变化触发保存
+
+**升级提示：**
+- 配置版本升到 11，启动时自动补上 `agent.think*` 与 `agent.context.*`，并清理已下线的 `commands.深度思考 / 思考展示 / 思考程度 / 思考引导`
+- 深度思考相关设置只能在配置文件或 WebUI 调整，QQ 群不再提供设置命令
+
+### v1.18.1
 
 **Bug 修复：**
 - fix: 末地烛等 5 个物品在背包图片里形状变形 — 这些物品的原版图标本来就是 3D 方块模型渲染，之前被当成平面贴图铺平画了出来（末地烛被掰弯、脚手架显示为问号方块）

@@ -1,6 +1,7 @@
 package cn.huohuas001.huhobotPenguin.spigot.manager
 
 import cn.huohuas001.bot.agent.AgentCommandMode
+import cn.huohuas001.bot.agent.AgentPrompts
 import cn.huohuas001.bot.provider.AdminMode
 import cn.huohuas001.bot.provider.ChatFormat
 import cn.huohuas001.bot.provider.ConfigUpgrader
@@ -33,6 +34,7 @@ class ConfigManager(
         changed = migratePostPrefix() || changed
         changed = removeLegacyMotdOptions() || changed
         changed = removeLegacyInventoryCommandOptions() || changed
+        changed = removeLegacyAgentSettingCommandOptions() || changed
 
         val previousVersion = plugin.config.getInt(CONFIG_VERSION_PATH, 0)
 
@@ -204,6 +206,28 @@ class ConfigManager(
         return changed
     }
 
+    /**
+     * 删除已下线的 Agent 思考设置命令配置项。
+     *
+     * 深度思考/展示方式/推理设置/思考引导改为只能在配置文件（WebUI）里设置，
+     * 对应的 QQ 命令已移除，这里把旧配置里遗留的 commands.xxx 段清掉，避免残留在面板里。
+     */
+    private fun removeLegacyAgentSettingCommandOptions(): Boolean {
+        var changed = false
+        listOf(
+            "commands.深度思考",
+            "commands.思考展示",
+            "commands.思考程度",
+            "commands.思考引导"
+        ).forEach { path ->
+            if (plugin.config.contains(path)) {
+                plugin.config.set(path, null)
+                changed = true
+            }
+        }
+        return changed
+    }
+
     fun botAppId(): String = plugin.config.getString("bot.app-id").orEmpty()
     fun botSecret(): String = plugin.config.getString("bot.secret").orEmpty()
     fun botName(): String = plugin.config.getString("bot.name", "HuHoBot")!!
@@ -357,6 +381,28 @@ class ConfigManager(
     fun isAgentFetchResultHidden(): Boolean =
         plugin.config.getBoolean("agent.hide-fetch-results", true)
 
+    fun agentThink(): Boolean = plugin.config.getBoolean("agent.think", false)
+
+    fun agentThinkVisibility(): String =
+        plugin.config.getString("agent.think-visibility")?.takeIf { it.isNotBlank() } ?: "log"
+
+    fun agentThinkLevel(): String = plugin.config.getString("agent.think-level").orEmpty()
+
+    fun agentThinkParam(): String =
+        plugin.config.getString("agent.think-param")?.takeIf { it.isNotBlank() } ?: "reasoning_effort"
+
+    fun agentThinkGuide(): Boolean = plugin.config.getBoolean("agent.think-guide", false)
+
+    fun agentThinkGuidePrompt(): String = plugin.config.getString("agent.think-guide-prompt").orEmpty()
+
+    fun agentCompressTarget(): Int = plugin.config.getInt("agent.context.compress.target", 4000)
+
+    fun agentCompressKeep(): Int = plugin.config.getInt("agent.context.compress.keep", 20)
+
+    fun agentCompressPrompt(): String = plugin.config.getString("agent.context.compress.prompt").orEmpty()
+
+    fun agentTruncateDrop(): Int = plugin.config.getInt("agent.context.truncate.drop", 10)
+
     fun bindingRequireGameVerification(): Boolean =
         plugin.config.getBoolean("binding.require-game-verification", true)
 
@@ -399,10 +445,23 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 10
+        private const val CURRENT_CONFIG_VERSION = 11
         private const val CONFIG_VERSION_PATH = "config-version"
 
-        private val COMMANDS_HIDDEN_FROM_MENU = setOf("blockMotd", "unblockMotd")
+        /**
+         * 不进 QQ 面板菜单的命令。
+         *
+         * 面板最多展示 20 条，超出的会被自动截断，所以把低频的运维/管理类命令排除在外，
+         * 它们仍然可以在配置里开关，也能通过 /帮助 查看。
+         */
+        private val COMMANDS_HIDDEN_FROM_MENU = setOf(
+            "blockMotd",
+            "unblockMotd",
+            "压缩",
+            "压缩token",
+            "压缩保留",
+            "删除信息"
+        )
 
         /** 版本化升级列表：当前配置版本 < toVersion 时自动更新对应字段的值。 */
         private val VERSIONED_UPGRADES = listOf(
@@ -483,6 +542,16 @@ class ConfigManager(
             "agent.model" to "AI Agent 使用的模型名",
             "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
             "agent.hide-fetch-results" to "获取类工具（插件列表/命令帮助/服务器日志）结果只交给 AI，不在群里发卡片",
+            "agent.think" to "深度思考：原生推理模型用，开启后才向接口附加思考参数（需同时配置 think-level 与 think-param）；与思考引导互斥",
+            "agent.think-visibility" to "思考过程展示方式：log=只写日志 / group=只发 QQ 群 / both=都发",
+            "agent.think-param" to "思考参数名，按厂商选：reasoning_effort / effort / thinking_level / reasoning.effort / thinking.type / thinking_budget / enable_thinking",
+            "agent.think-level" to "推理设置档位：none/minimal/low/medium/high/xhigh/max，也可填整数 token 预算或 true/false；留空不附加思考参数",
+            "agent.think-guide" to "思考引导：非推理模型用，提示词加 [思考] 模拟深度思考；与深度思考互斥，开启后深度思考相关设置不生效",
+            "agent.think-guide-prompt" to "思考引导提示词；留空则使用代码内置默认值",
+            "agent.context.compress.target" to "上下文压缩后的目标 token 数",
+            "agent.context.compress.keep" to "上下文压缩时原样保留的最近消息条数",
+            "agent.context.compress.prompt" to "上下文压缩提示词，支持 {target} 占位符；留空则使用代码内置默认值",
+            "agent.context.truncate.drop" to "/删除信息 未指定条数时默认删除的条数",
             "command-sender" to "命令执行收集模式：Hybrid 同时收集发送者输出和服务端日志",
             "command-blacklist" to "/执行 命令黑名单，禁止通过 /执行 运行的服务器命令列表",
             "command-panel.show-admin-commands" to "在 QQ 面板中向所有人展示管理员命令；执行时仍验证管理员权限",
@@ -511,6 +580,10 @@ class ConfigManager(
             "认证",
             "解除认证",
             "agent",
+            "压缩",
+            "压缩token",
+            "压缩保留",
+            "删除信息",
             "我的背包",
             "我的末影箱",
             "背包查看",
@@ -567,6 +640,16 @@ class ConfigManager(
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
             put("agent.hide-fetch-results", true)
+            put("agent.think", false)
+            put("agent.think-visibility", "log")
+            put("agent.think-level", "")
+            put("agent.think-param", "reasoning_effort")
+            put("agent.think-guide", false)
+            put("agent.think-guide-prompt", AgentPrompts.THINK_GUIDE)
+            put("agent.context.compress.target", 4000)
+            put("agent.context.compress.keep", 20)
+            put("agent.context.compress.prompt", AgentPrompts.CONTEXT_COMPRESS)
+            put("agent.context.truncate.drop", 10)
             put("binding.require-game-verification", true)
             put("binding.force-bind", false)
             put("binding.force-bind-groups", emptyList<String>())

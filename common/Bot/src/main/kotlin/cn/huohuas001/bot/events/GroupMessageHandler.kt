@@ -89,9 +89,18 @@ class GroupMessageHandler(
         val senderName = event.sender?.username
         val senderOpenId = event.sender?.openid ?: event.sender?.id
         if (!senderName.isNullOrBlank() && !senderOpenId.isNullOrBlank()) {
-            NicknameManager.put(senderName, senderOpenId)
-            val isNew = NicknameManager.getOpenId(senderName) != senderOpenId
-            if (isNew) NicknameManager.save()
+            // put 返回"映射是否变化"；变化才落盘，避免每条消息都重写 nicknames.dat
+            if (NicknameManager.put(senderName, senderOpenId)) NicknameManager.save()
+        }
+
+        // 被动缓存群成员角色：群消息的 author 自带 member_role，供审批鉴权查询
+        val senderRole = try {
+            event.sender?.meta?.getString("member_role")
+        } catch (_: Exception) {
+            null
+        }
+        if (!senderOpenId.isNullOrBlank() && !senderRole.isNullOrBlank()) {
+            CommandRepositories.memberRoles.put(groupId, senderOpenId, senderRole)
         }
 
         val configured = plugin.getGroupOpenIdList()
@@ -159,7 +168,7 @@ class GroupMessageHandler(
         val rawSenderName = event.sender?.username ?: "unknown"
         val senderOpenId = event.sender?.openid ?: event.sender?.id ?: ""
         if (rawSenderName != "unknown" && senderOpenId.isNotEmpty()) {
-            NicknameManager.put(rawSenderName, senderOpenId)
+            if (NicknameManager.put(rawSenderName, senderOpenId)) NicknameManager.save()
         }
         // 解析显示名：如果 username 是 openid，尝试从 NicknameManager 获取真实昵称
         val senderNickName = if (rawSenderName.matches(Regex("[0-9A-Fa-f]{20,}")) && senderOpenId.isNotEmpty()) {
@@ -230,11 +239,12 @@ class GroupMessageHandler(
         // 解析 @提及
         val mentions = event.rawMessage.mentions
         if (mentions != null) {
+            var nicknamesChanged = false
             for (mention in mentions) {
                 val mentionId = mention.id ?: continue
                 val mentionName = mention.username ?: continue
                 if (mentionName != "unknown" && mentionId.isNotEmpty()) {
-                    NicknameManager.put(mentionName, mentionId)
+                    if (NicknameManager.put(mentionName, mentionId)) nicknamesChanged = true
                 }
                 val mentionBinding = CommandRepositories.bindings.getBinding(mentionId)
                 val displayName = if (mentionBinding != null) {
@@ -261,6 +271,8 @@ class GroupMessageHandler(
                     .replace("<$mentionId>", "@$displayName")
                     .replace(mentionId, "@$displayName")
             }
+            // 一条消息里可能有多个新昵称，循环结束后统一落盘一次，避免多次整文件重写
+            if (nicknamesChanged) NicknameManager.save()
         }
 
         // 清理消息中残留的 raw openid 文本

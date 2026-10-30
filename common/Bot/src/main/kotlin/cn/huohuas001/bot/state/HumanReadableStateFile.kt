@@ -52,6 +52,7 @@ internal class HumanReadableStateFile {
             writeValueSection(writer, "administrator-modes", snapshot.administratorModes.mapValues { it.value.name })
             writeValueSection(writer, "full-forwarding", snapshot.fullForwarding.mapValues { it.value.toString() })
             writeUserBindingsSection(writer, snapshot.bindings)
+            writeMemberRolesSection(writer, snapshot.memberRoles)
         }
 
         try {
@@ -72,6 +73,7 @@ internal class HumanReadableStateFile {
         val administratorModes = linkedMapOf<String, AdministratorAccessMode>()
         val fullForwarding = linkedMapOf<String, Boolean>()
         val bindings = linkedMapOf<String, BindingInfo>()
+        val memberRoles = linkedMapOf<String, String>()
         // 旧格式：按群分组的绑定与显示名称设置，仅用于迁移
         val legacyBindings = linkedMapOf<String, MutableMap<String, BindingInfo>>()
         val legacySettings = linkedMapOf<String, MutableMap<String, Pair<String, String>>>()
@@ -96,6 +98,7 @@ internal class HumanReadableStateFile {
                     ?.let { administratorModes[key.trim()] = it }
                 "full-forwarding" -> value.toBooleanStrictOrNull()
                     ?.let { fullForwarding[key.trim()] = it }
+                "member-roles" -> memberRoles[key.trim()] = value
                 "user-bindings" -> {
                     // openId = playerName:qqMode:mcMode:qqUsername
                     val parts = value.split(':', limit = 4)
@@ -170,7 +173,7 @@ internal class HumanReadableStateFile {
         }
 
         log("已加载绑定数据：${bindings.size} 条（按 openid 全局共享，所有 QQ 群通用）")
-        return StoredCommandSettings(administrators, authenticatedUsers, administratorModes, fullForwarding, bindings)
+        return StoredCommandSettings(administrators, authenticatedUsers, administratorModes, fullForwarding, bindings, memberRoles)
     }
 
     private fun readLegacyProperties(file: File): StoredCommandSettings {
@@ -235,6 +238,21 @@ internal class HumanReadableStateFile {
         bindings.toSortedMap().forEach { (openId, info) ->
             writer.appendLine("$openId = ${info.playerName}:${info.qqDisplayNameMode}:${info.mcDisplayNameMode}:${info.qqUsername}")
         }
+        writer.appendLine()
+    }
+
+    /**
+     * 被动角色缓存段：`groupOpenId:memberOpenId = member_role`。
+     *
+     * 由群消息事件自动写入并实时刷新，无需手动维护。
+     */
+    private fun writeMemberRolesSection(
+        writer: java.io.BufferedWriter,
+        memberRoles: Map<String, String>
+    ) {
+        writer.appendLine("[member-roles]")
+        writer.appendLine("# groupOpenId:memberOpenId = member_role(owner/admin/member)，自动维护")
+        memberRoles.toSortedMap().forEach { (key, role) -> writer.appendLine("$key = $role") }
         writer.appendLine()
     }
 }

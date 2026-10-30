@@ -330,7 +330,8 @@ class BindingCommands : CommandSupport() {
             if (conflict != null) return false
 
             CommandRepositories.bindings.setBinding(openId, playerName, qqUsername)
-            NicknameManager.put(qqUsername, openId)
+            // 绑定成功同时记下 QQ 昵称，映射有变化就落盘，保证重启后 @昵称 仍可解析
+            if (NicknameManager.put(qqUsername, openId)) NicknameManager.save()
             val safeName = QClient.escapeMarkdown(playerName)
             QClient.sendTextToGroup(groupId, "<@$openId> 成功绑定游戏账号：$safeName")
             return true

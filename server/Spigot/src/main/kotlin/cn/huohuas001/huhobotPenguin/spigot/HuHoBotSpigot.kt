@@ -848,6 +848,44 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getAgentModel(): String? = configManager.agentModel()
     override fun getAgentCommandMode(): AgentCommandMode = configManager.agentCommandMode()
 
+    override fun getAgentThink(): Boolean = configManager.agentThink()
+    override fun getAgentThinkVisibility(): String = configManager.agentThinkVisibility()
+    override fun getAgentThinkLevel(): String = configManager.agentThinkLevel()
+    override fun getAgentThinkParam(): String = configManager.agentThinkParam()
+    override fun getAgentThinkGuide(): Boolean = configManager.agentThinkGuide()
+    override fun getAgentThinkGuidePrompt(): String = configManager.agentThinkGuidePrompt()
+    override fun getAgentCompressTarget(): Int = configManager.agentCompressTarget()
+    override fun getAgentCompressKeep(): Int = configManager.agentCompressKeep()
+    override fun getAgentCompressPrompt(): String = configManager.agentCompressPrompt()
+    override fun getAgentTruncateDrop(): Int = configManager.agentTruncateDrop()
+
+    override fun setAgentThink(enabled: Boolean): Boolean = saveAgentConfig("agent.think", enabled)
+
+    override fun setAgentThinkVisibility(visibility: String): Boolean =
+        saveAgentConfig("agent.think-visibility", visibility)
+
+    override fun setAgentThinkLevel(level: String): Boolean = saveAgentConfig("agent.think-level", level)
+
+    override fun setAgentThinkGuide(enabled: Boolean): Boolean = saveAgentConfig("agent.think-guide", enabled)
+
+    override fun setAgentCompressTarget(target: Int): Boolean =
+        saveAgentConfig("agent.context.compress.target", target)
+
+    override fun setAgentCompressKeep(keep: Int): Boolean =
+        saveAgentConfig("agent.context.compress.keep", keep)
+
+    /**
+     * 写入单个 Agent 配置项。
+     *
+     * 深度思考、上下文压缩等设置通过 WebUI 修改，效果必须立刻生效，
+     * 因此统一走 [applyWebUiConfigChanges] 这条通道：写 config.yml、刷新配置缓存，不用重启。
+     */
+    private fun saveAgentConfig(path: String, value: Any): Boolean {
+        val changes = JSONObject()
+        changes[path] = value
+        return applyWebUiConfigChanges(changes)
+    }
+
     override fun getBindingRequireGameVerification(): Boolean = configManager.bindingRequireGameVerification()
 
     override fun isForceBindEnabled(): Boolean = configManager.isForceBindEnabled()
@@ -861,8 +899,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
      *
      * 走 [applyWebUiConfigChanges] 这条通用写入通道，保证 config.yml 落盘后
      * 配置缓存同步刷新，不必重启即可生效。
-     */
-    private fun saveVerifyExemptPlayers(players: List<String>): Boolean {
+     */    private fun saveVerifyExemptPlayers(players: List<String>): Boolean {
         val changes = JSONObject()
         changes["binding.verify-exempt"] = JSONArray(players)
         return applyWebUiConfigChanges(changes)

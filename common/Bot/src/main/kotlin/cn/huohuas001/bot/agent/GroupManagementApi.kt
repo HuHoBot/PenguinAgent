@@ -31,6 +31,9 @@ object GroupManagementApi {
         val url = URL("$API_BASE$path")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = method
+        // 设置超时，避免接口不可达时把审批回调一类的调用路径卡死
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
         // 统一使用 SDK 的 getHeaders()，确保 Authorization 和 X-Union-Appid 都正确
         val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
         val headers = start0.getHeaders()
@@ -60,6 +63,27 @@ object GroupManagementApi {
 
     fun getBotState(starter: Starter, groupOpenId: String): JSONObject {
         return request(starter, "GET", "/v2/groups/$groupOpenId/bot_state")
+    }
+
+    // ── 群成员 ──
+
+    /**
+     * 查询群成员在当前群里的身份（owner=群主 / admin=群管理员 / member=普通成员）。
+     *
+     * 注意：该接口是 QQ 白名单能力，非白名单 bot 调用会返回错误码 11253，
+     * 此时返回 null。审批鉴权已改为以按钮权限（permission.type=1）为准，不再依赖本方法；
+     * 保留它是为了将来申请到权限后可以服务端复核。
+     *
+     * @return member_role 字符串；查询失败返回 null（不抛异常）
+     */
+    fun getMemberRole(starter: Starter, groupOpenId: String, memberOpenId: String): String? {
+        return try {
+            val resp = request(starter, "GET", "/v2/groups/$groupOpenId/members/$memberOpenId")
+            // QQ 返回的字段是 member_role（owner/admin/member），兼容旧字段名 role
+            resp.getString("member_role") ?: resp.getString("role")
+        } catch (_: Exception) {
+            null
+        }
     }
 
     // ── 入群申请 ──

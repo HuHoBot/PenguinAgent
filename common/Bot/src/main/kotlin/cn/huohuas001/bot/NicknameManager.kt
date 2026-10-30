@@ -50,10 +50,19 @@ object NicknameManager {
 
     private fun isOpenId(s: String): Boolean = s.matches(Regex("[0-9A-Fa-f]{20,}"))
 
-    fun put(nickname: String, openId: String) {
-        if (nickname.isBlank() || openId.isBlank()) return
+    /**
+     * 记录昵称与 openid 的映射。
+     *
+     * @return 映射是否发生了变化；调用方据此决定要不要 [save]。
+     *         注意不要先 put 再比较——那样读到的必然是刚写进去的值，永远判不出变化。
+     */
+    fun put(nickname: String, openId: String): Boolean {
+        if (nickname.isBlank() || openId.isBlank()) return false
+        val previousOpenId = nicknameToOpenId[nickname.lowercase()]
+        val previousNickname = openIdToNickname[openId]
         nicknameToOpenId[nickname.lowercase()] = openId
         openIdToNickname[openId] = nickname
+        return previousOpenId != openId || previousNickname != nickname
     }
 
     fun getOpenId(nickname: String): String? = nicknameToOpenId[nickname.lowercase()]

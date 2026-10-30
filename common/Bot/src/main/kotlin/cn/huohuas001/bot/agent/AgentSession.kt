@@ -2,6 +2,7 @@ package cn.huohuas001.bot.agent
 
 import cn.huohuas001.bot.NicknameManager
 import com.alibaba.fastjson.JSONObject
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 一次 /agent 任务的会话状态。
@@ -32,9 +33,35 @@ class AgentSession(
     /** 群成员映射：member_openid → 用户名。给 AI 喂 openid，但 QQ 显示用户名。 */
     val memberNames: MutableMap<String, String> = mutableMapOf()
 
+    /**
+     * 最近一次调用时接口报告的上下文 token 数。
+     *
+     * 比本地估算准，压缩前用它判断上下文到底有多大；接口没返回 usage 时保持 0。
+     */
+    @Volatile var lastPromptTokens: Int = 0
+
     /** 根据 member_openid 返回用户名；优先从 NicknameManager 查找，未知时原样返回 openid。 */
     fun displayName(openId: String): String =
         memberNames[openId] ?: NicknameManager.getNickname(openId) ?: openId
+
+    /**
+     * 是否有 runLoop 正在执行本会话。
+     *
+     * `/agent` 与审批回调都会启动 runLoop，同一会话被并发跑两遍会把 [messages] 写乱
+     * （裁出没有归属的 tool 消息、同一条命令被审批执行两次），所以进入前必须独占。
+     */
+    private val running = AtomicBoolean(false)
+
+    /** 独占本会话；已有 runLoop 在跑时返回 false。 */
+    fun tryBeginRun(): Boolean = running.compareAndSet(false, true)
+
+    /** 释放独占，必须与 [tryBeginRun] 配对（放在 finally 里）。 */
+    fun endRun() {
+        running.set(false)
+    }
+
+    /** 当前是否有 runLoop 在执行。 */
+    val isRunning: Boolean get() = running.get()
 
     /** 一次待管理员审批的执行请求。支持服务器命令和 QQ 群管理工具。 */
     class PendingApproval(

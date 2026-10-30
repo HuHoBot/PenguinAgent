@@ -1,6 +1,8 @@
 package cn.huohuas001.bot
 
 import cn.huohuas001.bot.agent.AgentConfig
+import cn.huohuas001.bot.agent.AgentContextConfig
+import cn.huohuas001.bot.agent.AgentThinkVisibility
 import cn.huohuas001.bot.addon.InstalledAddonStore
 import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.SensitiveFilter
@@ -192,7 +194,19 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
             baseUrl = baseUrl,
             apiKey = apiKey,
             model = getAgentModel()?.takeIf(String::isNotBlank) ?: "gpt-4o-mini",
-            commandMode = getAgentCommandMode()
+            commandMode = getAgentCommandMode(),
+            think = getAgentThink(),
+            thinkLevel = getAgentThinkLevel(),
+            thinkParam = getAgentThinkParam(),
+            thinkVisibility = AgentThinkVisibility.from(getAgentThinkVisibility()) ?: AgentThinkVisibility.LOG,
+            thinkGuide = getAgentThinkGuide(),
+            thinkGuidePrompt = getAgentThinkGuidePrompt(),
+            context = AgentContextConfig(
+                compressTarget = getAgentCompressTarget(),
+                compressKeep = getAgentCompressKeep(),
+                compressPrompt = getAgentCompressPrompt(),
+                truncateDrop = getAgentTruncateDrop()
+            )
         )
     }
 

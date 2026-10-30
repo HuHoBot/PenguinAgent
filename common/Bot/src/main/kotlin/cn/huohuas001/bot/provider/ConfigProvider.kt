@@ -266,6 +266,74 @@ interface ConfigProvider {
     /** 获取类工具结果只交给 AI，不在群里发卡片（默认开启）。 */
     fun isAgentFetchResultHidden(): Boolean = true
 
+    // ------------------------------------------------------ Agent 深度思考
+
+    /** 深度思考：原生推理模型用，开启后才向接口附加思考参数（档位与参数名都配了才生效）；开启思考引导后不生效。 */
+    fun getAgentThink(): Boolean = false
+
+    /**
+     * 思考过程的展示方式。
+     *
+     * log=只写日志（默认，避免刷屏）/ group=只发 QQ 群 / both=两边都发。
+     */
+    fun getAgentThinkVisibility(): String = "log"
+
+    /**
+     * 思考程度档位。
+     *
+     * none/minimal/low/medium/high/xhigh/max，也可填整数 token 预算（如 10000、-1），
+     * 或开关值（true/false、enabled/disabled）。留空表示不向接口附加思考参数。
+     */
+    fun getAgentThinkLevel(): String = ""
+
+    /**
+     * 思考参数名，按模型厂商选择。
+     *
+     * reasoning_effort / effort / thinking_level / reasoning.effort / thinking.type /
+     * thinking_budget / enable_thinking。
+     */
+    fun getAgentThinkParam(): String = "reasoning_effort"
+
+    /** 思考引导：非推理模型用，提示词加 <think> 模拟深度思考；与深度思考互斥，开启后深度思考相关设置不生效。 */
+    fun getAgentThinkGuide(): Boolean = false
+
+    /** 思考引导提示词；留空则使用代码内置的默认提示词。 */
+    fun getAgentThinkGuidePrompt(): String = ""
+
+    // ------------------------------------------------------ Agent 上下文压缩
+
+    /** 压缩后的目标 token 数。 */
+    fun getAgentCompressTarget(): Int = 4000
+
+    /** 压缩时原样保留的最近消息条数。 */
+    fun getAgentCompressKeep(): Int = 20
+
+    /** 压缩提示词，支持 {target} 占位符；留空则使用代码内置的默认提示词。 */
+    fun getAgentCompressPrompt(): String = ""
+
+    /** /删除信息 未指定条数时默认删除的条数。 */
+    fun getAgentTruncateDrop(): Int = 10
+
+    // ------------------------------------------------------ Agent 配置写入
+
+    /** 写入深度思考开关，供 WebUI 使用；未实现时返回 false。 */
+    fun setAgentThink(enabled: Boolean): Boolean = false
+
+    /** 写入思考过程展示方式，供 WebUI 使用；未实现时返回 false。 */
+    fun setAgentThinkVisibility(visibility: String): Boolean = false
+
+    /** 写入推理设置（思考程度），供 WebUI 使用；未实现时返回 false。 */
+    fun setAgentThinkLevel(level: String): Boolean = false
+
+    /** 写入思考引导开关，供 WebUI 使用；未实现时返回 false。 */
+    fun setAgentThinkGuide(enabled: Boolean): Boolean = false
+
+    /** 写入压缩目标 token，供 /压缩token 使用；未实现时返回 false。 */
+    fun setAgentCompressTarget(target: Int): Boolean = false
+
+    /** 写入压缩保留条数，供 /压缩保留 使用；未实现时返回 false。 */
+    fun setAgentCompressKeep(keep: Int): Boolean = false
+
     /** 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定。 */
     fun getBindingRequireGameVerification(): Boolean = true
 

@@ -16,6 +16,7 @@ object CommandRepositories {
     val authentication = AuthenticationRepository(::save)
     val groupSettings = GroupSettingsRepository(::save)
     val bindings = BindingRepository(::save)
+    val memberRoles = MemberRoleCache(::save)
 
     /** 在插件数据目录中加载状态；没有数据目录时退化为内存存储。 */
     @Synchronized
@@ -25,6 +26,7 @@ object CommandRepositories {
         authentication.replaceAll(snapshot.authenticatedUsers)
         groupSettings.replaceAll(snapshot.administratorModes, snapshot.fullForwarding)
         bindings.replaceAll(snapshot.bindings)
+        memberRoles.replaceAll(snapshot.memberRoles)
     }
 
     @Synchronized
@@ -35,7 +37,8 @@ object CommandRepositories {
                 authenticatedUsers = authentication.snapshot(),
                 administratorModes = groupSettings.administratorModeSnapshot(),
                 fullForwarding = groupSettings.fullForwardingSnapshot(),
-                bindings = bindings.snapshot()
+                bindings = bindings.snapshot(),
+                memberRoles = memberRoles.snapshot()
             )
         )
     }
