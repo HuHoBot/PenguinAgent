@@ -13,6 +13,7 @@ bot:
 
 chat-format:
   from-game: "[游戏] {message}"
+  # QQ→游戏：支持 MiniMessage（<gold>、<#FFAA00> 等），也兼容 &6、§6
   from-group: "[QQ] {name}: {message}"
   post-chat: true
   # 只有以该内容开头的游戏消息才会转发；转发时会移除该内容。留空表示全部转发。

@@ -86,6 +86,8 @@ tasks {
         archiveFileName.set("HuHoBot-Penguin_Spigot-${project.version}.jar")
         finalizedBy(gatherJar)
         relocate("org.bstats", "${project.group}.bstats")
+        // 自带一份 Adventure，避免和 Paper / 其他插件的版本冲突。
+        relocate("net.kyori", "${project.group}.libs.kyori")
         mergeServiceFiles()
         exclude(
             "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA",

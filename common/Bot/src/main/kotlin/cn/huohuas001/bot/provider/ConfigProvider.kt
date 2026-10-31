@@ -1,5 +1,6 @@
 package cn.huohuas001.bot.provider
 
+import cn.huohuas001.bot.tools.MiniMessageSupport
 import cn.huohuas001.bot.tools.filterTextByRegex
 import java.io.File
 
@@ -115,12 +116,17 @@ interface ConfigProvider {
 
     fun formatGroupMessage(name: String, message: String): String {
         val filtered = filterText(message)
+        // QQ 用户名和消息内容来自用户，先转义 MiniMessage 标签，
+        // 否则谁发一句 <red> 就能把后面的聊天全部染色。
+        val safeName = MiniMessageSupport.escape(name)
+        val safeMessage = MiniMessageSupport.escape(filtered)
         val result = getChatFormat().fromGroup
-            .replace("{name}", name)
-            .replace("{nick}", name)
-            .replace("{message}", filtered)
-            .replace("{msg}", filtered)
-        return convertAmpersandColors(result)
+            .replace("{name}", safeName)
+            .replace("{nick}", safeName)
+            .replace("{message}", safeMessage)
+            .replace("{msg}", safeMessage)
+        // 模板支持 MiniMessage（<gold>、<#FFAA00>）与旧式 & 颜色码，统一转成 § 码。
+        return convertAmpersandColors(MiniMessageSupport.toLegacy(result))
     }
 
     fun formatGameMessage(name: String, message: String): String {
@@ -129,7 +135,8 @@ interface ConfigProvider {
             .replace("{name}", name)
             .replace("{message}", filtered)
             .replace("{msg}", filtered)
-        return convertAmpersandColors(result)
+        // 这条消息发到 QQ，QQ 不支持 § 颜色码，所以这里不做颜色转换。
+        return result
     }
 
     fun formatPlayerJoinMessage(name: String): String =
@@ -155,7 +162,8 @@ interface ConfigProvider {
             .replace("{server}", getServerName())
             .replace("{platform}", getPlatform())
             .trim()
-        return applyPlaceholders(name, convertAmpersandColors(result))
+        // 死亡播报发到 QQ，QQ 不支持 § 颜色码，所以这里不做颜色转换。
+        return applyPlaceholders(name, result)
     }
 
     fun formatPlayerEventMessage(format: String, name: String): String {
@@ -164,12 +172,13 @@ interface ConfigProvider {
             .replace("{player}", name)
             .replace("{server}", getServerName())
             .replace("{platform}", getPlatform())
-        return applyPlaceholders(name, convertAmpersandColors(result))
+        // 进退服通知发到 QQ，QQ 不支持 § 颜色码，所以这里不做颜色转换。
+        return applyPlaceholders(name, result)
     }
 
-    /** 将 & 颜色符号转换为 Minecraft § 颜色代码。 */
+    /** 将 & 颜色符号转换为 Minecraft § 颜色代码，用于发进游戏的消息。 */
     fun convertAmpersandColors(text: String): String {
-        return text.replace(Regex("&(\\da-fk-orA-FK-OR)")) { "§${it.groupValues[1].lowercase()}" }
+        return text.replace(Regex("&([\\da-fk-orA-FK-OR])")) { "§${it.groupValues[1].lowercase()}" }
     }
 
     /** Markdown 配置键到 Markdown 目录内文件名的映射。 */
@@ -381,8 +390,15 @@ interface ConfigProvider {
      */
     fun kickUnboundPlayer(playerName: String): Boolean = false
 
-    /** /执行 命令黑名单：禁止通过 /执行 运行的服务器命令（不区分大小写）。 */
+    /** /执行 命令黑名单：禁止通过 /执行 运行的服务器命令（不区分大小写，`bukkit:` 等命名空间前缀会被忽略）。 */
     fun getCommandBlacklist(): List<String> = emptyList()
+
+    /**
+     * 把命令名解析成服务器认的规范名，用于黑名单匹配时覆盖别名（如 `/pl` 与 `/plugins`）。
+     *
+     * 平台层拿不到命令表时返回 null，黑名单退化为按文本规范化后比较。
+     */
+    fun resolveCommandName(command: String): String? = null
 
     fun getServerPluginList(): List<String> = emptyList()
     fun getServerCommandHelp(plugin: String?, command: String?): String = "当前平台不支持查询命令信息"

@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.20.0（2026-10-31）
+
+### 新功能
+
+- feat: 服务器状态通知（#27）—— 服务器关机、重启、意外关闭时向 QQ 群推送提醒。`server-notify` 配置组提供总开关 + 关机 / 重启 / 意外关闭三项独立开关与自定义消息，消息支持 `{server}`、`{platform}` 占位符
+- feat: 关机通知在 `onDisable` 里抢在 QQ 连接关闭前发送；重启与意外关闭只能在下次启动时判断，因此改为机器人连上 QQ 后补发
+- feat: 重启判定用 `server-notify.restart-window`（默认 180 秒），超过窗口再启动只当普通开机，不发通知
+- feat: 跨进程状态文件 `server-notify-state.properties` 记录 `clean` / `stop-time` / `jvm-start`：`clean=false` 说明上次崩溃、`kill -9` 或断电；插件重载（同 JVM 重新 `onEnable`）不会被当成关服或重启
+- feat: 群→游戏消息支持 MiniMessage（#29）—— `<gold>`、`<#FFAA00>`、`<bold>`、`<gradient:#FF0000:#00FF00>` 等写法，与旧式 `&6` / `§6` 混用无冲突；十六进制输出 `§x§R§R§G§G§B§B`，需服务端 1.18+
+- feat: WebUI 新增「服务器状态通知」分组，`chat-format.from-group` 说明补充 MiniMessage 写法
+
+### 优化
+
+- opt: 命令黑名单抽出 `CommandBlacklistGuard` 统一规范化 —— 去斜杠、去 `bukkit:` / `minecraft:` 命名空间前缀、统一小写；平台能拿到命令表时按服务器解析出的主名匹配，`/pl` 与 `/plugins` 一起拦下
+- opt: `/execute as @a run op Steve` 这类包装命令会检查 `run` 后面的真实命令，最多递归 4 层
+- opt: 黑名单匹配逻辑从 `AgentManager` 与 `CommandSupport` 各写一份改为共用一处实现
+- opt: `QClient.isReady()` 对外暴露 QQ 鉴权状态，供状态通知判断发送时机
+- opt: Spigot 产物 relocate `net.kyori`，自带一份 Adventure，避免与 Paper / 其他插件版本冲突
+
+### Bug 修复
+
+- fix: `convertAmpersandColors` 正则 `&(\da-fk-orA-FK-OR)` 把 `a-f`、`k-o` 当成字面字符串联匹配，实际只匹配 `&6a-fk-orA-FK-OR` 这类长串，`&6` 之类的旧式颜色码从未被转换
+- fix: 游戏→群方向（`from-game`、死亡播报、进退服通知）不再做 `&` → `§` 转换 —— QQ 不识别 `§` 颜色码，之前会把 `§` 原样发进群
+- fix: 群成员昵称与消息内容会被当作 MiniMessage 解析，发一句 `<red>` 就能把后续聊天全部染色；现在先用 `escapeTags` 转义再套模板
+- fix: 消息里已存在的 `§6` 颜色码在 MiniMessage 解析前用私有区字符临时保护，避免被当成非法标签吞掉
+
+### 升级提示
+
+- 配置版本升到 12，启动时自动补上 `server-notify.*` 默认值，无需手动改 `config.yml`
+- 新增依赖 `adventure-text-minimessage` / `adventure-text-serializer-legacy` 4.17.0，已打进 Spigot 产物并 relocate
+
+---
+
 ## v1.19.1（2026-10-31）
 
 ### Bug 修复

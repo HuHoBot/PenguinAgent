@@ -3,6 +3,7 @@ package cn.huohuas001.bot.agent
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.InteractionOutcome
 import cn.huohuas001.bot.QClient
+import cn.huohuas001.bot.events.commands.CommandBlacklistGuard
 import cn.huohuas001.bot.state.CommandRepositories
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -283,16 +284,11 @@ object AgentManager {
                             session.messages.add(toolMessage(toolCallId, "命令为空，无法执行。"))
                             continue
                         }
-                        // 命令黑名单检查
-                        val blacklist = plugin.getCommandBlacklist()
-                        if (blacklist.isNotEmpty()) {
-                            val cmdToCheck = command.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
-                                .removePrefix("/").trimStart().lowercase()
-                            if (blacklist.any { blocked -> cmdToCheck == blocked || cmdToCheck.startsWith("$blocked ") }) {
-                                session.messages.add(toolMessage(toolCallId, "此命令已被管理员禁止执行（黑名单）：$cmdToCheck"))
-                                sendToGroup(plugin, session, AgentMessageFormatter.error("命令 $cmdToCheck 在黑名单中，无法执行"))
-                                continue
-                            }
+                        // 命令黑名单检查：前缀、命名空间、别名都在 guard 里统一规范化后再比较
+                        if (CommandBlacklistGuard.isBlocked(plugin, command)) {
+                            session.messages.add(toolMessage(toolCallId, "此命令已被管理员禁止执行（黑名单）：$command"))
+                            sendToGroup(plugin, session, AgentMessageFormatter.error("命令 $command 在黑名单中，无法执行"))
+                            continue
                         }
                         if (config.commandMode == AgentCommandMode.AUTO) {
                             val output = executeCommand(plugin, command)

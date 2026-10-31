@@ -264,6 +264,37 @@ class ConfigManager(
         )!!
     )
 
+    fun serverNotifyEnabled(): Boolean =
+        plugin.config.getBoolean("server-notify.enabled", true)
+
+    fun serverNotifyShutdownEnabled(): Boolean =
+        serverNotifyEnabled() && plugin.config.getBoolean("server-notify.shutdown.enabled", true)
+
+    fun serverNotifyShutdownMessage(): String = plugin.config.getString(
+        "server-notify.shutdown.message",
+        "服务器已正常关闭"
+    )!!
+
+    fun serverNotifyRestartEnabled(): Boolean =
+        serverNotifyEnabled() && plugin.config.getBoolean("server-notify.restart.enabled", true)
+
+    fun serverNotifyRestartMessage(): String = plugin.config.getString(
+        "server-notify.restart.message",
+        "服务器已重启完成"
+    )!!
+
+    fun serverNotifyCrashEnabled(): Boolean =
+        serverNotifyEnabled() && plugin.config.getBoolean("server-notify.crash.enabled", true)
+
+    fun serverNotifyCrashMessage(): String = plugin.config.getString(
+        "server-notify.crash.message",
+        "服务器意外关闭（崩溃或被强制结束），请管理员检查控制台"
+    )!!
+
+    /** 上次正常关闭后多少秒内重新启动算作一次重启。 */
+    fun serverNotifyRestartWindow(): Long =
+        plugin.config.getLong("server-notify.restart-window", 180L).coerceIn(0L, 3600L)
+
     fun markdownFiles(): Map<String, String> {
         val configured = plugin.config.getConfigurationSection("markdown")
             ?.getValues(false)
@@ -445,7 +476,7 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 11
+        private const val CURRENT_CONFIG_VERSION = 12
         private const val CONFIG_VERSION_PATH = "config-version"
 
         /**
@@ -502,7 +533,7 @@ class ConfigManager(
             "serverName" to "服务器显示名称，可在进服/退服格式中通过 {server} 使用",
             "webui-port" to "WebUI 管理界面端口，修改后需重启生效",
             "chat-format.from-game" to "游戏→QQ 消息格式，可用占位符：{name}、{message}",
-            "chat-format.from-group" to "QQ→游戏 消息格式，可用占位符：{name}、{message}",
+            "chat-format.from-group" to "QQ→游戏 消息格式，可用占位符：{name}、{message}；支持 MiniMessage（<gold>、<#FFAA00>）与 & 颜色码",
             "chat-format.post-chat" to "是否开启群聊转发",
             "chat-format.start-with" to "只有以该内容开头的游戏消息才会转发；留空表示全部转发",
             "player-events.join.enabled" to "是否转发玩家进服通知",
@@ -512,6 +543,14 @@ class ConfigManager(
             "player-events.always-forward" to "是否忽略平台事件的隐藏/取消/登录状态判断，始终转发进退服事件",
             "player-events.death.enabled" to "是否转发玩家死亡播报",
             "player-events.death.format" to "死亡播报格式，可用占位符：{name}、{player}、{server}、{platform}、{message}（中文死亡描述）",
+            "server-notify.enabled" to "服务器状态通知总开关，关闭后关机、重启、意外关闭都不发送",
+            "server-notify.shutdown.enabled" to "服务器正常关闭时向 QQ 群发送通知",
+            "server-notify.shutdown.message" to "正常关闭通知内容，可用占位符：{server}、{platform}",
+            "server-notify.restart.enabled" to "服务器重新启动且距上次关闭未超过判定窗口时发送通知",
+            "server-notify.restart.message" to "重启通知内容，可用占位符：{server}、{platform}",
+            "server-notify.crash.enabled" to "上次运行未正常关闭时，下次启动后发送意外关闭通知",
+            "server-notify.crash.message" to "意外关闭通知内容，可用占位符：{server}、{platform}",
+            "server-notify.restart-window" to "上次正常关闭后多少秒内重新启动算作重启，建议 120-300",
             "markdown.queryOnline" to "查在线命令使用的 Markdown 模板文件名",
             "motd.server-ip" to "MOTD 查询的服务器地址",
             "motd.server-port" to "MOTD 查询的服务器端口",
@@ -615,6 +654,15 @@ class ConfigManager(
             put("player-events.always-forward", false)
             put("player-events.death.enabled", true)
             put("player-events.death.format", "[游戏] {message}")
+
+            put("server-notify.enabled", true)
+            put("server-notify.shutdown.enabled", true)
+            put("server-notify.shutdown.message", "服务器已正常关闭")
+            put("server-notify.restart.enabled", true)
+            put("server-notify.restart.message", "服务器已重启完成")
+            put("server-notify.crash.enabled", true)
+            put("server-notify.crash.message", "服务器意外关闭（崩溃或被强制结束），请管理员检查控制台")
+            put("server-notify.restart-window", 180)
 
             put("markdown.queryOnline", "online.md")
 

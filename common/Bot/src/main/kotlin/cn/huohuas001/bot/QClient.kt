@@ -74,6 +74,9 @@ object QClient {
         false
     }
 
+    /** QQ 是否已启动并完成鉴权，可用于判断现在发送消息是否会成功。 */
+    fun isReady(): Boolean = ::starter.isInitialized && isQqAuthenticated()
+
     /** 鉴权未完成时按秒重试面板同步，超过上限就放弃并告警。 */
     private fun scheduleGroupPanelsSyncRetry() {
         if (groupPanelsSyncRetry != null) return

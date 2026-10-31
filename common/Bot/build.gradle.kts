@@ -41,6 +41,10 @@ dependencies {
     // Used by both the submodule sources and this module's Kotlin sources.
     implementation("com.alibaba:fastjson:2.0.32")
 
+    // MiniMessage：群→游戏消息支持 <gold>、<#FFAA00> 等新式颜色写法。
+    implementation("net.kyori:adventure-text-minimessage:4.17.0")
+    implementation("net.kyori:adventure-text-serializer-legacy:4.17.0")
+
     compileOnly("org.projectlombok:lombok:1.18.26")
     annotationProcessor("org.projectlombok:lombok:1.18.26")
 

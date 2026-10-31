@@ -17,6 +17,8 @@
 | 功能 | 说明 |
 |------|------|
 | 双向聊天转发 | 游戏 ↔ QQ 群消息实时互通，支持格式模板与前缀过滤 |
+| **MiniMessage 颜色** | 群→游戏消息支持 `<gold>`、`<#FFAA00>`、`<bold>`、`<gradient>`，同时兼容 `&6` / `§6` |
+| **服务器状态通知** | 关机 / 重启 / 意外关闭时向 QQ 群推送提醒，消息可自定义 |
 | QQ 群指令系统 | 30+ 条内置命令，支持权限分级、命令开关与动态帮助 |
 | 白名单管理 | 映射到服务器原生命令，支持自定义模板 |
 | 敏感词审核 | 本地正则词库 + 可选 OpenAI 兼容接口 AI 二审 |
@@ -378,6 +380,19 @@ QQ 群中的 @消息会自动解析为 `§9@玩家名§r`（蓝色高亮），�
 - `{name}` / `{nick}` —— 发送者昵称
 - `{message}` / `{msg}` —— 消息内容
 
+**颜色写法（仅 from-group）：** 支持 MiniMessage 与旧式颜色码，两种可以混用：
+
+```yaml
+chat-format:
+  from-group: "<gold>[QQ]</gold> <#FFAA00>{name}</#FFAA00>: {message}"   # MiniMessage
+  # from-group: "&6[QQ] &e{name}&r: {message}"                          # 旧式颜色码
+```
+
+- 命名色 `<gold>`、`<red>`…，十六进制 `<#FFAA00>`，装饰 `<bold>`、`<italic>`、`<underlined>`，渐变 `<gradient:#FF0000:#00FF00>`
+- 旧式 `&6`、`§6` 依旧可用；十六进制输出为 `§x§R§R§G§G§B§B`，需要服务端 1.18+
+- `{name}` 与 `{message}` 会被自动转义，群成员发 `<red>` 不会把后面的聊天染色
+- 游戏→群方向（`from-game`、死亡播报、进退服通知）不解析 MiniMessage —— QQ 不识别 `§` 颜色码，原文直出
+
 ### 敏感词审核
 
 支持两级过滤：
@@ -401,6 +416,47 @@ custom-commands:
 - `{group}` —— 群 OpenID
 - `{user}` —— 用户 OpenID
 - `{0}`, `{1}` ... —— 按空格分割的参数
+
+### 服务器状态通知
+
+服务器关机、重启、意外关闭时向 QQ 群推送提醒（Spigot / Paper）。
+
+```yaml
+server-notify:
+  enabled: true                     # 总开关，关闭后下面三项都不发送
+  shutdown:
+    enabled: true
+    message: "服务器已正常关闭"      # 可用占位符：{server}、{platform}
+  restart:
+    enabled: true
+    message: "服务器已重启完成"
+  crash:
+    enabled: true
+    message: "服务器意外关闭（崩溃或被强制结束），请管理员检查控制台"
+  restart-window: 180               # 多少秒内重新启动算一次重启，建议 120-300
+```
+
+发送时机：
+
+| 事件 | 时机 | 说明 |
+|------|------|------|
+| 正常关闭 | `onDisable` 时立即发送 | 赶在 QQ 连接关闭前发出，失败会写日志但不阻塞卸载 |
+| 重启完成 | 下次启动时判定后发送 | 上次正常关闭且距 `restart-window` 内重新启动 |
+| 意外关闭 | 下次启动时补发 | 上次未正常收尾（崩溃、`kill -9`、断电），进程已死只能下次启动补发 |
+
+- 状态记录在插件数据目录的 `server-notify-state.properties`，不要手动删除
+- 插件重载 / 手动停用不会被当成关服，也不会被当成一次重启
+- QQ 是异步鉴权的，通知会等鉴权成功后再发（最多 60 秒），未配置群或等待超时会记日志跳过
+
+### 命令黑名单
+
+禁止通过 `/执行` 运行的服务器命令，防止 AI Agent 或被授权的群成员执行危险指令。
+
+```yaml
+command-blacklist: ["op", "deop", "ban", "stop"]
+```
+
+匹配时会做与服务器相同的规范化，`/plugins`、`bukkit:plugins`、`minecraft:plugins` 都会被 `plugins` 拦下；平台能拿到命令表时，原版别名（如 `/pl`）也会一并拦截，`/execute as @a run op Steve` 这种包装写法同样会检查 `run` 后面的真实命令。
 
 ---
 
@@ -541,7 +597,26 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.19.1（最新）
+### v1.20.0（最新）
+
+**新功能：**
+- feat: 服务器状态通知（#27）—— 关机 / 重启 / 意外关闭时向 QQ 群推送提醒，`server-notify` 配置组提供总开关与三项独立开关、自定义消息，消息支持 `{server}`、`{platform}` 占位符
+- feat: 群→游戏消息支持 MiniMessage（#29）—— `<gold>`、`<#FFAA00>`、`<bold>`、`<gradient>` 等写法，与旧式 `&6` / `§6` 混用无冲突；十六进制输出 `§x§R§R§G§G§B§B`，需服务端 1.18+
+
+**优化：**
+- opt: 命令黑名单统一规范化后再比较 —— 去斜杠、去 `bukkit:` / `minecraft:` 命名空间前缀，平台能拿到命令表时按服务器解析出的主名匹配（`/pl` 与 `/plugins` 一起拦），`/execute … run <命令>` 会检查 `run` 后面的真实命令
+- opt: WebUI 新增「服务器状态通知」分组，`chat-format.from-group` 的说明补充 MiniMessage 写法
+
+**Bug 修复：**
+- fix: `convertAmpersandColors` 正则把 `a-f`、`k-o` 当成字面字符串联匹配，导致 `&6` 之类的旧式颜色码实际上从未被转换
+- fix: 游戏→群方向（`from-game`、死亡播报、进退服通知）不再做 `&` → `§` 转换 —— QQ 不识别 `§` 颜色码，之前会把 `§` 原样发进群
+- fix: 群成员昵称与消息内容会被当作 MiniMessage 解析，发一句 `<red>` 就能把后续聊天全部染色；现在先转义再套模板
+
+**升级提示：**
+- 配置版本升到 12，启动时自动补上 `server-notify.*` 默认值，无需手动改 `config.yml`
+- 服务端 jar 自带一份 Adventure（`net.kyori` 已 relocate），不会与 Paper 或其他插件的版本冲突
+
+### v1.19.1
 
 **Bug 修复：**
 - fix: 草方块在背包 / 末影箱图片里显示成覆雪草方块（#32）— `grass_block_top.png` 是灰度遮罩图，原版靠生物群系颜色染色，之前的渲染器直接铺灰度图，顶面因此发白

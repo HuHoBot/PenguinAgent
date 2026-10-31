@@ -20,6 +20,8 @@ chat-format:
   # 游戏→QQ：{name} 为 MC 玩家名
   from-game: "[游戏] {name}: {message}"
   # QQ→游戏：{name} 为 QQ 用户名（绑定后默认仍是 QQ 名，可用 /MC显示名称 MC 切换）
+  # 支持 MiniMessage：<gold>、</gold>、<#FFAA00>、<bold>、<gradient:#FF0000:#00FF00> 等
+  # 也兼容旧式颜色码：&6、§6
   from-group: "[QQ] {name}: {message}"
   post-chat: true
   # 只有以该内容开头的游戏消息才会转发；转发时会移除该内容。留空表示全部转发。
@@ -38,6 +40,29 @@ player-events:
     enabled: true
     # 可用占位符：{name}、{player}、{server}、{platform}、{killer}（击杀者）、{message}（中文死亡描述）
     format: "[游戏] {message}"
+
+# 服务器状态通知：关机、重启、意外关闭时提醒 QQ 群。
+# 关机通知在服务器停止的瞬间发送；重启与意外关闭只能在下次启动时判断，
+# 因此会在机器人连上 QQ 后才发送。
+server-notify:
+  # 总开关，关闭后下面三项都不发送
+  enabled: true
+  shutdown:
+    enabled: true
+    # 可用占位符：{server}、{platform}
+    message: "服务器已正常关闭"
+  restart:
+    enabled: true
+    # 可用占位符：{server}、{platform}
+    message: "服务器已重启完成"
+  crash:
+    enabled: true
+    # 上次运行没有正常关闭（崩溃、kill -9、断电等）时，下次启动后发送
+    # 可用占位符：{server}、{platform}
+    message: "服务器意外关闭（崩溃或被强制结束），请管理员检查控制台"
+  # 上次正常关闭后多少秒内重新启动算作重启，建议 120-300
+  # 超过这个时间再启动只会当作普通开机，不发送通知
+  restart-window: 180
 
 # 配置键对应插件数据目录 Markdown/ 下的文件。
 markdown:
@@ -97,6 +122,8 @@ inventory:
 
 # /执行 命令黑名单：列出禁止通过 /执行 运行的服务器命令（不区分大小写）
 # 例如禁止 /执行 op someone：["op", "deop"]
+# 命名空间前缀与斜杠会被自动忽略：写 "plugins" 同时拦下 "/plugins"、"bukkit:plugins"、
+# "minecraft:plugins"；平台能拿到命令表时，别名（如 "pl"）也会一并拦下
 command-blacklist: []
 
 command-panel:

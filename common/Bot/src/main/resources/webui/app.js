@@ -166,6 +166,7 @@ const SECTION_ICONS = {
     server: "🖥️",
     "chat-format": "💬",
     "player-events": "📣",
+    "server-notify": "🔔",
     markdown: "📝",
     motd: "📋",
     whitelist: "✅",

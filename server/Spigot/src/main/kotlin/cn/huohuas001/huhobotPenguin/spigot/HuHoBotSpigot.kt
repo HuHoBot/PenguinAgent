@@ -23,6 +23,7 @@ import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotRecvMsg
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
 import cn.huohuas001.huhobotPenguin.spigot.manager.QrLoginManager
+import cn.huohuas001.huhobotPenguin.spigot.manager.ServerNotifyManager
 import cn.huohuas001.huhobotPenguin.spigot.integration.PlaceholderApiSupport
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventorySnapshot
@@ -52,6 +53,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     private lateinit var configManager: ConfigManager
+    private lateinit var serverNotifyManager: ServerNotifyManager
     private lateinit var offlineInventorySnapshots: OfflineInventorySnapshots
     private var scriptAddonLoader: ScriptAddonLoader? = null
 
@@ -65,6 +67,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         initializeInventoryRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
         initializeRuntime()
+        serverNotifyManager = ServerNotifyManager(this, configManager).also { it.onServerStarted() }
         scheduleForceBindCheck()
         logCommandExecutor()
         val command = HuHoBotCommand(this)
@@ -115,6 +118,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     override fun onDisable() {
+        // 必须赶在 shutdownRuntime() 关掉 QQ 连接之前发送，否则关机通知发不出去。
+        if (::serverNotifyManager.isInitialized) serverNotifyManager.onServerStopping()
         val loader = scriptAddonLoader
         try {
             loader?.unloadAll()
@@ -961,6 +966,26 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     override fun getCommandBlacklist(): List<String> = configManager.commandBlacklist()
+
+    /**
+     * 命令表（`CraftServer#getCommandMap()`）不在 Bukkit API 里，只能反射取一次。
+     *
+     * 取不到就返回 null，黑名单退化为纯文本匹配；取到后可以用它把 `/pl` 这类别名还原成主名，
+     * 否则黑名单里写 `plugins`、实际执行 `pl` 就能绕过去。
+     */
+    private val commandMap: CommandMap? by lazy {
+        runCatching {
+            server.javaClass.methods
+                .firstOrNull { it.name == "getCommandMap" && it.parameterCount == 0 }
+                ?.invoke(server) as? CommandMap
+        }.getOrNull()
+    }
+
+    override fun resolveCommandName(command: String): String? = runCatching {
+        val name = command.trim().trimStart('/').substringAfterLast(':').trim()
+        if (name.isEmpty()) return@runCatching null
+        commandMap?.getCommand(name)?.name?.lowercase()
+    }.getOrNull()
 
     override fun getWebUiPort(): Int = config.getInt("webui-port", 5678)
 

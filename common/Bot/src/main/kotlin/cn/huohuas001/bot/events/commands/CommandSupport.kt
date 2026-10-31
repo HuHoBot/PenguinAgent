@@ -96,15 +96,10 @@ abstract class CommandSupport : BaseCommand() {
             "huhobot run ${groupId(event)} ${userId(event)} $command"
         }
 
-        // 命令黑名单检查
-        val blacklist = plugin.getCommandBlacklist()
-        if (blacklist.isNotEmpty()) {
-            val cmdToCheck = outgoingCommand.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
-                .removePrefix("/").trimStart().lowercase()
-            if (blacklist.any { blocked -> cmdToCheck == blocked || cmdToCheck.startsWith("$blocked ") }) {
-                sendMessage(event, "此命令已被管理员禁止执行")
-                return
-            }
+        // 命令黑名单检查：前缀、命名空间、别名都在 guard 里统一规范化后再比较
+        if (CommandBlacklistGuard.isBlocked(plugin, outgoingCommand)) {
+            sendMessage(event, "此命令已被管理员禁止执行")
+            return
         }
 
         plugin.sendCommand(outgoingCommand).whenComplete { result, error ->

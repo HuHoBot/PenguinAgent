@@ -89,7 +89,7 @@ object WebUiSchema {
         description = "控制游戏与 QQ 群之间的聊天互通。触发前缀是常用手段：填 # 后只有以 # 开头的游戏消息才会被转发，可避免刷屏。",
         fields = listOf(
             FieldSpec("chat-format.from-game", "游戏→群 格式", "text", "占位符：{name} {message}", placeholder = "[游戏] {message}"),
-            FieldSpec("chat-format.from-group", "群→游戏 格式", "text", "占位符：{name} {message}", placeholder = "[QQ] {name}: {message}"),
+            FieldSpec("chat-format.from-group", "群→游戏 格式", "text", "占位符：{name} {message}；支持 MiniMessage（<gold>、<#FFAA00>）与 & 颜色码", placeholder = "[QQ] {name}: {message}"),
             FieldSpec("chat-format.post-chat", "转发游戏聊天", "boolean", "是否把游戏聊天转发到群"),
             FieldSpec("chat-format.start-with", "触发前缀", "text", "游戏消息必须以此前缀开头才转发；留空转发全部")
         )
@@ -107,6 +107,24 @@ object WebUiSchema {
             FieldSpec("player-events.quit.format", "退服格式", "text", "占位符：{name}", placeholder = "[游戏] {name} 离开了服务器"),
             FieldSpec("player-events.death.enabled", "死亡播报", "boolean", "玩家死亡时在群内播报死亡描述"),
             FieldSpec("player-events.death.format", "死亡播报格式", "text", "占位符：{name}、{message}（中文死亡描述）", placeholder = "[游戏] {message}")
+        )
+    )
+
+    private val SERVER_NOTIFY_SECTION = SectionSpec(
+        key = "server-notify",
+        title = "服务器状态通知",
+        description = "服务器关闭、重启完成、意外关闭时向 QQ 群发送提醒。关机通知在服务器停止的瞬间发送；" +
+            "重启和意外关闭只能在下次启动时判断，因此会在机器人连上 QQ 后补发。" +
+            "「重启判定窗口」设得太短会把重启较慢的服务器当成普通开机，从而漏发重启通知。",
+        fields = listOf(
+            FieldSpec("server-notify.enabled", "总开关", "boolean", "关闭后关机、重启、意外关闭通知都不发送"),
+            FieldSpec("server-notify.shutdown.enabled", "关机通知", "boolean", "服务器正常关闭时立即发送"),
+            FieldSpec("server-notify.shutdown.message", "关机消息", "text", "可用占位符：{server}、{platform}", placeholder = "服务器已正常关闭"),
+            FieldSpec("server-notify.restart.enabled", "重启通知", "boolean", "服务器在判定窗口内重新启动时发送"),
+            FieldSpec("server-notify.restart.message", "重启消息", "text", "可用占位符：{server}、{platform}", placeholder = "服务器已重启完成"),
+            FieldSpec("server-notify.crash.enabled", "意外关闭通知", "boolean", "上次运行未正常关闭时，下次启动并连上 QQ 后发送"),
+            FieldSpec("server-notify.crash.message", "意外关闭消息", "text", "可用占位符：{server}、{platform}", placeholder = "服务器意外关闭（崩溃或被强制结束），请管理员检查控制台"),
+            FieldSpec("server-notify.restart-window", "重启判定窗口（秒）", "number", "上次正常关闭后多少秒内重新启动算作重启，建议 120-300")
         )
     )
 
@@ -252,7 +270,7 @@ object WebUiSchema {
         title = "命令黑名单",
         description = "禁止通过 /执行 运行的服务器命令，名单内的命令群里任何人都触发不了（每行一个，如 op、deop）。",
         fields = listOf(
-            FieldSpec("command-blacklist", "禁止执行的命令", "list", "禁止通过 /执行 运行的服务器命令（不区分大小写，每行一个，如 op、deop）")
+            FieldSpec("command-blacklist", "禁止执行的命令", "list", "禁止通过 /执行 运行的服务器命令（不区分大小写，每行一个，如 op、deop）。斜杠与 bukkit:/minecraft: 前缀会被自动忽略，平台支持时别名也会一并拦截")
         )
     )
 
@@ -262,6 +280,7 @@ object WebUiSchema {
         SERVER_SECTION,
         CHAT_FORMAT_SECTION,
         PLAYER_EVENTS_SECTION,
+        SERVER_NOTIFY_SECTION,
         MARKDOWN_SECTION,
         MOTD_SECTION,
         WHITELIST_SECTION,
