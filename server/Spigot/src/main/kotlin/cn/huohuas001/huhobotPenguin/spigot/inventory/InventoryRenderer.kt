@@ -85,6 +85,37 @@ object InventoryRenderer {
     private val playerModelRenderer by lazy { PlayerModelRenderer(PREVIEW_WIDTH, PREVIEW_HEIGHT) }
     private val equipmentAssets by lazy { EquipmentAssetResolver() }
 
+    /**
+     * 需要生物群系染色的贴图（键为资源文件名，不含扩展名，值为 0xRRGGBB）。
+     *
+     * 原版里这些贴图是灰度图，运行时靠生物群系颜色染成绿色；本地渲染没有群系上下文，
+     * 按平原配色固定染色。不染的话草方块顶面是一块灰白色，看起来就像覆雪草方块（#32），
+     * 树叶、草丛同理发灰。只列确定需要染色的贴图，浅色系方块（铁块、雪等）不受影响。
+     */
+    private val textureTints: Map<String, Int> = mapOf(
+        // 草方块顶面：平原草色
+        "grass_block_top" to 0x91BD59,
+        // 树叶：除白桦、云杉在原版里是固定色外，其余统一用平原树叶色
+        "oak_leaves" to 0x77AB2F,
+        "jungle_leaves" to 0x77AB2F,
+        "acacia_leaves" to 0x77AB2F,
+        "dark_oak_leaves" to 0x77AB2F,
+        "mangrove_leaves" to 0x77AB2F,
+        "birch_leaves" to 0x80A755,
+        "spruce_leaves" to 0x619961,
+        // 草丛类：与草方块同色
+        "short_grass" to 0x91BD59,
+        "fern" to 0x91BD59,
+        "tall_grass_top" to 0x91BD59,
+        "tall_grass_bottom" to 0x91BD59,
+        "large_fern_top" to 0x91BD59,
+        "large_fern_bottom" to 0x91BD59,
+        // 藤蔓：树叶色
+        "vine" to 0x77AB2F,
+        // 睡莲：原版固定色
+        "lily_pad" to 0x71C35C
+    )
+
     /** 初始化默认壁纸或用户壁纸，并预先合成所有强制遮罩。 */
     fun init(
         dataFolder: File,
@@ -282,18 +313,46 @@ object InventoryRenderer {
 
     private fun loadTexture(material: Material): BufferedImage? {
         val name = material.key.key
-        loadResource("$RESOURCE_ROOT/special-variants/minecraft/$name.png")?.let { return it }
-        loadResource("$RESOURCE_ROOT/overrides/items/minecraft/$name.png")?.let { return it }
+        loadResource("$RESOURCE_ROOT/special-variants/minecraft/$name.png")?.let { return applyTint(name, it) }
+        loadResource("$RESOURCE_ROOT/overrides/items/minecraft/$name.png")?.let { return applyTint(name, it) }
 
-        val direct = loadResource("$RESOURCE_ROOT/assets/minecraft/$name.png")
+        val direct = applyTint(name, loadResource("$RESOURCE_ROOT/assets/minecraft/$name.png"))
         if (material.isBlock && material.isSolid) {
-            val top = loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_top.png") ?: direct
-            val side = loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_side.png")
-                ?: loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_front.png")
+            val top = applyTint("${name}_top", loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_top.png"))
+                ?: direct
+            val side = applyTint("${name}_side", loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_side.png"))
+                ?: applyTint("${name}_front", loadResource("$RESOURCE_ROOT/assets/minecraft/${name}_front.png"))
                 ?: direct
             if (top != null && side != null) return renderIsometricBlock(top, side)
         }
         return direct ?: fallbackTexture
+    }
+
+    /**
+     * 按 [textureTints] 做乘法染色，保留原贴图的明暗层次。
+     *
+     * 原版把群系颜色乘到灰度贴图上得到最终颜色，这里用同样的算法（通道值 × 染色值 / 255），
+     * 未列入 [textureTints] 的贴图原样返回。贴图很小（32×32），逐像素处理足够快。
+     */
+    private fun applyTint(name: String, image: BufferedImage?): BufferedImage? {
+        val rgb = textureTints[name] ?: return image
+        if (image == null) return null
+        val tintR = (rgb shr 16) and 0xFF
+        val tintG = (rgb shr 8) and 0xFF
+        val tintB = rgb and 0xFF
+        val tinted = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val argb = image.getRGB(x, y)
+                val alpha = argb ushr 24
+                if (alpha == 0) continue
+                val r = (((argb shr 16) and 0xFF) * tintR) / 255
+                val g = (((argb shr 8) and 0xFF) * tintG) / 255
+                val b = ((argb and 0xFF) * tintB) / 255
+                tinted.setRGB(x, y, (alpha shl 24) or (r shl 16) or (g shl 8) or b)
+            }
+        }
+        return tinted
     }
 
     private fun renderPlayerHead(skin: BufferedImage): BufferedImage {

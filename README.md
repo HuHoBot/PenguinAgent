@@ -541,7 +541,19 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.19.0（最新）
+### v1.19.1（最新）
+
+**Bug 修复：**
+- fix: 草方块在背包 / 末影箱图片里显示成覆雪草方块（#32）— `grass_block_top.png` 是灰度遮罩图，原版靠生物群系颜色染色，之前的渲染器直接铺灰度图，顶面因此发白
+- fix: 同一批需要染色的贴图一并修复：橡木 / 白桦 / 云杉 / 丛林 / 金合欢 / 深色橡木 / 红树树叶，以及短草、蕨、高草、大型蕨、藤蔓、睡莲，此前都会渲染成灰色
+- fix: 染色按原版乘法混色（`通道 × 染色 / 255`），保留贴图明暗层次；草方块只染顶面（侧面本身已带绿色），树叶所有面都染
+
+**说明：**
+- 白桦树叶用 `#80A755`、云杉树叶用 `#619961`（原版固定色），其余树叶、草丛用平原草色 `#91BD59` / 树叶色 `#77AB2F`
+- 只染明确需要群系颜色的贴图，铁块、雪、石英等浅色方块不受影响
+- 西瓜 / 南瓜茎同样是灰度图，但原版按生长阶段取不同颜色，本次未改动
+
+### v1.19.0
 
 **新功能：**
 - feat: Agent 深度思考 — 原生推理模型开启后按厂商适配思考参数（`agent.think` / `think-level` / `think-param`），支持 `reasoning_effort`、`effort`、`thinking_level`、`reasoning.effort`、`thinking.type`、`thinking_budget`、`enable_thinking`，档位与参数不匹配时只记日志、不让请求失败
