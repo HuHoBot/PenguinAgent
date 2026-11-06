@@ -8,6 +8,8 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 
+![bStats signature](https://bstats.org/signatures/bukkit/PenguinAgent.svg)
+
 ![HuHoBot](https://count.moeyy.cn/@huhobot?name=huhobot&theme=booru-lewd&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
 
 ---
