@@ -295,6 +295,50 @@ class ConfigManager(
     fun serverNotifyRestartWindow(): Long =
         plugin.config.getLong("server-notify.restart-window", 180L).coerceIn(0L, 3600L)
 
+    // ---------------------------------------------------------------- 在线列表渲染
+
+    fun onlineListEnabled(): Boolean =
+        plugin.config.getBoolean("online-list.enabled", true)
+
+    fun onlineListPageSize(): Int =
+        plugin.config.getInt("online-list.page-size", 27).coerceIn(1, 300)
+
+    fun onlineListAdminFirst(): Boolean =
+        plugin.config.getBoolean("online-list.admin-first", true)
+
+    fun onlineListAdminPermission(): String =
+        plugin.config.getString("online-list.admin-permission", "").orEmpty()
+
+    fun onlineListSkinEnabled(): Boolean =
+        plugin.config.getBoolean("online-list.skin.enabled", true)
+
+    fun onlineListSkinConnectTimeoutMs(): Int =
+        plugin.config.getInt("online-list.skin.connect-timeout-ms", 3000).coerceAtLeast(250)
+
+    fun onlineListSkinReadTimeoutMs(): Int =
+        plugin.config.getInt("online-list.skin.read-timeout-ms", 5000).coerceAtLeast(250)
+
+    fun onlineListSkinCacheSize(): Int =
+        plugin.config.getInt("online-list.skin.cache-size", 200).coerceAtLeast(8)
+
+    fun onlineListSkinDownloadThreads(): Int =
+        plugin.config.getInt("online-list.skin.download-threads", 4).coerceIn(1, 12)
+
+    fun onlineListCooldownSeconds(): Long =
+        plugin.config.getLong("online-list.cooldown-seconds", 3L).coerceAtLeast(0L)
+
+    fun onlineListRenderColumns(): Int =
+        plugin.config.getInt("online-list.render.columns", 3).coerceIn(1, 3)
+
+    fun onlineListRenderFontFamily(): String =
+        plugin.config.getString("online-list.render.font-family", "").orEmpty()
+
+    fun onlineListRenderFooterText(): String =
+        plugin.config.getString("online-list.render.footer-text", "POWERED BY HuHoBot").orEmpty()
+
+    fun onlineListImageMaxBytes(): Int =
+        plugin.config.getInt("online-list.image-max-bytes", 20 * 1024 * 1024)
+
     fun markdownFiles(): Map<String, String> {
         val configured = plugin.config.getConfigurationSection("markdown")
             ?.getValues(false)
@@ -598,6 +642,20 @@ class ConfigManager(
             "update-check.url" to "自定义更新检查数据源（逗号分隔的 URL，可返回纯文本版本号或 JSON）；留空使用内置数据源",
             "placeholder-api.enabled" to "启用 PlaceholderAPI 占位符解析（未安装 PlaceholderAPI 时无效果）",
             "bot.auto-add-groups" to "收到陌生群消息时自动把群 OpenID 写入 bot.groups",
+            "online-list.enabled" to "查在线命令是否使用本地渲染的在线列表图片（关闭后回退到 MOTD 外部 API 图片）",
+            "online-list.page-size" to "在线列表每页玩家数（三列布局推荐 27 = 3列×9行）",
+            "online-list.admin-first" to "管理员是否排在在线列表最前面",
+            "online-list.admin-permission" to "在线列表管理员判定权限节点；留空时只看 OP",
+            "online-list.cooldown-seconds" to "同一 QQ 群两次在线列表请求的最小间隔秒数，防刷屏",
+            "online-list.skin.enabled" to "在线列表是否下载并显示玩家皮肤头像",
+            "online-list.skin.connect-timeout-ms" to "皮肤下载连接超时（毫秒）",
+            "online-list.skin.read-timeout-ms" to "皮肤下载读取超时（毫秒）",
+            "online-list.skin.cache-size" to "皮肤头像 LRU 缓存容量",
+            "online-list.skin.download-threads" to "皮肤头像并发下载线程数（1-12）",
+            "online-list.render.columns" to "在线列表渲染列数（1-3，推荐 3）",
+            "online-list.render.font-family" to "在线列表渲染字体；留空自动检测",
+            "online-list.render.footer-text" to "在线列表图片页脚文字",
+            "online-list.image-max-bytes" to "在线列表图片最大字节数，超出则拒绝发送",
         )
 
         private val COMMAND_NAMES = listOf(
@@ -714,6 +772,22 @@ class ConfigManager(
             put("update-check.url", "")
             put("placeholder-api.enabled", true)
             put("bot.auto-add-groups", true)
+
+            // 在线列表渲染
+            put("online-list.enabled", true)
+            put("online-list.page-size", 27)
+            put("online-list.admin-first", true)
+            put("online-list.admin-permission", "")
+            put("online-list.cooldown-seconds", 3L)
+            put("online-list.skin.enabled", true)
+            put("online-list.skin.connect-timeout-ms", 3000)
+            put("online-list.skin.read-timeout-ms", 5000)
+            put("online-list.skin.cache-size", 200)
+            put("online-list.skin.download-threads", 4)
+            put("online-list.render.columns", 3)
+            put("online-list.render.font-family", "")
+            put("online-list.render.footer-text", "POWERED BY HuHoBot")
+            put("online-list.image-max-bytes", 20 * 1024 * 1024)
 
             COMMAND_NAMES.forEach { commandName ->
                 put("commands.$commandName", true)

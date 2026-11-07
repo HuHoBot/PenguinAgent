@@ -85,9 +85,10 @@ abstract class BaseCommand {
         // 按指令名长度降序匹配,避免短指令抢先(如 "发" 抢走 "发信息")
         for (command in commandMap.keys.sortedByDescending { it.length }) {
             if (cleaned == command || cleaned.startsWith("$command ")) {
-                if (plugin.getCommandList()[command] == false) {
+                val groupId = event.groupOpenId ?: event.groupId
+                if (plugin.getCommandList(groupId)[command] == false) {
                     cn.huohuas001.bot.QClient.sendTextToGroup(
-                        event.groupOpenId ?: event.groupId, "此命令已被管理员关闭"
+                        groupId, "此命令已被管理员关闭"
                     )
                     return DispatchResult.HANDLED
                 }
@@ -96,7 +97,7 @@ abstract class BaseCommand {
                     val isAdmin = cn.huohuas001.bot.events.commands.CommandSupport.checkAdmin(plugin, event)
                     if (!isAdmin) {
                         cn.huohuas001.bot.QClient.sendTextToGroup(
-                            event.groupOpenId ?: event.groupId, "你没有执行此命令的管理员权限"
+                            groupId, "你没有执行此命令的管理员权限"
                         )
                         return DispatchResult.HANDLED
                     }
@@ -133,9 +134,10 @@ abstract class BaseCommand {
 
         val targetCommand = if (customCommand.permission > 0) "管理员执行" else "执行"
         val handler = commandMap[targetCommand] ?: return DispatchResult.NOT_HANDLED
-        if (plugin.getCommandList()[targetCommand] == false) {
+        val groupId = event.groupOpenId ?: event.groupId
+        if (plugin.getCommandList(groupId)[targetCommand] == false) {
             cn.huohuas001.bot.QClient.sendTextToGroup(
-                event.groupOpenId ?: event.groupId, "此命令已被管理员关闭"
+                groupId, "此命令已被管理员关闭"
             )
             return DispatchResult.HANDLED
         }

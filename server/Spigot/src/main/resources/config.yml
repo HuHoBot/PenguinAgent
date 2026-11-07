@@ -76,8 +76,39 @@ motd:
   server-port: 25565
   api: ""
   text: ""
+  # 已启用 online-list 时，查在线命令使用本地渲染的在线列表图片，不再使用本节的外部图片接口
   post-img: true
   use-markdown: true
+
+# 查在线命令的本地图片渲染（雾蓝玻璃主题，带玩家皮肤头像）。
+# 关闭 enabled 后，查在线会回退到 MOTD 外部 API 图片。
+online-list:
+  enabled: true
+  # 每页玩家数，三列布局推荐 27（3列×9行）
+  page-size: 27
+  # 管理员置顶；组内按玩家名排序
+  admin-first: true
+  # 管理员判定权限节点；留空时只看 OP
+  admin-permission: ""
+  # 同一 QQ 群两次渲染请求的最小间隔秒数，防刷屏
+  cooldown-seconds: 3
+  skin:
+    # 是否下载并显示玩家皮肤头像；关闭则显示占位头像
+    enabled: true
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
+    # 皮肤头像 LRU 缓存容量
+    cache-size: 200
+    # 皮肤并发下载线程数（1-12）
+    download-threads: 4
+  render:
+    # 渲染列数（1-3，推荐 3）
+    columns: 3
+    # 渲染字体；留空自动检测
+    font-family: ""
+    footer-text: "POWERED BY HuHoBot"
+  # 在线列表图片最大字节数，超出则拒绝发送
+  image-max-bytes: 20971520
 
 whitelist:
   add-command: "whitelist add {name}"

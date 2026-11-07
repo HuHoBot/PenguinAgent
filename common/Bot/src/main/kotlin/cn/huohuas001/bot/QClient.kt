@@ -17,6 +17,7 @@ import cn.huohuas001.bot.tools.QqBotConsoleOutputFilter
 import com.alibaba.fastjson.JSON
 import io.github.kloping.qqbot.Starter
 import io.github.kloping.qqbot.api.Intents
+import io.github.kloping.qqbot.api.event.ConnectedEvent
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 import io.github.kloping.qqbot.entities.ex.Keyboard
 import io.github.kloping.qqbot.entities.ex.Markdown
@@ -24,6 +25,7 @@ import io.github.kloping.qqbot.entities.ex.msg.MessageChain
 import io.github.kloping.qqbot.entities.qqpd.Channel
 import io.github.kloping.qqbot.http.data.V2MsgData
 import io.github.kloping.qqbot.http.data.V2Result
+import io.github.kloping.qqbot.impl.ListenerHost
 import io.github.kloping.qqbot.utils.LoggerImpl
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -47,6 +49,15 @@ object QClient {
 
     private lateinit var starter: Starter
     private lateinit var groupMessageHandler: GroupMessageHandler
+
+    /**
+     * WebSocket 网关是否已完成鉴权（收到 READY 帧）。
+     *
+     * `Starter.run()` 返回后 contextManager 已赋值，但 wssWorker 还在后台线程里连接网关；
+     * 若此刻直接调用 `starter.bot.groupBaseV2.send(...)` 会 NPE。只有收到 READY 帧后才允许发送。
+     */
+    @Volatile
+    private var connectedReady = false
 
     @Volatile
     private var groupPanelsSyncPending = false
@@ -75,7 +86,7 @@ object QClient {
     }
 
     /** QQ 是否已启动并完成鉴权，可用于判断现在发送消息是否会成功。 */
-    fun isReady(): Boolean = ::starter.isInitialized && isQqAuthenticated()
+    fun isReady(): Boolean = ::starter.isInitialized && isQqAuthenticated() && connectedReady
 
     /** 鉴权未完成时按秒重试面板同步，超过上限就放弃并告警。 */
     private fun scheduleGroupPanelsSyncRetry() {
@@ -181,12 +192,6 @@ object QClient {
         groupPanelsSyncRetry = null
         val plugin = BotShared.getPlugin()
         val allCommands = groupMessageHandler.registeredCommands()
-        val commandList = plugin.getCommandList()
-        val menuList = plugin.getCommandMenuList()
-        val builtInCommands = allCommands
-            .filter { commandList[it.command] != false }
-            .filter { menuList[it.command] != false }
-        plugin?.log_info("面板同步: 总命令=${allCommands.size}, 启用=${builtInCommands.size}")
         val customCommands = CustomCommandRegistry.snapshot().filter { it.pushMenu }.map {
             RegisteredCommand(
                 command = it.key,
@@ -197,10 +202,8 @@ object QClient {
         MenuManager.syncGroupPanels(
             starter = starter,
             groupOpenIds = plugin.getGroupOpenIdList(),
-            builtInCommands = builtInCommands,
-            customCommands = customCommands,
-            priorities = plugin.getCommandMenuPriorities(),
-            showAdminCommands = plugin.showAdminCommandsInMenu()
+            allBuiltInCommands = allCommands,
+            customCommands = customCommands
         )
     }
 
@@ -222,11 +225,18 @@ object QClient {
 
         try {
             groupMessageHandler = GroupMessageHandler(plugin)
+            connectedReady = false
             starter = Starter(appid, secret)
             starter.config.code = Intents.PUBLIC_INTENTS.and(Intents.GROUP_INTENTS)
             starter.run()
             starter.registerListenerHost(groupMessageHandler)
             starter.registerListenerHost(AgentInteractionListener())
+            starter.registerListenerHost(object : ListenerHost() {
+                @EventReceiver
+                fun onConnected(event: ConnectedEvent) {
+                    connectedReady = true
+                }
+            })
             LoggerImpl.INSTANCE.setLogLevel(1)
             logFilePattern?.let { LoggerImpl.INSTANCE.setOutFile(it) }
             syncGroupPanels()

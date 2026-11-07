@@ -4,6 +4,8 @@ import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.NicknameManager
 import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.addon.AddonManager
+import cn.huohuas001.bot.onlinelist.OnlineListBridge
+import cn.huohuas001.bot.onlinelist.OnlineListImageReply
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 
@@ -59,6 +61,35 @@ class PublicCommands : CommandSupport() {
 
     @Commands(command = "查在线", describe = "查询在线玩家列表")
     fun queryOnline(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        val requested = params.trim()
+        // 本地渲染支持分页：/查在线 [页码]，缺省为第 1 页
+        val requestedPage = if (requested.isEmpty()) 1 else requested.toIntOrNull()
+        if (requestedPage == null || requestedPage < 1) {
+            reply(plugin, event, "用法: /查在线 [页码]\n示例: /查在线 1")
+            return
+        }
+
+        // 平台支持本地渲染时（Spigot/Paper），优先发送本地渲染的在线列表图片
+        val handled = OnlineListBridge.handle(groupId(event), requestedPage, object : OnlineListImageReply {
+            override fun image(png: ByteArray) {
+                replyWithImgBytes(plugin, event, " ", png)
+            }
+
+            override fun busy() {
+                reply(plugin, event, "在线列表正在生成，请稍候再试。")
+            }
+
+            override fun outOfRange(page: Int, totalPages: Int) {
+                reply(plugin, event, "没有第 $page 页，当前共 $totalPages 页。")
+            }
+
+            override fun failed(message: String) {
+                plugin.log_warning("查在线图片发送失败: $message")
+                reply(plugin, event, "在线列表生成或发送失败，请稍后再试。")
+            }
+        })
+        if (handled) return
+
         val onlineList = plugin.getOnlineList()
 
         val motd = plugin.getMotd()

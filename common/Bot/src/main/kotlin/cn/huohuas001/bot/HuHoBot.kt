@@ -218,11 +218,20 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
      */
     fun getWebUiConfigValues(): Map<String, Any?> = emptyMap()
 
+    /** WebUI 读取指定群的可覆盖配置（与全局结构一致，返回生效值）。未实现时返回空 Map。 */
+    fun getWebUiGroupConfigValues(groupId: String): Map<String, Any?> = emptyMap()
+
     /**
      * WebUI 保存配置：应用扁平 dotted-path 变更并持久化 + 重载。
      * 由各平台实现；未实现时返回 false。
      */
     fun applyWebUiConfigChanges(changes: JSONObject): Boolean = false
+
+    /** WebUI 保存指定群的覆盖配置。未实现时返回 false。 */
+    fun applyWebUiGroupConfigChanges(groupId: String, changes: JSONObject): Boolean = false
+
+    /** 删除指定群的覆盖配置，恢复使用全局设置。 */
+    fun resetWebUiGroupConfig(groupId: String): Boolean = false
 
     // ---------------------------------------------------------------- WebUI 扫码授权
 

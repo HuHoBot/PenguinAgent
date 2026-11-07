@@ -12,7 +12,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-/** QQ 群指令面板同步：复用受管面板，避免重启时不断创建新面板。 */
+/** QQ 群指令面板同步：支持按群独立配置，复用受管面板避免重复创建。 */
 object MenuManager {
     private const val API_BASE = "https://api.sgroup.qq.com"
     private const val PANEL_REMARK = "HuHoBot Penguin 指令面板"
@@ -23,20 +23,24 @@ object MenuManager {
     private const val MAX_DUPLICATE_DELETES_PER_SYNC = 10
     /** 官方文档：指令面板写操作限频 10 QPM。 */
     private const val PANEL_UPDATE_RETRY_DELAY_MS = 1_000L
-    private val LEGACY_REMARKS = setOf(PANEL_REMARK, "HuHoBot 指令面板")
+
+    private data class PanelProfile(
+        val signature: String,
+        val remark: String,
+        val items: List<JSONObject>,
+        val groups: MutableList<String>
+    )
 
     fun syncGroupPanels(
         starter: Starter,
         groupOpenIds: List<String>,
-        builtInCommands: Collection<RegisteredCommand>,
-        customCommands: Collection<RegisteredCommand> = emptyList(),
-        priorities: Map<String, Int> = emptyMap(),
-        showAdminCommands: Boolean = false
+        allBuiltInCommands: Collection<RegisteredCommand>,
+        customCommands: Collection<RegisteredCommand> = emptyList()
     ) {
-        val plugin = BotShared.getPlugin()
+        val plugin = BotShared.getPlugin() ?: return
         val groups = groupOpenIds.map(String::trim).filter(String::isNotEmpty).distinct()
         if (groups.isEmpty()) {
-            plugin?.log_warning("面板同步跳过: 未配置群 OpenId")
+            plugin.log_warning("面板同步跳过: 未配置群 OpenId")
             return
         }
 
@@ -44,74 +48,122 @@ object MenuManager {
             val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
             val token = start0.accessToken
             if (token == null) {
-                plugin?.log_warning("面板同步跳过: accessToken 为空")
+                plugin.log_warning("面板同步跳过: accessToken 为空")
                 return
             }
             val authHeader = "QQBot $token"
-            val items = buildItems(builtInCommands, customCommands, priorities, showAdminCommands)
-            if (items.isEmpty()) {
-                plugin?.log_warning("没有已注册的 QQ 命令，跳过指令面板同步")
-                return
-            }
 
-            val limitedItems = if (items.size > MAX_ITEMS) {
-                plugin?.log_warning(
-                    "已注册命令数 ${items.size} 超过单个面板上限 $MAX_ITEMS，超出部分仅在帮助中显示"
-                )
-                items.take(MAX_ITEMS)
-            } else {
-                items
+            // 按群的有效配置分组：相同配置共享一个面板，避免不必要的面板数量
+            val profiles = linkedMapOf<String, PanelProfile>()
+            for (groupId in groups) {
+                val items = buildItemsForGroup(plugin, groupId, allBuiltInCommands, customCommands)
+                if (items.isEmpty()) continue
+                val limited = if (items.size > MAX_ITEMS) items.take(MAX_ITEMS) else items
+                val signature = panelSignature(limited, plugin.showAdminCommandsInMenu(groupId))
+                val profile = profiles.getOrPut(signature) {
+                    PanelProfile(signature, "$PANEL_REMARK #$signature", limited, mutableListOf())
+                }
+                profile.groups += groupId
             }
-            plugin?.log_info("指令面板入选: ${limitedItems.joinToString { it.getString("name") }}")
-            val panel = panelPayload(limitedItems)
 
             val allPanels = listPanels(authHeader, "group")
-            val managed = allPanels.filter { it.remark in LEGACY_REMARKS }
-            val primary = managed.firstOrNull()?.let { getPanel(authHeader, it.id) ?: it }
+            val managed = allPanels.filter { isManagedRemark(it.remark) }
+            val managedByRemark = managed.associateBy { it.remark }.toMutableMap()
+            val usedPanelIds = mutableSetOf<String>()
 
-            if (primary != null) {
-                // 原位更新不会消耗新的“面板数量”名额，是避免 30013 的关键。
-                // 但原位更新必须回传当前 version，否则会撞 30019。
-                updatePanelWithVersion(authHeader, primary, limitedItems)
-                syncPanelTargets(authHeader, primary, groups)
-
-                val duplicates = managed.drop(1)
-                duplicates.take(MAX_DUPLICATE_DELETES_PER_SYNC).forEach {
-                    deletePanel(authHeader, it.id)
+            for (profile in profiles.values) {
+                val existing = managedByRemark[profile.remark]?.let { getPanel(authHeader, it.id) ?: it }
+                val panelId = if (existing != null) {
+                    updatePanelWithVersion(authHeader, existing, profile.items)
+                    syncPanelTargets(authHeader, existing, profile.groups)
+                    existing.id
+                } else {
+                    val id = createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
+                    if (id == null) {
+                        plugin.log_warning("指令面板注册失败（${profile.remark}）: 未获取到 panel_id")
+                        continue
+                    }
+                    id
                 }
-                if (duplicates.size > MAX_DUPLICATE_DELETES_PER_SYNC) {
-                    plugin?.log_warning(
-                        "检测到 ${duplicates.size} 个历史重复指令面板，本次已清理 " +
-                            "$MAX_DUPLICATE_DELETES_PER_SYNC 个；下次同步会继续清理"
-                    )
-                }
-                plugin?.log_info(
-                    "指令面板已更新 (panel_id=${primary.id}, commands=${limitedItems.size}, " +
-                        "duplicates=${duplicates.size})"
+                usedPanelIds += panelId
+                plugin.log_info(
+                    "指令面板已同步 (${profile.remark}, panel_id=$panelId, commands=${profile.items.size}, groups=${profile.groups.size})"
                 )
-                return
+                // QQ 写操作限频 10 QPM，多面板时主动留间隔
+                if (profiles.size > 1) Thread.sleep(700)
             }
 
-            val initialGroups = groups.take(MAX_TARGETS_PER_REQUEST)
-            val panelBody = JSONObject().apply {
-                put("scope", "group")
-                put("target_type", "specific")
-                put("group_openids", JSONArray(initialGroups))
-                put("panel", panel)
+            // 清理不再使用的受管面板（群配置变化后遗留的 profile）
+            val stale = managed.filter { it.id !in usedPanelIds }
+            stale.take(MAX_DUPLICATE_DELETES_PER_SYNC).forEach {
+                runCatching { deletePanel(authHeader, it.id) }
+                if (profiles.size + stale.size > 1) Thread.sleep(700)
             }
-            val panelId = createPanel(authHeader, panelBody)
-            if (panelId == null) {
-                plugin?.log_warning("指令面板注册失败: 未获取到 panel_id")
-                return
+            if (stale.size > MAX_DUPLICATE_DELETES_PER_SYNC) {
+                plugin.log_warning(
+                    "检测到 ${stale.size} 个待清理的历史指令面板，本次已清理 " +
+                        "$MAX_DUPLICATE_DELETES_PER_SYNC 个；下次同步会继续清理"
+                )
             }
-
-            groups.drop(MAX_TARGETS_PER_REQUEST)
-                .chunked(MAX_TARGETS_PER_REQUEST)
-                .forEach { updateTargets(authHeader, panelId, "add", it) }
-            plugin?.log_info("指令面板已创建 (panel_id=$panelId, commands=${limitedItems.size})")
         } catch (error: Exception) {
-            plugin?.log_error("指令面板同步失败: ${error.message}")
+            plugin.log_error("指令面板同步失败: ${error.message}")
         }
+    }
+
+    private fun isManagedRemark(remark: String): Boolean =
+        remark == PANEL_REMARK || remark == "HuHoBot 指令面板" || remark.startsWith("$PANEL_REMARK #")
+
+    private fun panelSignature(items: List<JSONObject>, showAdminCommands: Boolean): String {
+        val raw = buildString {
+            append(if (showAdminCommands) '1' else '0')
+            for (item in items) {
+                append('|').append(item.getString("name"))
+                append(':').append(item.getString("desc"))
+                append(':').append(item.getBooleanValue("only_admin"))
+            }
+        }
+        var h = 0x811c9dc5.toInt()
+        for (b in raw.toByteArray(Charsets.UTF_8)) {
+            h = h xor (b.toInt() and 0xff)
+            h *= 0x01000193
+        }
+        return (h.toLong() and 0xffffffffL).toString(16).padStart(8, '0')
+    }
+
+    private fun createPanelForGroups(
+        authHeader: String,
+        remark: String,
+        items: List<JSONObject>,
+        groups: List<String>
+    ): String? {
+        val initialGroups = groups.take(MAX_TARGETS_PER_REQUEST)
+        val panelBody = JSONObject().apply {
+            put("scope", "group")
+            put("target_type", "specific")
+            put("group_openids", JSONArray(initialGroups))
+            put("panel", panelPayload(items, remark = remark))
+        }
+        val panelId = createPanel(authHeader, panelBody) ?: return null
+        groups.drop(MAX_TARGETS_PER_REQUEST)
+            .chunked(MAX_TARGETS_PER_REQUEST)
+            .forEach { updateTargets(authHeader, panelId, "add", it) }
+        return panelId
+    }
+
+    private fun buildItemsForGroup(
+        plugin: cn.huohuas001.bot.HuHoBot,
+        groupId: String,
+        allBuiltInCommands: Collection<RegisteredCommand>,
+        customCommands: Collection<RegisteredCommand>
+    ): List<JSONObject> {
+        val commandList = plugin.getCommandList(groupId)
+        val menuList = plugin.getCommandMenuList(groupId)
+        val priorities = plugin.getCommandMenuPriorities(groupId)
+        val showAdminCommands = plugin.showAdminCommandsInMenu(groupId)
+        val builtIn = allBuiltInCommands
+            .filter { commandList[it.command] != false }
+            .filter { menuList[it.command] != false }
+        return buildItems(builtIn, customCommands, priorities, showAdminCommands)
     }
 
     private fun buildItems(
@@ -184,8 +236,12 @@ object MenuManager {
         return result.toString()
     }
 
-    private fun panelPayload(items: List<JSONObject>, version: Int? = null): JSONObject = JSONObject().apply {
-        put("remark", PANEL_REMARK)
+    private fun panelPayload(
+        items: List<JSONObject>,
+        version: Int? = null,
+        remark: String = PANEL_REMARK
+    ): JSONObject = JSONObject().apply {
+        put("remark", remark)
         put("items", JSONArray(items))
         // 原位更新必须带上读到的当前版本号，否则 QQ 侧按乐观并发判定为
         // 30019「面板版本冲突，请重试」。
@@ -276,7 +332,8 @@ object MenuManager {
         items: List<JSONObject>
     ): Boolean {
         val plugin = BotShared.getPlugin()
-        val response = updatePanel(authHeader, record.id, panelPayload(items, record.version))
+        val remark = record.remark.ifBlank { PANEL_REMARK }
+        val response = updatePanel(authHeader, record.id, panelPayload(items, record.version, remark))
         if (response.success) return true
         if (!response.isRetryableConflict) {
             response.requireSuccess("更新指令面板 ${record.id}")
@@ -288,7 +345,7 @@ object MenuManager {
         )
         Thread.sleep(PANEL_UPDATE_RETRY_DELAY_MS)
         val fresh = getPanel(authHeader, record.id)
-        val retried = updatePanel(authHeader, record.id, panelPayload(items, fresh?.version))
+        val retried = updatePanel(authHeader, record.id, panelPayload(items, fresh?.version, remark))
         retried.requireSuccess("重试更新指令面板 ${record.id}")
         return true
     }

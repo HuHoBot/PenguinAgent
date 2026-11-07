@@ -108,6 +108,7 @@ object WebUiServer {
                 path == "/api/login" && method == "POST" -> handleLogin(exchange)
                 path == "/api/config" && method == "GET" -> handleGetConfig(exchange)
                 path == "/api/config" && method == "POST" -> handleSaveConfig(exchange)
+                path == "/api/group-config/reset" && method == "POST" -> handleResetGroupConfig(exchange)
                 path == "/api/status" && method == "GET" -> handleStatus(exchange)
                 path == "/api/qr/status" && method == "GET" -> handleQrStatus(exchange)
                 path == "/api/qr/start" && method == "POST" -> handleQrStart(exchange)
@@ -160,13 +161,21 @@ object WebUiServer {
     private fun handleGetConfig(exchange: HttpExchange) {
         if (!authorize(exchange)) return
         val plugin = BotShared.getPlugin()
-        val values = plugin.getWebUiConfigValues()
+        val group = parseQuery(exchange)["group"]?.trim().orEmpty()
         val payload = JSONObject()
         payload["schema"] = JSON.parseArray(WebUiSchema.toJson())
-        payload["values"] = JSON.toJSON(values)
         payload["platform"] = plugin.getPlatform()
         scheduleGroupNameRefresh(plugin)
         payload["groupNames"] = JSON.toJSON(GroupDirectory.snapshot())
+        payload["groups"] = JSON.toJSON(plugin.getGroupOpenIdList())
+        if (group.isNotEmpty()) {
+            payload["scope"] = "group"
+            payload["groupId"] = group
+            payload["values"] = JSON.toJSON(plugin.getWebUiGroupConfigValues(group))
+        } else {
+            payload["scope"] = "global"
+            payload["values"] = JSON.toJSON(plugin.getWebUiConfigValues())
+        }
         respond(exchange, 200, payload.toJSONString())
     }
 
@@ -179,14 +188,31 @@ object WebUiServer {
 
     private fun handleSaveConfig(exchange: HttpExchange) {
         if (!authorize(exchange)) return
+        val group = parseQuery(exchange)["group"]?.trim().orEmpty()
         val body = parseBody(exchange) ?: return respond(exchange, 400, """{"error":"bad request"}""")
         val changes = body.getJSONObject("changes") ?: return respond(exchange, 400, """{"error":"changes required"}""")
-        val applied = BotShared.getPlugin().applyWebUiConfigChanges(changes)
+        val applied = if (group.isNotEmpty()) {
+            BotShared.getPlugin().applyWebUiGroupConfigChanges(group, changes)
+        } else {
+            BotShared.getPlugin().applyWebUiConfigChanges(changes)
+        }
         if (applied) {
             respond(exchange, 200, """{"ok":true}""")
         } else {
             respond(exchange, 500, """{"error":"配置保存失败"}""")
         }
+    }
+
+    private fun handleResetGroupConfig(exchange: HttpExchange) {
+        if (!authorize(exchange)) return
+        val body = parseBody(exchange) ?: return respond(exchange, 400, """{"error":"bad request"}""")
+        val group = body.getString("group")?.trim().orEmpty().ifEmpty {
+            parseQuery(exchange)["group"]?.trim().orEmpty()
+        }
+        if (group.isEmpty()) return respond(exchange, 400, """{"error":"group required"}""")
+        val ok = BotShared.getPlugin().resetWebUiGroupConfig(group)
+        if (ok) respond(exchange, 200, """{"ok":true}""")
+        else respond(exchange, 500, """{"error":"重置群配置失败"}""")
     }
 
     private fun handleStatus(exchange: HttpExchange) {

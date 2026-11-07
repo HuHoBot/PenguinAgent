@@ -10,6 +10,8 @@ const state = {
     dirty: false,
     groupNames: {},
     groupNamesSettled: false,
+    groupList: [],
+    configScope: "global", // "global" or group openId
 };
 
 /* ───────────────────────── 工具 ───────────────────────── */
@@ -194,10 +196,17 @@ function renderNav() {
         btn.innerHTML =
             `<span class="nav-icon">${SECTION_ICONS[section.key] || "📄"}</span>` +
             `<span class="nav-label">${esc(section.title)}</span>`;
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
             if (state.dirty && !confirm("有未保存的修改，切换到其他页面将丢失。继续？")) return;
+            const prev = state.activeSection;
             state.activeSection = section.key;
             state.dirty = false;
+            // 跨分节时，如果作用域含义变化（全局 <-> 群），重新加载对应值
+            const needReload = GROUP_CONFIGURABLE_SECTIONS.has(prev) !== GROUP_CONFIGURABLE_SECTIONS.has(section.key)
+                || (GROUP_CONFIGURABLE_SECTIONS.has(section.key) && effectiveConfigScope() !== "global");
+            if (needReload) {
+                try { await loadConfig(); return; } catch (e) { showToast(e.message, "error"); }
+            }
             renderSection(section);
             updateNavActive();
         });
@@ -230,11 +239,23 @@ function updateNavActive() {
 
 /* ───────────────────────── 配置加载与渲染 ───────────────────────── */
 
-async function loadConfig() {
-    const data = await api("/api/config");
+const GROUP_CONFIGURABLE_SECTIONS = new Set(["commands"]);
+
+function effectiveConfigScope() {
+    if (!GROUP_CONFIGURABLE_SECTIONS.has(state.activeSection)) return "global";
+    return state.configScope && state.configScope !== "global" ? state.configScope : "global";
+}
+
+async function loadConfig(scope) {
+    if (scope !== undefined) state.configScope = scope || "global";
+    const useScope = scope !== undefined ? scope : effectiveConfigScope();
+    const q = useScope && useScope !== "global"
+        ? "?group=" + encodeURIComponent(useScope) : "";
+    const data = await api("/api/config" + q);
     state.schema = data.schema || [];
     state.values = data.values || {};
     state.groupNames = data.groupNames || {};
+    state.groupList = Array.isArray(data.groups) ? data.groups : state.groupList;
     state.groupNamesSettled = false;
     groupNameAttempts = 0;
     state.platform = data.platform || "";
@@ -305,6 +326,10 @@ function renderSection(section) {
     form.innerHTML = "";
     form.dataset.section = section.key;
 
+    if (GROUP_CONFIGURABLE_SECTIONS.has(section.key)) {
+        form.appendChild(renderGroupScopeSelector(section));
+    }
+
     if (section.key === "bot") {
         form.appendChild(renderQrConnectCard());
     }
@@ -312,6 +337,84 @@ function renderSection(section) {
     for (const field of section.fields) {
         form.appendChild(renderField(field));
     }
+}
+
+function groupDisplayName(openId) {
+    const name = state.groupNames[openId];
+    if (name) return `${name}（…${openId.slice(-6)}）`;
+    return `群聊 …${openId.slice(-6)}`;
+}
+
+function renderGroupScopeSelector(section) {
+    const wrap = document.createElement("div");
+    wrap.className = "field-card group-scope-card";
+    const text = document.createElement("div");
+    text.className = "field-text";
+    const isGroup = state.configScope && state.configScope !== "global";
+    text.innerHTML =
+        `<div class="field-label">配置范围</div>` +
+        `<div class="field-desc">选择要配置的群聊。默认使用全局配置；为某个群单独保存后，该群将使用自己的「指令面板与可用指令」设置（存储在 <code>groups/&lt;群OpenID&gt;/config.yml</code>）。从群列表移除群时，其配置文件夹会自动删除。</div>`;
+
+    const controls = document.createElement("div");
+    controls.className = "group-scope-controls";
+
+    const select = document.createElement("select");
+    select.className = "input";
+    const globalOpt = document.createElement("option");
+    globalOpt.value = "global";
+    globalOpt.textContent = "全局配置（默认）";
+    select.appendChild(globalOpt);
+    (state.groupList || []).forEach((id) => {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = groupDisplayName(id);
+        if (id === state.configScope) opt.selected = true;
+        select.appendChild(opt);
+    });
+    if (!isGroup) select.value = "global";
+    select.addEventListener("change", async () => {
+        if (state.dirty && !confirm("有未保存的修改，切换群聊将丢失。继续？")) return;
+        state.dirty = false;
+        try {
+            await loadConfig(select.value);
+        } catch (e) {
+            showToast("加载群配置失败：" + e.message, "error");
+        }
+    });
+    controls.appendChild(select);
+
+    if (isGroup) {
+        const resetBtn = document.createElement("button");
+        resetBtn.type = "button";
+        resetBtn.className = "btn btn-ghost btn-sm";
+        resetBtn.textContent = "恢复全局配置";
+        resetBtn.title = "删除该群的覆盖配置，恢复使用全局设置";
+        attachRipple(resetBtn);
+        resetBtn.addEventListener("click", async () => {
+            if (!confirm(`确定让「${groupDisplayName(state.configScope)}」恢复使用全局配置吗？该群的覆盖配置将被删除。`)) return;
+            try {
+                await api("/api/group-config/reset", {
+                    method: "POST",
+                    body: JSON.stringify({ group: state.configScope })
+                });
+                showToast("已恢复全局配置", "success");
+                state.dirty = false;
+                await loadConfig(state.configScope);
+            } catch (e) {
+                showToast("操作失败：" + e.message, "error");
+            }
+        });
+        controls.appendChild(resetBtn);
+
+        const badge = document.createElement("span");
+        badge.className = state.values.__groupHasOverrides ? "badge-ok" : "badge-muted";
+        badge.textContent = state.values.__groupHasOverrides ? "已单独配置" : "使用全局默认";
+        controls.appendChild(badge);
+    }
+
+    wrap.appendChild(text);
+    wrap.appendChild(controls);
+    return wrap;
 }
 
 /* ───────────────────────── 附属插件中心 ───────────────────────── */
@@ -915,18 +1018,22 @@ async function saveConfig() {
     const changes = collectChanges();
     btn.classList.add("is-busy");
     try {
-        await api("/api/config", {
+        const scope = effectiveConfigScope();
+        const isGroup = scope !== "global";
+        const q = isGroup ? "?group=" + encodeURIComponent(scope) : "";
+        await api("/api/config" + q, {
             method: "POST",
             body: JSON.stringify({ changes }),
         });
         // 保存后重新从配置文件读取最新值
-        const data = await api("/api/config");
+        const data = await api("/api/config" + q);
         state.values = data.values || {};
+        state.groupList = Array.isArray(data.groups) ? data.groups : state.groupList;
         // 重新渲染当前分节，使界面立即反映保存结果
         const section = state.schema.find((s) => s.key === state.activeSection);
         if (section) renderSection(section);
         state.dirty = false;
-        showToast("配置已保存并重载 ✓", "success");
+        showToast(isGroup ? "群配置已保存 ✓" : "配置已保存并重载 ✓", "success");
         loadStatus().catch(() => {});
     } catch (e) {
         showToast("保存失败：" + e.message, "error");

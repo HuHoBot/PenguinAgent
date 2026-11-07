@@ -2,6 +2,7 @@ package cn.huohuas001.huhobotPenguin.spigot
 
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.QClient
+import cn.huohuas001.bot.onlinelist.OnlineListBridge
 import cn.huohuas001.bot.addon.Addon
 import cn.huohuas001.bot.addon.AddonManager
 import cn.huohuas001.bot.agent.AgentCommandMode
@@ -9,6 +10,7 @@ import cn.huohuas001.bot.events.commands.CustomCommandRegistry
 import cn.huohuas001.bot.events.commands.BaseCommand
 import cn.huohuas001.bot.events.commands.RegisteredCommand
 import cn.huohuas001.bot.provider.*
+import cn.huohuas001.bot.state.GroupCommandConfigStore
 import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.huhobotPenguin.spigot.commands.AtCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.QqBindCommand
@@ -28,6 +30,7 @@ import cn.huohuas001.huhobotPenguin.spigot.integration.PlaceholderApiSupport
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventorySnapshot
 import cn.huohuas001.huhobotPenguin.spigot.inventory.OfflineInventorySnapshots
+import cn.huohuas001.huhobotPenguin.spigot.onlinelist.OnlineListManager
 import cn.huohuas001.huhobotPenguin.spigot.scripting.ScriptAddonLoader
 import cn.huohuas001.huhobotPenguin.adapter.api.MsgPack
 import cn.huohuas001.huhobotPenguin.adapter.api.toMsgPack
@@ -50,12 +53,16 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     companion object {
         private var instance: HuHoBotSpigot? = null
         fun getInstance(): HuHoBotSpigot? = instance
+        // 与 ConfigManager 保持一致的面板隐藏默认值（仅用于 WebUI 展示）
+        private val COMMANDS_HIDDEN_FROM_MENU_WEBUI =
+            setOf("blockMotd", "unblockMotd", "压缩", "压缩token", "压缩保留", "删除信息")
     }
 
     private lateinit var configManager: ConfigManager
     private lateinit var serverNotifyManager: ServerNotifyManager
     private lateinit var offlineInventorySnapshots: OfflineInventorySnapshots
     private var scriptAddonLoader: ScriptAddonLoader? = null
+    private var onlineListManager: OnlineListManager? = null
 
     fun getScriptAddonLoader(): ScriptAddonLoader? = scriptAddonLoader
 
@@ -63,8 +70,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         instance = this
         configManager = ConfigManager(this)
         configManager.initialize()
+        GroupCommandConfigStore.configureDataDir(dataFolder)
+        GroupCommandConfigStore.syncFolders(configManager.groupOpenIds())
         PlaceholderApiSupport.setup(this)
         initializeInventoryRenderer()
+        initializeOnlineListRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
         initializeRuntime()
         serverNotifyManager = ServerNotifyManager(this, configManager).also { it.onServerStarted() }
@@ -130,6 +140,9 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         }
         scriptAddonLoader = null
         if (::offlineInventorySnapshots.isInitialized) offlineInventorySnapshots.close()
+        OnlineListBridge.handler = null
+        onlineListManager?.stop()
+        onlineListManager = null
         instance = null
         shutdownRuntime()
         CommandOutputAppender.removeInstance()
@@ -148,6 +161,9 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         configManager.reload()
         PlaceholderApiSupport.setup(this)
         initializeInventoryRenderer()
+        initializeOnlineListRenderer()
+        GroupCommandConfigStore.configureDataDir(dataFolder)
+        GroupCommandConfigStore.syncFolders(configManager.groupOpenIds())
         reloadRuntimeConfig()
         logCommandExecutor()
         // 配置里开着强制绑定但 QQ 不可用时，自动改回关闭，避免把玩家挡在门外
@@ -209,6 +225,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         // 2. 重新加载配置
         configManager.reload()
         initializeInventoryRenderer()
+        initializeOnlineListRenderer()
 
         // 3. 重新注册 MC 命令
         registerBukkitCommands()
@@ -602,6 +619,28 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         )
     }
 
+    /**
+     * 初始化（或重新加载）在线列表本地渲染器，并注册到 [OnlineListBridge]。
+     * 失败时不中断插件，查在线命令自动回退到 MOTD 外部 API 图片。
+     */
+    private fun initializeOnlineListRenderer() {
+        onlineListManager?.stop()
+        if (OnlineListBridge.handler === onlineListManager) OnlineListBridge.handler = null
+        onlineListManager = null
+        if (!configManager.onlineListEnabled()) {
+            log_info("在线列表本地渲染已关闭（online-list.enabled=false），查在线将使用 MOTD 外部 API 图片")
+            return
+        }
+        try {
+            val manager = OnlineListManager(this, configManager).also { it.start() }
+            onlineListManager = manager
+            OnlineListBridge.handler = manager
+        } catch (error: Throwable) {
+            log_warning("在线列表渲染器初始化失败，查在线将回退到 MOTD 外部 API 图片: ${error.message}")
+            OnlineListBridge.handler = null
+        }
+    }
+
     private fun formatItem(item: org.bukkit.inventory.ItemStack): String {
         if (item.type.isAir) return "---"
         val meta = item.itemMeta
@@ -781,8 +820,10 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         if (openId.isEmpty() || !configManager.isAutoAddGroupsEnabled()) return false
         if (configManager.groupOpenIds().contains(openId)) return false
         return try {
-            config.set("bot.groups", configManager.groupOpenIds() + openId)
+            val groups = configManager.groupOpenIds() + openId
+            config.set("bot.groups", groups)
             saveConfig()
+            GroupCommandConfigStore.syncFolders(groups)
             log_info("已自动把群 $openId 添加到 bot.groups")
             reloadRuntimeConfig()
             true
@@ -1013,10 +1054,16 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun applyWebUiConfigChanges(changes: JSONObject): Boolean {
         return try {
+            val groupsChanged = changes.containsKey("bot.groups")
             changes.forEach { (path, value) ->
                 config.set(path, convertJsonValue(value))
             }
             saveConfig()
+            if (groupsChanged) {
+                val groups = changes.getJSONArray("bot.groups")?.mapNotNull { it?.toString()?.trim() }
+                    ?.filter { it.isNotEmpty() } ?: configManager.groupOpenIds()
+                GroupCommandConfigStore.syncFolders(groups)
+            }
             reloadPluginConfig()
             true
         } catch (error: Exception) {
@@ -1024,6 +1071,60 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             false
         }
     }
+
+    override fun getWebUiGroupConfigValues(groupId: String): Map<String, Any?> {
+        val global = getWebUiConfigValues().toMutableMap()
+        // 在全局值基础上叠加该群的有效命令/面板配置
+        val gid = groupId.trim()
+        global["__groupId"] = gid
+        global["__groupHasOverrides"] = GroupCommandConfigStore.hasOverrides(gid)
+        global["command-panel.show-admin-commands"] = showAdminCommandsInMenu(gid)
+        val cmdList = getCommandList(gid)
+        val menuList = getCommandMenuList(gid)
+        val priorities = getCommandMenuPriorities(gid)
+        val names = (cmdList.keys + menuList.keys + priorities.keys +
+            BaseCommand.allCommands().map { it.command }).distinct()
+        names.forEach { name ->
+            global["commands.$name.enable"] = cmdList[name] ?: true
+            global["commands.$name.pushMenu"] = menuList[name] ?: (name !in COMMANDS_HIDDEN_FROM_MENU_WEBUI)
+            global["commands.$name.priority"] = priorities[name] ?: if (name == "agent") 0 else 100
+            // 兼容 boolean-map/旧读取形态
+            global["commands.$name"] = global["commands.$name.enable"]
+        }
+        return global
+    }
+
+    override fun applyWebUiGroupConfigChanges(groupId: String, changes: JSONObject): Boolean {
+        val gid = groupId.trim()
+        if (gid.isEmpty()) return false
+        return try {
+            val filtered = linkedMapOf<String, Any?>()
+            changes.forEach { (path, value) ->
+                if (GroupCommandConfigStore.isOverridable(path)) {
+                    filtered[path] = convertJsonValue(value)
+                }
+            }
+            if (!GroupCommandConfigStore.applyChanges(gid, filtered)) return false
+            GroupCommandConfigStore.clearCache(gid)
+            QClient.syncGroupPanels()
+            true
+        } catch (error: Exception) {
+            log_error("保存群配置失败 ($groupId): ${error.message}")
+            false
+        }
+    }
+
+    override fun resetWebUiGroupConfig(groupId: String): Boolean {
+        val gid = groupId.trim()
+        if (gid.isEmpty()) return false
+        val ok = GroupCommandConfigStore.clear(gid)
+        if (ok) {
+            GroupCommandConfigStore.syncFolders(configManager.groupOpenIds())
+            QClient.syncGroupPanels()
+        }
+        return ok
+    }
+
 
     /** 将 fastjson 值转换为 Bukkit 配置可接受的 Java 类型。 */
     private fun convertJsonValue(value: Any?): Any? = when (value) {

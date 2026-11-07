@@ -10,6 +10,10 @@ object BotShared {
         plugin = instance
     }
 
+    fun isInitialized(): Boolean = ::plugin.isInitialized
+
+    fun getPluginOrNull(): HuHoBot? = if (isInitialized()) plugin else null
+
     fun getPlugin(): HuHoBot {
         return plugin
     }

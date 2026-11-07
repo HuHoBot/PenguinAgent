@@ -245,16 +245,34 @@ interface ConfigProvider {
         return emptyMap()
     }
 
+    /** 按群解析的可用命令开关；默认等同全局。 */
+    fun getCommandList(groupId: String?): Map<String, Boolean> =
+        cn.huohuas001.bot.state.GroupCommandConfigStore.effectiveCommandSwitches(groupId, getCommandList())
+
     /** 获取命令面板开关列表,命令名 -> 是否推送到 QQ 指令面板,默认为空 */
     fun getCommandMenuList(): Map<String, Boolean> {
         return emptyMap()
     }
 
+    /** 按群解析的命令面板开关；默认等同全局。 */
+    fun getCommandMenuList(groupId: String?): Map<String, Boolean> =
+        cn.huohuas001.bot.state.GroupCommandConfigStore.effectiveCommandMenuSwitches(groupId, getCommandMenuList())
+
     /** 数值越小越先进入 QQ 面板；只影响面板，不影响命令执行。 */
     fun getCommandMenuPriorities(): Map<String, Int> = emptyMap()
 
+    /** 按群解析的命令面板优先级；默认等同全局。 */
+    fun getCommandMenuPriorities(groupId: String?): Map<String, Int> =
+        cn.huohuas001.bot.state.GroupCommandConfigStore.effectiveCommandMenuPriorities(groupId, getCommandMenuPriorities())
+
     /** 展示管理员命令不放宽实际执行权限。 */
     fun showAdminCommandsInMenu(): Boolean = true
+
+    /** 按群解析的管理员命令面板可见性；默认等同全局。 */
+    fun showAdminCommandsInMenu(groupId: String?): Boolean =
+        cn.huohuas001.bot.state.GroupCommandConfigStore.effectiveBoolean(
+            groupId, "command-panel.show-admin-commands", showAdminCommandsInMenu()
+        )
 
     fun getBotName(): String
     fun getServerName(): String = getBotName()

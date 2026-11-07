@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.21.0（2026-11-07）
+
+### 新功能
+
+- feat: WebUI「命令与 QQ 面板」支持按群单独配置 —— 顶部可用下拉菜单选择群聊（默认全局配置），按群覆盖可用指令开关、是否推送到 QQ 指令面板、面板优先级，以及「管理员命令对所有人显示」
+- feat: 群配置持久化到 `plugins/HuHoBotPenguin/groups/<群OpenID>/config.yml`；仅 `bot.groups` 中的群会保留/创建配置目录，从群列表移除群时自动删除对应配置文件夹
+- feat: `/查在线 [页码]` 在 Spigot/Paper 端改为本地渲染在线列表图片（雾蓝玻璃主题、玩家皮肤头像、管理员置顶、分页），不依赖外部 MOTD 图片接口；其他平台、关闭 `online-list.enabled` 或渲染失败时自动回退到原有 MOTD 图片 / Markdown 逻辑
+- feat: `/motd` 改用 `motd.txssb.cn` 的状态 JSON 与 `app_img` 图片接口；未显式指定端口时不传 `port`，交由 `stype=auto` 解析 SRV 记录（避免误判离线）
+
+### 改进
+
+- change: QQ 群命令开关按消息来源群生效，同一命令可在不同群启用/禁用
+- change: 指令面板同步按群的有效配置分组：相同配置复用同一面板，不同配置使用独立受管面板并关联目标群；保存群配置或恢复全局后自动同步面板
+- change: WebUI 配置接口支持按群读取/保存/重置：`GET|POST /api/config?group=<openId>`、`POST /api/group-config/reset`
+- opt: 在线列表底图拼接加入 footer 顶部低频颜色校正，修复替换底图后 body/footer 之间的横向接缝
+
+### Bug 修复
+
+- fix: 修复按群配置功能引入的启动崩溃 —— `GroupCommandConfigStore` 在 `BotShared` 初始化前访问 `getPlugin()` 导致 `UninitializedPropertyAccessException`；改为显式 `configureDataDir(dataFolder)` + 安全获取插件实例
+
+### 说明
+
+- 指令面板仍受 QQ 官方面板数量与写频率限制；群数量多且各群配置不同时，可能需要等待同步或受平台配额影响
+- `/motd` 现在直接使用 `motd.txssb.cn`；`motd.api` 主要用于 `/查在线` 在未走本地渲染时的回退图片地址
+
+---
+
 ## v1.20.0（2026-10-31）
 
 ### 新功能
