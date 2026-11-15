@@ -367,6 +367,9 @@ interface ConfigProvider {
     /** 入群审批轮询间隔（秒）；0 = 不轮询。 */
     fun getJoinApproveIntervalSeconds(): Int = 30
 
+    /** 入群审批策略列表：[{name, mode: allow|deny, openids[], reject-reason}] */
+    fun getJoinApproveStrategies(): List<com.alibaba.fastjson.JSONObject> = emptyList()
+
     /** 平台服务器诊断文本（TPS/MSPT/内存/运行时长）；未实现返回 null。 */
     fun getServerDiagnostics(): String? = null
 

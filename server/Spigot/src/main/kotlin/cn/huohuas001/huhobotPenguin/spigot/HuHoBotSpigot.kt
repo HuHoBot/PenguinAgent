@@ -80,6 +80,16 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             { message -> log_info(message) },
             { message -> log_warning(message) }
         )
+        // 全局网络代理 / 权限组 / 定时任务 / 入群自动审批
+        cn.huohuas001.bot.agent.ProxySupport.configure(
+            configManager.proxyEnabled(),
+            configManager.proxyType(),
+            configManager.proxyHost(),
+            configManager.proxyPort()
+        )
+        cn.huohuas001.bot.state.PermissionGroupsStore.configure(dataFolder)
+        cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)
+        cn.huohuas001.bot.agent.JoinApproveManager.start()
         initializeInventoryRenderer()
         initializeOnlineListRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
@@ -905,6 +915,106 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getAgentThink(): Boolean = configManager.agentThink()
     override fun getAgentMaxTokens(): Int = configManager.agentMaxTokens()
     override fun getAgentTimeoutSeconds(): Int = configManager.agentTimeoutSeconds()
+    override fun getAgentSystemPrompt(): String = configManager.agentSystemPrompt()
+    override fun getAgentTools(): List<String> = configManager.agentTools()
+    override fun getAgentSearchProvider(): String = configManager.agentSearchProvider()
+    override fun getAgentSearchApiUrl(): String = configManager.agentSearchApiUrl()
+    override fun getAgentSearchApiKey(): String = configManager.agentSearchApiKey()
+
+    override fun getStorageType(): String = configManager.storageType()
+    override fun getLanguage(): String = configManager.language()
+    override fun isDebugEnabled(): Boolean = configManager.debugEnabled()
+
+    override fun getChatAiEnabled(): Boolean = configManager.chatAiEnabled()
+    override fun getChatAiBaseUrl(): String? = configManager.chatAiBaseUrl()
+    override fun getChatAiApiKey(): String? = configManager.chatAiApiKey()
+    override fun getChatAiModel(): String? = configManager.chatAiModel()
+    override fun getChatAiTrigger(): String = configManager.chatAiTrigger()
+    override fun getChatAiThink(): Boolean = configManager.chatAiThink()
+    override fun getChatAiThinkLevel(): String = configManager.chatAiThinkLevel()
+    override fun getChatAiThinkParam(): String = configManager.chatAiThinkParam()
+    override fun getChatAiSystemPrompt(): String = configManager.chatAiSystemPrompt()
+    override fun getChatAiTools(): List<String> = configManager.chatAiTools()
+    override fun getChatAiMaxContext(): Int = configManager.chatAiMaxContext()
+    override fun getChatAiCompressTarget(): Int = configManager.chatAiCompressTarget()
+    override fun getChatAiCompressKeep(): Int = configManager.chatAiCompressKeep()
+    override fun getChatAiSearchProvider(): String = configManager.chatAiSearchProvider()
+    override fun getChatAiSearchApiUrl(): String = configManager.chatAiSearchApiUrl()
+    override fun getChatAiSearchApiKey(): String = configManager.chatAiSearchApiKey()
+
+    override fun getSearchProvider(): String = configManager.searchProvider()
+    override fun getSearchApiUrl(): String = configManager.searchApiUrl()
+    override fun getSearchApiKey(): String = configManager.searchApiKey()
+    override fun getSearchResultCount(): Int = configManager.searchResultCount()
+
+    override fun getProxyEnabled(): Boolean = configManager.proxyEnabled()
+    override fun getProxyType(): String = configManager.proxyType()
+    override fun getProxyHost(): String = configManager.proxyHost()
+    override fun getProxyPort(): Int = configManager.proxyPort()
+
+    override fun isJoinApproveEnabled(): Boolean = configManager.joinApproveEnabled()
+    override fun getJoinApproveIntervalSeconds(): Int = configManager.joinApproveIntervalSeconds()
+    override fun getJoinApproveStrategies(): List<com.alibaba.fastjson.JSONObject> = configManager.joinApproveStrategies()
+
+    override fun getServerDiagnostics(): String? = runCatching { buildServerDiagnostics() }.getOrNull()
+
+    override fun getPlayerStatsText(playerName: String): String? =
+        runCatching { buildPlayerStats(playerName) }.getOrNull()
+
+    /** 服务器实时诊断文本（TPS 反射 Paper/Spigot 双兼容，失败项自动跳过）。 */
+    private fun buildServerDiagnostics(): String {
+        val runtime = Runtime.getRuntime()
+        val usedMb = (runtime.totalMemory() - runtime.freeMemory()) / 1048576
+        val maxMb = runtime.maxMemory() / 1048576
+        val uptimeMin = java.lang.management.ManagementFactory.getRuntimeMXBean().uptime / 60000
+        val tps = try {
+            val spigot = org.bukkit.Bukkit::class.java.getMethod("spigot").invoke(null)
+            spigot.javaClass.getMethod("getTPS").invoke(spigot) as DoubleArray
+        } catch (_: Throwable) {
+            null
+        }
+        val mspt = try {
+            org.bukkit.Bukkit.getServer().javaClass.getMethod("getAverageTickTime")
+                .invoke(org.bukkit.Bukkit.getServer()) as? Double
+        } catch (_: Throwable) {
+            null
+        }
+        return buildString {
+            appendLine("服务端: ${org.bukkit.Bukkit.getName()} ${org.bukkit.Bukkit.getVersion()}")
+            if (tps != null && tps.size >= 3) {
+                appendLine(String.format("TPS(1m/5m/15m): %.1f / %.1f / %.1f", tps[0], tps[1], tps[2]))
+            }
+            if (mspt != null) appendLine(String.format("平均 MSPT: %.1f ms", mspt))
+            appendLine("内存: ${usedMb}MB 已用 / ${maxMb}MB 上限")
+            appendLine("在线玩家: ${server.onlinePlayers.size}/${server.maxPlayers}")
+            appendLine("运行时长: $uptimeMin 分钟")
+        }.trim()
+    }
+
+    /** 玩家统计文本（在线玩家；统计枚举名跨版本防御）。 */
+    private fun buildPlayerStats(playerName: String): String? {
+        val player = server.getPlayerExact(playerName) ?: return null
+        fun stat(name: String): Int = try {
+            player.getStatistic(org.bukkit.Statistic.valueOf(name))
+        } catch (_: Throwable) {
+            -1
+        }
+        val kills = stat("PLAYER_KILLS")
+        val mobKills = stat("MOB_KILLS")
+        val deaths = stat("DEATHS")
+        val playTicks = stat("TOTAL_WORLD_TIME").takeIf { it >= 0 } ?: stat("PLAY_ONE_MINUTE")
+        val minutes = if (playTicks > 0) playTicks / (20 * 60) else 0
+        val loc = player.location
+        return buildString {
+            appendLine("玩家 ${player.name}:")
+            if (kills >= 0) appendLine("击杀(玩家/生物): $kills / $mobKills")
+            if (deaths >= 0) appendLine("死亡: $deaths")
+            if (minutes > 0) appendLine("游戏时长: 约 $minutes 分钟")
+            appendLine("等级: ${player.level}(经验 $player.totalExperience)")
+            appendLine("生命: ${"%.1f".format(player.health)}/20 饥饿: ${player.foodLevel}/20")
+            appendLine("位置: ${loc.world?.name} @ ${loc.blockX}, ${loc.blockY}, ${loc.blockZ}")
+        }.trim()
+    }
     override fun getAgentThinkVisibility(): String = configManager.agentThinkVisibility()
     override fun getAgentThinkLevel(): String = configManager.agentThinkLevel()
     override fun getAgentThinkParam(): String = configManager.agentThinkParam()

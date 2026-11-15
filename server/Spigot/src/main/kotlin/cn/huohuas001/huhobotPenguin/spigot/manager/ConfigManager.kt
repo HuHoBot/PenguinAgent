@@ -457,6 +457,97 @@ class ConfigManager(
 
     fun agentTimeoutSeconds(): Int = plugin.config.getInt("agent.timeout-seconds", 120)
 
+    // ── 存储语言调试 ──
+
+    fun storageType(): String = plugin.config.getString("storage.type", "file") ?: "file"
+
+    fun language(): String = plugin.config.getString("language", "zh_CN") ?: "zh_CN"
+
+    fun debugEnabled(): Boolean = plugin.config.getBoolean("debug", false)
+
+    // ── Agent 扩展 ──
+
+    fun agentSystemPrompt(): String = plugin.config.getString("agent.system-prompt", "") ?: ""
+
+    fun agentTools(): List<String> =
+        (plugin.config.getList("agent.tools") ?: emptyList<Any>()).mapNotNull { it?.toString()?.trim() }
+            .filter(String::isNotEmpty)
+
+    fun agentSearchProvider(): String = plugin.config.getString("agent.search.provider", "") ?: ""
+
+    fun agentSearchApiUrl(): String = plugin.config.getString("agent.search.api-url", "") ?: ""
+
+    fun agentSearchApiKey(): String = plugin.config.getString("agent.search.api-key", "") ?: ""
+
+    // ── 群员聊天 AI ──
+
+    fun chatAiEnabled(): Boolean = plugin.config.getBoolean("chat-ai.enabled", false)
+
+    fun chatAiBaseUrl(): String? = plugin.config.getString("chat-ai.base-url")?.takeIf(String::isNotBlank)
+
+    fun chatAiApiKey(): String? = plugin.config.getString("chat-ai.api-key")?.takeIf(String::isNotBlank)
+
+    fun chatAiModel(): String? = plugin.config.getString("chat-ai.model")?.takeIf(String::isNotBlank)
+
+    fun chatAiTrigger(): String = plugin.config.getString("chat-ai.trigger", "") ?: ""
+
+    fun chatAiThink(): Boolean = plugin.config.getBoolean("chat-ai.think", false)
+
+    fun chatAiThinkLevel(): String = plugin.config.getString("chat-ai.think-level", "") ?: ""
+
+    fun chatAiThinkParam(): String = plugin.config.getString("chat-ai.think-param", "reasoning_effort") ?: "reasoning_effort"
+
+    fun chatAiSystemPrompt(): String = plugin.config.getString("chat-ai.system-prompt", "") ?: ""
+
+    fun chatAiTools(): List<String> =
+        (plugin.config.getList("chat-ai.tools") ?: emptyList<Any>()).mapNotNull { it?.toString()?.trim() }
+            .filter(String::isNotEmpty)
+
+    fun chatAiMaxContext(): Int = plugin.config.getInt("chat-ai.max-context", 30)
+
+    fun chatAiCompressTarget(): Int = plugin.config.getInt("chat-ai.compress.target", 4000)
+
+    fun chatAiCompressKeep(): Int = plugin.config.getInt("chat-ai.compress.keep", 20)
+
+    fun chatAiSearchProvider(): String = plugin.config.getString("chat-ai.search.provider", "") ?: ""
+
+    fun chatAiSearchApiUrl(): String = plugin.config.getString("chat-ai.search.api-url", "") ?: ""
+
+    fun chatAiSearchApiKey(): String = plugin.config.getString("chat-ai.search.api-key", "") ?: ""
+
+    // ── 全局搜索 ──
+
+    fun searchProvider(): String = plugin.config.getString("search.provider", "none") ?: "none"
+
+    fun searchApiUrl(): String = plugin.config.getString("search.api-url", "") ?: ""
+
+    fun searchApiKey(): String = plugin.config.getString("search.api-key", "") ?: ""
+
+    fun searchResultCount(): Int = plugin.config.getInt("search.result-count", 5).coerceIn(1, 10)
+
+    // ── 网络代理 ──
+
+    fun proxyEnabled(): Boolean = plugin.config.getBoolean("network.proxy.enabled", false)
+
+    fun proxyType(): String = plugin.config.getString("network.proxy.type", "http") ?: "http"
+
+    fun proxyHost(): String = plugin.config.getString("network.proxy.host", "") ?: ""
+
+    fun proxyPort(): Int = plugin.config.getInt("network.proxy.port", 8080)
+
+    // ── 入群自动审批 ──
+
+    fun joinApproveEnabled(): Boolean = plugin.config.getBoolean("join-approve.enabled", false)
+
+    fun joinApproveIntervalSeconds(): Int = plugin.config.getInt("join-approve.interval-seconds", 30)
+
+    fun joinApproveStrategies(): List<com.alibaba.fastjson.JSONObject> =
+        plugin.config.getMapList("join-approve.strategies").mapNotNull { map ->
+            val obj = com.alibaba.fastjson.JSONObject()
+            for ((k, v) in map) obj[k] = v
+            if (obj.getString("mode").isNullOrBlank()) null else obj
+        }
+
     fun isAgentFetchResultHidden(): Boolean =
         plugin.config.getBoolean("agent.hide-fetch-results", true)
 

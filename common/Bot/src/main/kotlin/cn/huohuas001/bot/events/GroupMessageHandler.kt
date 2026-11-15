@@ -116,6 +116,20 @@ class GroupMessageHandler(
 
             BaseCommand.DispatchResult.HANDLED -> Unit
             BaseCommand.DispatchResult.NOT_HANDLED -> {
+                // 聊天 AI：@机器人 的非命令消息交给聊天助手（启用时），不再转发进游戏
+                val chatAiEnabled = plugin.getChatAiEnabled()
+                if (chatAiEnabled) {
+                    val mentionStripped = Regex("<@!?[^>]+>").replace(content, "").trim()
+                    if (mentionStripped.isNotEmpty()) {
+                        val handledByChatAi = cn.huohuas001.bot.agent.ChatAiManager.handle(
+                            plugin, groupId,
+                            senderOpenId ?: "",
+                            senderName ?: "QQ用户",
+                            mentionStripped
+                        ) { reply -> cn.huohuas001.bot.QClient.replyText(event, reply) }
+                        if (handledByChatAi) return
+                    }
+                }
                 forwardFullGroupMessage(groupId, event)
             }
         }

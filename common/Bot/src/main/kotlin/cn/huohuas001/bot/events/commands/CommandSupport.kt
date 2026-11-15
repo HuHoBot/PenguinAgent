@@ -147,12 +147,14 @@ abstract class CommandSupport : BaseCommand() {
             } catch (_: Exception) { false }
             val manualAdmin = userId in plugin.getAdminList() ||
                 CommandRepositories.administrators.contains(groupId, userId)
+            // 权限组：成员所在权限组配置 admin=true 时按管理员对待
+            val permissionGroupAdmin = cn.huohuas001.bot.state.PermissionGroupsStore.isAdminByGroup(userId)
             val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
             val configuredMode = CommandRepositories.groupSettings.administratorMode(groupId, defaultMode)
             return when (configuredMode) {
-                AdministratorAccessMode.QQ -> qqAdmin
-                AdministratorAccessMode.MANUAL -> manualAdmin
-                AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin
+                AdministratorAccessMode.QQ -> qqAdmin || permissionGroupAdmin
+                AdministratorAccessMode.MANUAL -> manualAdmin || permissionGroupAdmin
+                AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin || permissionGroupAdmin
             }
         }
     }
