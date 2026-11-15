@@ -373,6 +373,16 @@ interface ConfigProvider {
     /** 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定。 */
     fun getBindingRequireGameVerification(): Boolean = true
 
+    /** 一个 QQ 号最多可绑定的游戏账号数；未配置时只允许绑定一个角色。 */
+    fun getMaxBindings(): Int = 1
+
+    /**
+     * 账号被锁定后立即断开该角色的在线会话。
+     *
+     * 由各平台实现（需要踢出在线玩家的能力）；未实现或玩家不在线时返回 false。
+     */
+    fun kickLockedPlayer(playerName: String): Boolean = false
+
     /**
      * 是否开启强制绑定：未绑定的玩家进游戏会被踢出并拿到验证码，
      * 必须先在 QQ 群完成绑定才能进入服务器。

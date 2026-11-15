@@ -1,6 +1,7 @@
 package cn.huohuas001.huhobotPenguin.spigot.commands
 
 import cn.huohuas001.bot.events.commands.BindingCommands
+import cn.huohuas001.bot.state.BindResult
 import cn.huohuas001.bot.state.PendingBindingStore
 import cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
 import org.bukkit.Bukkit
@@ -38,17 +39,19 @@ class QqBindCommand : CommandExecutor {
             return true
         }
 
-        val success = BindingCommands.completeBind(
+        val plugin = HuHoBotSpigot.getInstance() ?: return true
+
+        val result = BindingCommands.completeBind(
             groupId = pending.groupId,
             openId = pending.openId,
             playerName = playerName,
-            qqUsername = pending.qqUsername
+            qqUsername = pending.qqUsername,
+            maxBindings = plugin.getMaxBindings()
         )
 
-        if (success) {
+        if (result == BindResult.SUCCESS) {
             sender.sendMessage("${ChatColor.GREEN}已绑定QQ账号：${ChatColor.WHITE}${pending.qqUsername}")
             // 绑定成功后自动添加白名单
-            val plugin = HuHoBotSpigot.getInstance() ?: return true
             val whitelist = plugin.getWhiteList()
             if (whitelist.addCommand.isNotBlank()) {
                 val cmd = whitelist.addCommand.replace("{name}", playerName)
@@ -57,7 +60,14 @@ class QqBindCommand : CommandExecutor {
                 }
             }
         } else {
-            sender.sendMessage("${ChatColor.RED}绑定失败：游戏ID「$playerName」可能已被其他账号绑定")
+            val reason = when (result) {
+                BindResult.PLAYER_TAKEN -> "游戏ID「$playerName」已被其他账号绑定"
+                BindResult.ALREADY_BOUND -> "你的 QQ 已经绑定过角色「$playerName」"
+                BindResult.LIMIT_REACHED -> "你的 QQ 已达到绑定上限（${plugin.getMaxBindings()} 个角色）"
+                BindResult.INVALID_NAME -> "游戏ID格式不正确"
+                BindResult.SUCCESS -> ""
+            }
+            sender.sendMessage("${ChatColor.RED}绑定失败：$reason")
         }
         return true
     }

@@ -341,9 +341,10 @@ object QClient {
 
         // 匹配绑定的 MC 玩家名：@PlayerName 或 PlayerName → <@openid>（绑定全局共享）
         for ((openId, info) in CommandRepositories.bindings.allBindings()) {
-            val mcName = info.playerName
-            val pattern = Regex("(?<![<a-zA-Z0-9])@?${Regex.escape(mcName)}(?![>a-zA-Z0-9])")
-            result = result.replace(pattern) { _ -> "<@$openId>" }
+            for (mcName in info.playerNames) {
+                val pattern = Regex("(?<![<a-zA-Z0-9])@?${Regex.escape(mcName)}(?![>a-zA-Z0-9])")
+                result = result.replace(pattern) { _ -> "<@$openId>" }
+            }
         }
         // 处理直接输入的 @openid：尝试转为昵称，找不到就去掉
         result = result.replace(Regex("@([0-9A-Fa-f]{20,})(?=\\s|\$)")) { match ->

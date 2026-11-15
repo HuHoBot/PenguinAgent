@@ -485,6 +485,9 @@ class ConfigManager(
     fun bindingRequireGameVerification(): Boolean =
         plugin.config.getBoolean("binding.require-game-verification", true)
 
+    /** 一个 QQ 号最多可绑定的角色数；默认 1，与旧版行为一致。 */
+    fun maxBindings(): Int = plugin.config.getInt("binding.max-bindings", 1).coerceIn(1, 100)
+
     fun isForceBindEnabled(): Boolean = plugin.config.getBoolean("binding.force-bind", false)
 
     fun forceBindGroups(): List<String> =
@@ -524,7 +527,7 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 12
+        private const val CURRENT_CONFIG_VERSION = 13
         private const val CONFIG_VERSION_PATH = "config-version"
 
         /**
@@ -539,7 +542,9 @@ class ConfigManager(
             "压缩",
             "压缩token",
             "压缩保留",
-            "删除信息"
+            "删除信息",
+            "锁定",
+            "解除锁定"
         )
 
         /** 版本化升级列表：当前配置版本 < toVersion 时自动更新对应字段的值。 */
@@ -613,6 +618,7 @@ class ConfigManager(
             "features.full-amount" to "是否默认开启全量聊天转发",
             "features.enable-auth" to "是否启用 QQ 头像认证功能",
             "binding.require-game-verification" to "绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作；强制绑定下仅影响走普通流程的绑定（如免验证玩家主动绑定）",
+            "binding.max-bindings" to "一个 QQ 号最多可绑定的游戏账号数，默认 1；大于 1 时可用 /绑定 <游戏ID> 继续绑定，用 /解除绑定 <游戏ID> 解除指定角色",
             "binding.force-bind" to "强制绑定：未绑定玩家进游戏会被踢出并拿到 5 位验证码，必须先在 QQ 群执行 /绑定 <验证码> 才能进入；开启后请勿再叠加白名单插件或 Minecraft 自带白名单",
             "binding.force-bind-groups" to "强制绑定提示里展示的 QQ 群号列表，留空则不提示具体群号",
             "binding.verify-exempt" to "免验证名单：这些玩家无需 QQ 绑定即可进入服务器（受限于设备或环境无法使用 QQ 的人），每行一个玩家名",
@@ -691,7 +697,9 @@ class ConfigManager(
             "末影箱查看",
             "强制解绑",
             "添加免验证",
-            "取消免验证"
+            "取消免验证",
+            "锁定",
+            "解除锁定"
         )
 
         private val DEFAULT_VALUES: Map<String, Any> = buildMap {
@@ -761,6 +769,7 @@ class ConfigManager(
             put("agent.context.compress.prompt", AgentPrompts.CONTEXT_COMPRESS)
             put("agent.context.truncate.drop", 10)
             put("binding.require-game-verification", true)
+            put("binding.max-bindings", 1)
             put("binding.force-bind", false)
             put("binding.force-bind-groups", emptyList<String>())
             put("binding.verify-exempt", emptyList<String>())

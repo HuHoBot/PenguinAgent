@@ -150,7 +150,7 @@ object UnbindConfirmation {
             QClient.sendTextToGroup(request.groupOpenId, "你已经没有任何绑定，无需解绑")
             return InteractionOutcome.HANDLED
         }
-        if (!current.playerName.equals(request.playerName, ignoreCase = true)) {
+        if (!current.hasPlayer(request.playerName)) {
             QClient.sendTextToGroup(
                 request.groupOpenId,
                 "绑定关系已变更，请重新执行 /解除绑定"
@@ -158,10 +158,14 @@ object UnbindConfirmation {
             return InteractionOutcome.HANDLED
         }
 
-        CommandRepositories.bindings.removeBinding(request.userOpenId)
+        // 多账号时只移除确认卡片上的这一个角色，其余角色保留
+        if (!CommandRepositories.bindings.removePlayer(request.userOpenId, request.playerName)) {
+            QClient.sendTextToGroup(request.groupOpenId, "绑定关系已变更，请重新执行 /解除绑定")
+            return InteractionOutcome.HANDLED
+        }
         QClient.sendTextToGroup(
             request.groupOpenId,
-            "已解除角色绑定：${QClient.escapeMarkdown(current.playerName)}"
+            "已解除角色绑定：${QClient.escapeMarkdown(request.playerName)}"
         )
 
         val plugin = try {
@@ -172,14 +176,14 @@ object UnbindConfirmation {
 
         // 强制绑定下必须立刻断开在线会话，否则玩家能解绑后继续留在服务器里
         if (plugin.isForceBindEnabled()) {
-            plugin.kickUnboundPlayer(current.playerName)
+            plugin.kickUnboundPlayer(request.playerName)
             return InteractionOutcome.HANDLED
         }
 
         // 白名单同步：与用户自行解绑保持一致
         val whitelist = plugin.getWhiteList()
         if (whitelist.delCommand.isNotBlank()) {
-            val command = whitelist.delCommand.replace("{name}", current.playerName)
+            val command = whitelist.delCommand.replace("{name}", request.playerName)
             plugin.sendCommand(command).whenComplete { _, error ->
                 if (error != null) plugin.log_error("解绑后移除白名单失败: ${error.message}")
             }

@@ -74,6 +74,8 @@ internal class HumanReadableStateFile {
         val fullForwarding = linkedMapOf<String, Boolean>()
         val bindings = linkedMapOf<String, BindingInfo>()
         val memberRoles = linkedMapOf<String, String>()
+        // openid → 已锁定的角色名，解析完绑定后再合并进 BindingInfo
+        val lockedPlayers = linkedMapOf<String, List<String>>()
         // 旧格式：按群分组的绑定与显示名称设置，仅用于迁移
         val legacyBindings = linkedMapOf<String, MutableMap<String, BindingInfo>>()
         val legacySettings = linkedMapOf<String, MutableMap<String, Pair<String, String>>>()
@@ -100,16 +102,28 @@ internal class HumanReadableStateFile {
                     ?.let { fullForwarding[key.trim()] = it }
                 "member-roles" -> memberRoles[key.trim()] = value
                 "user-bindings" -> {
-                    // openId = playerName:qqMode:mcMode:qqUsername
+                    // openId = playerName[,playerName...]:qqMode:mcMode:qqUsername
                     val parts = value.split(':', limit = 4)
                     if (parts.size >= 3) {
-                        bindings[key.trim()] = BindingInfo(
-                            playerName = parts[0].trim(),
-                            qqDisplayNameMode = parts[1].trim(),
-                            mcDisplayNameMode = parts[2].trim(),
-                            qqUsername = if (parts.size == 4) parts[3].trim() else ""
-                        )
+                        val playerNames = parts[0].split(',')
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                        if (playerNames.isNotEmpty()) {
+                            bindings[key.trim()] = BindingInfo(
+                                playerNames = playerNames,
+                                qqDisplayNameMode = parts[1].trim(),
+                                mcDisplayNameMode = parts[2].trim(),
+                                qqUsername = if (parts.size == 4) parts[3].trim() else ""
+                            )
+                        }
                     }
+                }
+                "user-binding-locks" -> {
+                    // openId = playerName[,playerName...]
+                    val playerNames = value.split(',')
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                    if (playerNames.isNotEmpty()) lockedPlayers[key.trim()] = playerNames
                 }
                 "bindings" -> {
                     // 旧格式：groupId = openId:playerName:qqUsername,openId:playerName:qqUsername
@@ -118,7 +132,10 @@ internal class HumanReadableStateFile {
                         val parts = entry.split(':', limit = 3)
                         if (parts.size >= 2) {
                             val qqUsername = if (parts.size == 3) parts[2].trim() else ""
-                            groupBindings[parts[0].trim()] = BindingInfo(parts[1].trim(), qqUsername = qqUsername)
+                            groupBindings[parts[0].trim()] = BindingInfo(
+                                playerNames = listOf(parts[1].trim()),
+                                qqUsername = qqUsername
+                            )
                         }
                     }
                 }
@@ -159,7 +176,7 @@ internal class HumanReadableStateFile {
                     if (existing == null) {
                         bindings[openId] = info
                         migrated++
-                    } else if (!existing.playerName.equals(info.playerName, ignoreCase = true)) {
+                    } else if (!existing.hasPlayer(info.playerName)) {
                         conflicted++
                     }
                 }
@@ -172,7 +189,17 @@ internal class HumanReadableStateFile {
             }
         }
 
-        log("已加载绑定数据：${bindings.size} 条（按 openid 全局共享，所有 QQ 群通用）")
+        // 锁定状态只保留仍属于该 openid 的角色：解绑后遗留的锁不应继续拦住同名新绑定
+        lockedPlayers.forEach { (openId, lockedNames) ->
+            val info = bindings[openId] ?: return@forEach
+            val valid = info.playerNames.filter { name ->
+                lockedNames.any { it.equals(name, ignoreCase = true) }
+            }
+            if (valid.isNotEmpty()) bindings[openId] = info.copy(lockedPlayerNames = valid)
+        }
+
+        val accountCount = bindings.values.sumOf { it.playerNames.size }
+        log("已加载绑定数据：${bindings.size} 个 QQ、$accountCount 个角色（按 openid 全局共享，所有 QQ 群通用）")
         return StoredCommandSettings(administrators, authenticatedUsers, administratorModes, fullForwarding, bindings, memberRoles)
     }
 
@@ -225,18 +252,32 @@ internal class HumanReadableStateFile {
     }
 
     /**
-     * 绑定段：`openId = playerName:qqMode:mcMode:qqUsername`。
+     * 绑定段：`openId = playerName[,playerName...]:qqMode:mcMode:qqUsername`。
      *
-     * openid 相同即同一个人，跨群共享同一条记录；qqUsername 放最后以便昵称里含冒号也不会解析错。
+     * openid 相同即同一个人，跨群共享同一条记录；多个角色用半角逗号分隔，
+     * qqUsername 放最后以便昵称里含冒号也不会解析错。
+     * 锁定状态单独写在 `[user-binding-locks]`，避免在同一个值里再挤一个字段。
      */
     private fun writeUserBindingsSection(
         writer: java.io.BufferedWriter,
         bindings: Map<String, BindingInfo>
     ) {
         writer.appendLine("[user-bindings]")
-        writer.appendLine("# openid = MC玩家名:QQ显示名模式:MC显示名模式:QQ昵称")
+        writer.appendLine("# openid = MC玩家名(多个用半角逗号分隔):QQ显示名模式:MC显示名模式:QQ昵称")
         bindings.toSortedMap().forEach { (openId, info) ->
-            writer.appendLine("$openId = ${info.playerName}:${info.qqDisplayNameMode}:${info.mcDisplayNameMode}:${info.qqUsername}")
+            writer.appendLine(
+                "$openId = ${info.playerNames.joinToString(",")}:" +
+                    "${info.qqDisplayNameMode}:${info.mcDisplayNameMode}:${info.qqUsername}"
+            )
+        }
+        writer.appendLine()
+
+        writer.appendLine("[user-binding-locks]")
+        writer.appendLine("# openid = 已锁定的MC玩家名(多个用半角逗号分隔)，自动维护")
+        bindings.toSortedMap().forEach { (openId, info) ->
+            if (info.lockedPlayerNames.isNotEmpty()) {
+                writer.appendLine("$openId = ${info.lockedPlayerNames.joinToString(",")}")
+            }
         }
         writer.appendLine()
     }
