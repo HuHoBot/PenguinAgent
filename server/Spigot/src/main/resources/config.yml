@@ -1,4 +1,4 @@
-config-version: 8
+config-version: 13
 
 # WebUI 端口，访问 http://127.0.0.1:<port> 管理配置。
 webui-port: 5678
@@ -125,6 +125,9 @@ features:
   full-amount: false
 
 binding:
+  # 一个 QQ 号最多可以绑定的游戏账号数量，默认 1（只允许绑定一个角色）。
+  # 大于 1 时可用 /绑定 <游戏ID> 继续绑定，用 /解除绑定 <游戏ID> 解除指定角色。
+  max-bindings: 1
   # 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作
   # 【注意】强制绑定开启时，被踢出的玩家用 5 位验证码直接完成绑定，不经过本流程；
   # 但免验证玩家主动绑定时仍走普通流程，是否需要游戏内 /qqbind 验证由本项决定
@@ -201,6 +204,8 @@ commands:
   我的末影箱: true
   背包查看: true
   末影箱查看: true
+  锁定: true
+  解除锁定: true
 
 audit:
   # 本地 sensitive-words/*.txt 命中后才调用 OpenAI 兼容接口二审

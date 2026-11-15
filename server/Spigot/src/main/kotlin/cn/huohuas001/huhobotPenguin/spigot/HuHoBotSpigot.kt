@@ -19,6 +19,7 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.CommandOutputAppender
 import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.SendCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
+import cn.huohuas001.huhobotPenguin.spigot.events.AccountLockGuard
 import cn.huohuas001.huhobotPenguin.spigot.events.ForceBindGuard
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
@@ -55,7 +56,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         fun getInstance(): HuHoBotSpigot? = instance
         // 与 ConfigManager 保持一致的面板隐藏默认值（仅用于 WebUI 展示）
         private val COMMANDS_HIDDEN_FROM_MENU_WEBUI =
-            setOf("blockMotd", "unblockMotd", "压缩", "压缩token", "压缩保留", "删除信息")
+            setOf("blockMotd", "unblockMotd", "压缩", "压缩token", "压缩保留", "删除信息", "锁定", "解除锁定")
     }
 
     private lateinit var configManager: ConfigManager
@@ -87,6 +88,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         } ?: log_error("无法注册 /huhobot 命令，请检查 plugin.yml")
         server.pluginManager.registerEvents(GameChat(), this)
         server.pluginManager.registerEvents(ForceBindGuard(this), this)
+        server.pluginManager.registerEvents(AccountLockGuard(this), this)
         val atCommand = AtCommand()
         getCommand("at")?.apply {
             setExecutor(atCommand)
@@ -934,6 +936,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun getBindingRequireGameVerification(): Boolean = configManager.bindingRequireGameVerification()
 
+    override fun getMaxBindings(): Int = configManager.maxBindings()
+
     override fun isForceBindEnabled(): Boolean = configManager.isForceBindEnabled()
 
     override fun getForceBindGroups(): List<String> = configManager.forceBindGroups()
@@ -985,6 +989,28 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         // 放到下一 tick，避免在消息回调里直接改变玩家状态
         server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
         log_info("强制绑定: $playerName 已解除绑定，踢出在线会话")
+        return true
+    }
+
+    /**
+     * 账号被锁定后立即踢出在线玩家。
+     *
+     * 锁定通常发生在账号被盗或借出时，只拦截下次进服不够，必须把当前会话也断开。
+     * 免验证名单同样不豁免：锁定的优先级高于免验证。
+     */
+    override fun kickLockedPlayer(playerName: String): Boolean {
+        val target = server.getPlayerExact(playerName) ?: return false
+        val separator = "${ChatColor.DARK_GRAY}${ChatColor.STRIKETHROUGH}${"─".repeat(30)}"
+        val reason = buildString {
+            appendLine(separator)
+            appendLine("${ChatColor.RED}${ChatColor.BOLD}账号已被锁定")
+            appendLine(separator)
+            appendLine("${ChatColor.GRAY}该游戏账号已被绑定者锁定，本次游戏会话已结束。")
+            appendLine("${ChatColor.GRAY}如需恢复，请在 QQ 群执行 /解除锁定 后再重新连接。")
+        }
+        // 放到下一 tick，避免在消息回调里直接改变玩家状态
+        server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
+        log_info("账号锁定: $playerName 已被锁定，踢出在线会话")
         return true
     }
 
