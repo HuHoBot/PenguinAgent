@@ -35,6 +35,10 @@ import kotlin.math.max
  * 用户壁纸始终位于最底层，不会影响物品格子和人物模型的可读性。
  */
 object InventoryRenderer {
+
+    /** 统一走 FontManager：内置字体优先，无系统中文时也能正确渲染（issue #37）。 */
+    private val uiFontFamily =
+        cn.huohuas001.huhobotPenguin.spigot.manager.FontManager.chooseFont("")
     private val logger = Logger.getLogger("InventoryRenderer")
 
     private const val RESOURCE_ROOT = "inventory/faithful32x"
@@ -254,7 +258,7 @@ object InventoryRenderer {
 
     private fun drawAmount(graphics: Graphics2D, bounds: Rectangle, amount: Int) {
         val text = amount.toString()
-        graphics.font = Font(Font.SANS_SERIF, Font.BOLD, 26)
+        graphics.font = Font(uiFontFamily, Font.BOLD, 26)
         val metrics = graphics.fontMetrics
         val x = bounds.x + bounds.width - 4 - metrics.stringWidth(text)
         val y = bounds.y + bounds.height - 4
@@ -665,7 +669,7 @@ object InventoryRenderer {
         val graphics = image.createGraphics()
         try {
             graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-            graphics.font = Font(Font.SANS_SERIF, Font.PLAIN, 18)
+            graphics.font = Font(uiFontFamily, Font.PLAIN, 18)
             val metrics = graphics.fontMetrics
             val x = image.width - metrics.stringWidth(text) - 16
             val y = image.height - 16

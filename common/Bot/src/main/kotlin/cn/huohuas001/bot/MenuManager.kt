@@ -15,7 +15,11 @@ import java.net.URLEncoder
 /** QQ 群指令面板同步：支持按群独立配置，复用受管面板避免重复创建。 */
 object MenuManager {
     private const val API_BASE = "https://api.sgroup.qq.com"
-    private const val PANEL_REMARK = "HuHoBot Penguin 指令面板"
+
+    /** 受管面板 remark 前缀。QQ 官方对 remark 有长度限制，前缀务必保持精简。 */
+    private const val PANEL_REMARK = "HuHoBot 指令面板"
+    /** v1.21.0 曾使用过更长前缀；同步时一并识别，避免升级后重复创建。 */
+    private const val LEGACY_PANEL_REMARK = "HuHoBot Penguin 指令面板"
     private const val MAX_ITEMS = 20
     private const val MAX_NAME_DISPLAY_WIDTH = 14
     private const val MAX_DESCRIPTION_DISPLAY_WIDTH = 30
@@ -66,34 +70,59 @@ object MenuManager {
                 profile.groups += groupId
             }
 
+            if (profiles.isEmpty()) {
+                // 防御：绝不因为"这次算不出面板条目"而清理旧面板——
+                // v1.21.0 曾在此处把 profiles 为空当成"没有受管面板在用"，
+                // 随后的 stale 清理会删光所有面板，QQ 端 @机器人 不再弹出（issue #36）。
+                plugin.log_warning(
+                    "面板同步跳过: 所有群都没有可推送的命令条目（请检查 commands.<命令>.pushMenu 与 enable 配置），" +
+                        "保留现有面板不动"
+                )
+                return
+            }
+
             val allPanels = listPanels(authHeader, "group")
             val managed = allPanels.filter { isManagedRemark(it.remark) }
             val managedByRemark = managed.associateBy { it.remark }.toMutableMap()
             val usedPanelIds = mutableSetOf<String>()
+            var succeededProfiles = 0
 
             for (profile in profiles.values) {
-                val existing = managedByRemark[profile.remark]?.let { getPanel(authHeader, it.id) ?: it }
-                val panelId = if (existing != null) {
-                    updatePanelWithVersion(authHeader, existing, profile.items)
-                    syncPanelTargets(authHeader, existing, profile.groups)
-                    existing.id
-                } else {
-                    val id = createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
-                    if (id == null) {
-                        plugin.log_warning("指令面板注册失败（${profile.remark}）: 未获取到 panel_id")
-                        continue
+                // 逐个 profile 隔离：一个失败不拖垮其余面板，更不清空旧面板
+                try {
+                    val existing = managedByRemark[profile.remark]?.let { getPanel(authHeader, it.id) ?: it }
+                    val panelId = if (existing != null) {
+                        updatePanelWithVersion(authHeader, existing, profile.items)
+                        syncPanelTargets(authHeader, existing, profile.groups)
+                        existing.id
+                    } else {
+                        val id = createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
+                        if (id == null) {
+                            plugin.log_warning("指令面板注册失败（${profile.remark}）: 未获取到 panel_id")
+                            continue
+                        }
+                        id
                     }
-                    id
+                    usedPanelIds += panelId
+                    succeededProfiles++
+                    plugin.log_info(
+                        "指令面板已同步 (${profile.remark}, panel_id=$panelId, commands=${profile.items.size}, groups=${profile.groups.size})"
+                    )
+                } catch (error: Exception) {
+                    plugin.log_error("指令面板 ${profile.remark} 同步失败: ${error.message}（保留现有面板）")
                 }
-                usedPanelIds += panelId
-                plugin.log_info(
-                    "指令面板已同步 (${profile.remark}, panel_id=$panelId, commands=${profile.items.size}, groups=${profile.groups.size})"
-                )
                 // QQ 写操作限频 10 QPM，多面板时主动留间隔
                 if (profiles.size > 1) Thread.sleep(700)
             }
 
-            // 清理不再使用的受管面板（群配置变化后遗留的 profile）
+            if (succeededProfiles == 0) {
+                // 全部 profile 都失败：保留旧面板，避免"升级后面板消失"
+                plugin.log_warning("指令面板同步全部失败，保留现有面板不变（可稍后手动重载重试）")
+                return
+            }
+
+            // 清理不再使用的受管面板（群配置变化后遗留的 profile）。
+            // 只有本轮至少有一个面板成功落地时才清理。
             val stale = managed.filter { it.id !in usedPanelIds }
             stale.take(MAX_DUPLICATE_DELETES_PER_SYNC).forEach {
                 runCatching { deletePanel(authHeader, it.id) }
@@ -106,12 +135,16 @@ object MenuManager {
                 )
             }
         } catch (error: Exception) {
-            plugin.log_error("指令面板同步失败: ${error.message}")
+            plugin.log_error("指令面板同步失败: ${error.message}（现有面板已保留，不会导致面板消失）")
         }
     }
 
     private fun isManagedRemark(remark: String): Boolean =
-        remark == PANEL_REMARK || remark == "HuHoBot 指令面板" || remark.startsWith("$PANEL_REMARK #")
+        remark == PANEL_REMARK ||
+            remark == LEGACY_PANEL_REMARK ||
+            remark.startsWith("$LEGACY_PANEL_REMARK #") ||
+            remark == "HuHoBot 指令面板" ||
+            remark.startsWith("$PANEL_REMARK #")
 
     private fun panelSignature(items: List<JSONObject>, showAdminCommands: Boolean): String {
         val raw = buildString {

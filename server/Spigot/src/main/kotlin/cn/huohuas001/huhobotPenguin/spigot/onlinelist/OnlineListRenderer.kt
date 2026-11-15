@@ -370,13 +370,8 @@ class OnlineListRenderer(
         graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
     }
 
-    private fun chooseFont(configured: String): String {
-        val available = GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet()
-        if (configured.isNotBlank() && available.contains(configured.trim())) return configured.trim()
-        val candidates = arrayOf("Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "SansSerif")
-        for (candidate in candidates) if (available.contains(candidate)) return candidate
-        return Font.SANS_SERIF
-    }
+    private fun chooseFont(configured: String): String =
+        cn.huohuas001.huhobotPenguin.spigot.manager.FontManager.chooseFont(configured)
 
     private fun readResource(path: String): BufferedImage {
         val input: InputStream? = OnlineListRenderer::class.java.getResourceAsStream(path)

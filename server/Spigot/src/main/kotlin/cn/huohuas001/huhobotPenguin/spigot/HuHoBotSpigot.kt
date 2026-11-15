@@ -74,6 +74,12 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         GroupCommandConfigStore.configureDataDir(dataFolder)
         GroupCommandConfigStore.syncFolders(configManager.groupOpenIds())
         PlaceholderApiSupport.setup(this)
+        // 内置字体先行：所有图片渲染(查在线/背包/皮肤)统一从这里选字体
+        cn.huohuas001.huhobotPenguin.spigot.manager.FontManager.initialize(
+            dataFolder,
+            { message -> log_info(message) },
+            { message -> log_warning(message) }
+        )
         initializeInventoryRenderer()
         initializeOnlineListRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
