@@ -1,0 +1,8 @@
+{
+  "id": "huhobotpenguin",
+  "name": "HuHoBotPenguin",
+  "version": "@version@",
+  "main": "cn.huohuas001.huhobotPenguin.proxy.VelocityEntry",
+  "authors": ["Shabby-666"],
+  "description": "HuHoBot Penguin proxy compatibility entry"
+}

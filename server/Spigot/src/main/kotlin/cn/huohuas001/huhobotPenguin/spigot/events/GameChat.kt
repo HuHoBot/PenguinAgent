@@ -12,6 +12,8 @@ class GameChat : Listener {
     @EventHandler(ignoreCancelled = true)
     fun onChat(event: AsyncPlayerChatEvent) {
         QClient.broadcastGameMessage(event.player.name, event.message)
+        // 代理互通桥：转发到代理端广播其它子服（默认关闭）
+        cn.huohuas001.huhobotPenguin.spigot.manager.ProxyBridge.forwardChat(event.player, event.player.name, event.message)
     }
 
     @EventHandler

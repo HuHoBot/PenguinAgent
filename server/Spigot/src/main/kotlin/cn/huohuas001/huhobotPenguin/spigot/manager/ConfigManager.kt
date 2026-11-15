@@ -541,6 +541,8 @@ class ConfigManager(
 
     fun joinApproveIntervalSeconds(): Int = plugin.config.getInt("join-approve.interval-seconds", 30)
 
+    fun proxyBridgeEnabled(): Boolean = plugin.config.getBoolean("proxy-bridge.enabled", false)
+
     fun joinApproveStrategies(): List<com.alibaba.fastjson.JSONObject> =
         plugin.config.getMapList("join-approve.strategies").mapNotNull { map ->
             val obj = com.alibaba.fastjson.JSONObject()
@@ -757,6 +759,7 @@ class ConfigManager(
             "network.proxy.port" to "代理端口",
             "join-approve.enabled" to "入群自动审批开关（需 QQ 白名单能力，不可用时自动停用）",
             "join-approve.interval-seconds" to "入群审批轮询间隔秒数(10-600)",
+            "proxy-bridge.enabled" to "代理互通桥：把游戏聊天转发给代理端广播其它子服(默认关闭)",
             "agent.model" to "AI Agent 使用的模型名",
             "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
             "agent.hide-fetch-results" to "获取类工具（插件列表/命令帮助/服务器日志）结果只交给 AI，不在群里发卡片",
@@ -918,6 +921,8 @@ class ConfigManager(
 
             put("join-approve.enabled", false)
             put("join-approve.interval-seconds", 30)
+
+            put("proxy-bridge.enabled", false)
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
             put("agent.hide-fetch-results", true)

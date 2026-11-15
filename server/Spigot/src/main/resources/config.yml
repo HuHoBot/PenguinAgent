@@ -380,6 +380,9 @@ network:
 # 需要 QQ 白名单能力接口(普通机器人返回 11253 时自动停用)
 # 策略按顺序匹配，第一条命中生效；openids 空=对所有申请生效
 
+proxy-bridge:
+  enabled: false      # 代理互通桥(huhobot:bridge 通道)，把游戏聊天转发给代理端广播其它子服
+
 join-approve:
   enabled: false
   interval-seconds: 30

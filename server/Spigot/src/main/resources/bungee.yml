@@ -1,0 +1,6 @@
+# BungeeCord 端描述（与 plugin.yml 同 jar；BC 优先读取本文件）
+name: HuHoBotPenguin
+main: cn.huohuas001.huhobotPenguin.proxy.BungeeEntry
+version: '@version@'
+author: Shabby-666
+description: HuHoBot Penguin proxy compatibility entry

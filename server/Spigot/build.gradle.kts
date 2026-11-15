@@ -10,6 +10,8 @@ plugins {
 repositories {
     mavenCentral()
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
+    maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://oss.sonatype.org/content/repositories/snapshots/")
     maven("https://jitpack.io")
 }
 
@@ -23,6 +25,8 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
+    // 代理端兼容(同一 jar 可装入 BungeeCord/Velocity)：
+    // Velocity 用本仓库 src/stub/java 的 API 桩编译(不入包,运行时用代理端自带类,保持 Java8 产物)
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
     // SQLite 可选存储后端(org.xerial 纯 JDBC 驱动；shadowJar 只保留主流平台 native 控制体积)
@@ -39,6 +43,15 @@ dependencies {
 
 kotlin {
     jvmToolchain(8)
+}
+
+// Velocity API 编译桩：仅编译期可见，shadowJar 里排除，运行时使用代理端自带的真实 API
+sourceSets {
+    main {
+        java {
+            srcDir("src/stub/java")
+        }
+    }
 }
 
 tasks {
@@ -86,6 +99,11 @@ tasks {
 
     shadowJar {
         dependsOn(normalizeSpigotPackageDirectory)
+        exclude("com/velocitypowered/**")
+        exclude("com/google/inject/**")
+        exclude("org/slf4j/**")
+        exclude("io/netty/**")
+        exclude("net/md_5/**")
         archiveFileName.set("HuHoBot-Penguin_Spigot-${project.version}.jar")
         finalizedBy(gatherJar)
         relocate("org.bstats", "${project.group}.bstats")

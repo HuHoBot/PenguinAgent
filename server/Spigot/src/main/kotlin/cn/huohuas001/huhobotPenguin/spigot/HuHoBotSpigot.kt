@@ -91,6 +91,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         cn.huohuas001.bot.state.PermissionGroupsStore.configure(dataFolder)
         cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)
         cn.huohuas001.bot.agent.JoinApproveManager.start()
+        cn.huohuas001.huhobotPenguin.spigot.manager.ProxyBridge.initialize(this, configManager.proxyBridgeEnabled())
         initializeInventoryRenderer()
         initializeOnlineListRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }
