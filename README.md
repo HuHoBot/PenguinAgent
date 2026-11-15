@@ -657,7 +657,21 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.21.0（最新）
+### v1.21.1（最新）
+
+**新功能：**
+- feat: 多账号绑定（#35）—— 一个 QQ 号可在 `binding.max-bindings` 上限内绑定多个游戏账号，`/解除绑定 <游戏ID>` 解除指定角色
+- feat: 账号锁定（#33）—— `/锁定 [游戏ID]` 禁止该账号进入服务器并立即断开在线会话，`/解除锁定 [游戏ID]` 恢复
+
+**改进：**
+- change: 多账号下 `/我的背包`、`/我的末影箱` 支持可选游戏 ID 参数，用来指定要查看的账户
+- change: 管理员 `/强制解绑` 可按角色名精确解绑，也可按 openid / QQ 昵称解绑该 QQ 的全部角色
+
+**升级提示：**
+- 配置版本升到 13，启动时自动补上 `binding.max-bindings: 1`
+- 不调整 `binding.max-bindings` 时行为与旧版一致：一个 QQ 号仍然只能绑定一个角色
+
+### v1.21.0
 
 **新功能：**
 - feat: WebUI「命令与 QQ 面板」支持按群单独配置 —— 可按群覆盖可用指令开关、面板推送、优先级及管理员命令可见性；默认使用全局配置
