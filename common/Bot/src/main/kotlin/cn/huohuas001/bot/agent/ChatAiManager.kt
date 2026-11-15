@@ -101,6 +101,9 @@ object ChatAiManager {
         sessions.remove(groupOpenId)
     }
 
+    /** 指定群当前记录条数（供状态命令）。 */
+    fun sizeOf(groupOpenId: String): Int = sessions[groupOpenId]?.size ?: 0
+
     /** 聊天 AI 上下文压缩（同群共享记录压缩成摘要）。 */
     fun compress(plugin: HuHoBot, groupOpenId: String): String {
         val config = config() ?: return "聊天 AI 未启用"

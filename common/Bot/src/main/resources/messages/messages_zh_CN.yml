@@ -1,0 +1,25 @@
+# HuHoBot 消息文案(中文)
+command:
+  disabled: "此命令已被管理员关闭"
+  no-admin: "你没有执行此命令的管理员权限"
+  no-permission-group: "当前权限组未开放该命令"
+
+chat-ai:
+  busy: "上一条还在思考中，稍等一下再问我…"
+  empty-reply: "聊天助手暂时没有回复，稍后再试试吧。"
+  cleared: "✅ 本群聊天记录已清空，下次对话从零开始。"
+  compressed: "✅ 聊天记录已压缩"
+  nothing-to-compress: "当前群没有多少聊天记录，不需要压缩"
+  status: "聊天 AI：{enabled}\n语言：{language}\n本群记录条数：{count}"
+
+unbind:
+  confirm-title: "确认解除绑定？"
+  confirm-body: "绑定角色：{player}\n解除后会同步移出白名单，30 秒内未选择视为取消。"
+  not-yours: "这不是你的绑定信息，请让发起者本人操作"
+  timeout: "选择超时，已取消解绑"
+  cancelled: "已取消解绑"
+  done: "已解除角色绑定：{player}"
+
+agent:
+  approval-timeout: "审批超时未处理，操作已自动拒绝"
+  no-permission: "你没有审批权限，请让管理员操作"

@@ -88,7 +88,15 @@ abstract class BaseCommand {
                 val groupId = event.groupOpenId ?: event.groupId
                 if (plugin.getCommandList(groupId)[command] == false) {
                     cn.huohuas001.bot.QClient.sendTextToGroup(
-                        groupId, "此命令已被管理员关闭"
+                        groupId, cn.huohuas001.bot.messages.Messages.t("command.disabled")
+                    )
+                    return DispatchResult.HANDLED
+                }
+                // 权限组：组成员仅可用组内开放的命令
+                val groupMemberOpenId = event.sender?.openid ?: event.sender?.id ?: ""
+                if (cn.huohuas001.bot.state.PermissionGroupsStore.commandAllowed(groupMemberOpenId, command) == false) {
+                    cn.huohuas001.bot.QClient.sendTextToGroup(
+                        groupId, cn.huohuas001.bot.messages.Messages.t("command.no-permission-group")
                     )
                     return DispatchResult.HANDLED
                 }
@@ -97,7 +105,7 @@ abstract class BaseCommand {
                     val isAdmin = cn.huohuas001.bot.events.commands.CommandSupport.checkAdmin(plugin, event)
                     if (!isAdmin) {
                         cn.huohuas001.bot.QClient.sendTextToGroup(
-                            groupId, "你没有执行此命令的管理员权限"
+                            groupId, cn.huohuas001.bot.messages.Messages.t("command.no-admin")
                         )
                         return DispatchResult.HANDLED
                     }

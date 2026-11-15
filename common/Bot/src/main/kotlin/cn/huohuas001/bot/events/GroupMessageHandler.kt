@@ -34,6 +34,7 @@ class GroupMessageHandler(
         registerCommand(MotdCommands())
         registerCommand(BindingCommands())
         registerCommand(InventoryCommands())
+        registerCommand(cn.huohuas001.bot.agent.ChatAiCommands())
     }
 
     fun registerCommand(command: BaseCommand) {
