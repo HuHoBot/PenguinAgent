@@ -43,7 +43,11 @@ class AgentApiClient(
     /** 思考程度档位；留空表示不附加任何思考参数 */
     private val thinkLevel: String = "",
     /** 思考参数名，按模型厂商选择 */
-    private val thinkParam: String = ""
+    private val thinkParam: String = "",
+    /** 请求的 max_tokens 上限；null 表示不在请求体中出现（保持服务端默认）。 */
+    private val maxTokens: Int? = null,
+    /** 请求的读超时（秒）。 */
+    private val timeoutSeconds: Int = 120
 ) {
 
     /**
@@ -73,6 +77,7 @@ class AgentApiClient(
             put("messages", messages)
             if (tools != null) put("tools", tools)
             put("temperature", 0.3)
+            if (maxTokens != null && maxTokens > 0) put("max_tokens", maxTokens)
         }
         if (thinkLevel.isNotBlank() && thinkParam.isNotBlank()) {
             thinkingWarning = AgentThinking.applyRequest(body, thinkLevel, thinkParam)
@@ -133,12 +138,13 @@ class AgentApiClient(
 
     private fun post(json: String): String {
         val url = baseUrl.trimEnd('/') + "/chat/completions"
+        val timeoutMillis = timeoutSeconds.coerceIn(30, 600) * 1000
         val connection = try {
             (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
                 connectTimeout = 15_000
-                readTimeout = 120_000
+                readTimeout = timeoutMillis
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Authorization", "Bearer $apiKey")
             }

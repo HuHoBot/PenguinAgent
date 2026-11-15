@@ -895,6 +895,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getAgentCommandMode(): AgentCommandMode = configManager.agentCommandMode()
 
     override fun getAgentThink(): Boolean = configManager.agentThink()
+    override fun getAgentMaxTokens(): Int = configManager.agentMaxTokens()
+    override fun getAgentTimeoutSeconds(): Int = configManager.agentTimeoutSeconds()
     override fun getAgentThinkVisibility(): String = configManager.agentThinkVisibility()
     override fun getAgentThinkLevel(): String = configManager.agentThinkLevel()
     override fun getAgentThinkParam(): String = configManager.agentThinkParam()
@@ -1029,6 +1031,9 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }.getOrNull()
 
     override fun getWebUiPort(): Int = config.getInt("webui-port", 5678)
+
+    override fun getWebUiBindAddress(): String =
+        config.getString("webui-bind-address", "127.0.0.1")?.takeIf(String::isNotBlank) ?: "127.0.0.1"
 
     override fun getWebUiConfigValues(): Map<String, Any?> =
         config.getValues(true).toMutableMap().apply {

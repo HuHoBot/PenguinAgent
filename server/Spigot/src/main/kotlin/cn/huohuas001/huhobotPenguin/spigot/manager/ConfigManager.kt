@@ -453,6 +453,10 @@ class ConfigManager(
     fun agentCommandMode(): AgentCommandMode =
         AgentCommandMode.from(plugin.config.getString("agent.command-mode")) ?: AgentCommandMode.MANUAL
 
+    fun agentMaxTokens(): Int = plugin.config.getInt("agent.max-tokens", 0)
+
+    fun agentTimeoutSeconds(): Int = plugin.config.getInt("agent.timeout-seconds", 120)
+
     fun isAgentFetchResultHidden(): Boolean =
         plugin.config.getBoolean("agent.hide-fetch-results", true)
 

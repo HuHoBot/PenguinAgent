@@ -174,7 +174,8 @@ object AgentContextManager {
 
         val target = config.context.compressTarget.coerceAtLeast(200)
         val beforeTokens = estimateTokens(before)
-        val client = AgentApiClient(config.baseUrl, config.apiKey, config.model)
+        val client = AgentApiClient(config.baseUrl, config.apiKey, config.model,
+            maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds)
         val systemPrompt = JSONObject()
         systemPrompt.put("role", "system")
         systemPrompt.put("content", config.effectiveCompressPrompt())

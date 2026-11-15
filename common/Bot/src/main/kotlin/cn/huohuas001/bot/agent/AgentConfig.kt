@@ -37,7 +37,11 @@ class AgentConfig(
     /** 思考引导提示词，留空则用 [AgentPrompts.THINK_GUIDE] */
     val thinkGuidePrompt: String,
     /** 上下文压缩相关配置 */
-    val context: AgentContextConfig
+    val context: AgentContextConfig,
+    /** 请求的 max_tokens 上限；null 表示不在请求体中出现（服务端默认）。 */
+    val maxTokens: Int? = null,
+    /** 请求的读超时（秒）。 */
+    val timeoutSeconds: Int = 120
 ) {
     /** 是否具备调用 AI 的前提条件（已启用且配置了接口地址与密钥）。 */
     val usable: Boolean

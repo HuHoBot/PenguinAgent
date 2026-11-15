@@ -52,7 +52,8 @@ object WebUiServer {
         try {
             val plugin = BotShared.getPlugin()
             val port = plugin.getWebUiPort()
-            val server = HttpServer.create(InetSocketAddress(port), 0)
+            val bindAddress = plugin.getWebUiBindAddress().trim().ifEmpty { "127.0.0.1" }
+            val server = HttpServer.create(InetSocketAddress(bindAddress, port), 0)
             val pool = Executors.newFixedThreadPool(2)
             server.executor = pool
             executor = pool
@@ -60,7 +61,7 @@ object WebUiServer {
             server.start()
             httpServer = server
             running.set(true)
-            plugin.log_info("网页配置UI已在127.0.0.1:${port}启动")
+            plugin.log_info("网页配置UI已在$bindAddress:${port}启动" + if (bindAddress == "127.0.0.1") "" else "（已绑定非回环地址，请注意安全风险）")
             val generated = WebUiPassword.ensureGenerated()
             if (generated.isNotEmpty()) {
                 plugin.log_info("WebUI 管理密码（仅首次启动自动生成，可用 /hb password 修改）: $generated")

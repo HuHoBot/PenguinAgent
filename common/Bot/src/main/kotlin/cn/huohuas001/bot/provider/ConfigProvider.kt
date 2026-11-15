@@ -290,6 +290,15 @@ interface ConfigProvider {
     fun getAgentModel(): String? = System.getenv("HUHOBOT_AGENT_MODEL")
     fun getAgentCommandMode(): cn.huohuas001.bot.agent.AgentCommandMode = cn.huohuas001.bot.agent.AgentCommandMode.MANUAL
 
+    /**
+     * Agent 请求的 max_tokens 上限；0 表示不在请求体中出现（保持服务端默认）。
+     * 部分兼容网关在客户端不带 max_tokens 时默认值很小，长回答会被截断。
+     */
+    fun getAgentMaxTokens(): Int = 0
+
+    /** Agent 请求的读超时（秒）；推理模型思考时间长时可调大。 */
+    fun getAgentTimeoutSeconds(): Int = 120
+
     /** 获取类工具结果只交给 AI，不在群里发卡片（默认开启）。 */
     fun isAgentFetchResultHidden(): Boolean = true
 

@@ -206,7 +206,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
                 compressKeep = getAgentCompressKeep(),
                 compressPrompt = getAgentCompressPrompt(),
                 truncateDrop = getAgentTruncateDrop()
-            )
+            ),
+            maxTokens = getAgentMaxTokens().takeIf { it > 0 },
+            timeoutSeconds = getAgentTimeoutSeconds().coerceIn(30, 600)
         )
     }
 
@@ -293,6 +295,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
 
     /** WebUI 服务端口；默认 5678。 */
     fun getWebUiPort(): Int = 5678
+
+    /** WebUI 绑定地址；默认 127.0.0.1，需要局域网访问时显式改为 0.0.0.0。 */
+    fun getWebUiBindAddress(): String = "127.0.0.1"
 
     fun getOnlineList(): List<String>
 
