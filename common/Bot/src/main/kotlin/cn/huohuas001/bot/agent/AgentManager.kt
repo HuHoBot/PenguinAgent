@@ -182,9 +182,11 @@ object AgentManager {
         // 只有开了深度思考、且没开思考引导时才向接口附加思考参数；
         // 深度思考与思考引导互斥，开启思考引导后深度思考相关设置一律不生效
         val client = if (config.effectiveThink) {
-            AgentApiClient(config.baseUrl, config.apiKey, config.model, config.thinkLevel, config.thinkParam)
+            AgentApiClient(config.baseUrl, config.apiKey, config.model, config.thinkLevel, config.thinkParam,
+                maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds)
         } else {
-            AgentApiClient(config.baseUrl, config.apiKey, config.model)
+            AgentApiClient(config.baseUrl, config.apiKey, config.model,
+                maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds)
         }
         val tools = AgentTools.buildTools()
         var steps = 0
@@ -697,18 +699,35 @@ object AgentManager {
     }
 
     /** 将超长内容按行拆分为多条，保证 QQ 群展示完整；内容不超过上限时原样返回。 */
-    private fun splitMessages(content: String): List<String> {
+    internal fun splitMessages(content: String): List<String> {
+        if (content.isEmpty()) return emptyList()
         if (content.length <= MAX_MESSAGE_CHARS) return listOf(content)
         val chunks = mutableListOf<String>()
         val current = StringBuilder()
-        for (line in content.lineSequence()) {
-            if (current.isNotEmpty() && current.length + line.length + 1 > MAX_MESSAGE_CHARS) {
+        fun flush() {
+            if (current.isNotEmpty()) {
                 chunks.add(current.toString())
-                current.clear()
+                current.setLength(0)
             }
-            current.append(line).append('\n')
         }
-        if (current.isNotEmpty()) chunks.add(current.toString())
+        for (line in content.lineSequence()) {
+            var rest = line
+            while (true) {
+                // 块内已有内容时为行间换行预留 1 字符
+                val room = MAX_MESSAGE_CHARS - current.length - if (current.isEmpty()) 0 else 1
+                if (rest.length <= room) {
+                    // 单行超长被硬切后的剩余尾部可能为空，此时不再补换行，避免下一块以空行开头
+                    if (current.isNotEmpty()) current.append('\n')
+                    current.append(rest)
+                    break
+                }
+                if (current.isNotEmpty()) current.append('\n')
+                current.append(rest, 0, room)
+                flush()
+                rest = rest.substring(room)
+            }
+        }
+        flush()
         return chunks
     }
 
