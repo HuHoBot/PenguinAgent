@@ -41,7 +41,15 @@ class AgentConfig(
     /** 请求的 max_tokens 上限；null 表示不在请求体中出现（服务端默认）。 */
     val maxTokens: Int? = null,
     /** 请求的读超时（秒）。 */
-    val timeoutSeconds: Int = 120
+    val timeoutSeconds: Int = 120,
+    /** 自定义系统提示词；留空使用内置默认。 */
+    val systemPrompt: String = "",
+    /** 允许的工具名列表；空 = 全部可用。 */
+    val allowedTools: List<String> = emptyList(),
+    /** 联网搜索配置（provider 空 = 关闭）。 */
+    val searchProvider: String = "",
+    val searchApiUrl: String = "",
+    val searchApiKey: String = ""
 ) {
     /** 是否具备调用 AI 的前提条件（已启用且配置了接口地址与密钥）。 */
     val usable: Boolean
@@ -61,8 +69,7 @@ class AgentConfig(
         get() = thinkGuidePrompt.trim().ifEmpty { AgentPrompts.THINK_GUIDE }
 
     /** 实际使用的压缩提示词；{target} 会被替换成目标 token 数。 */
-    fun effectiveCompressPrompt(): String {
-        val template = context.compressPrompt.trim().ifEmpty { AgentPrompts.CONTEXT_COMPRESS }
+    fun effectiveCompressPrompt(): String {        val template = context.compressPrompt.trim().ifEmpty { AgentPrompts.CONTEXT_COMPRESS }
         return template.replace("{target}", context.compressTarget.toString())
     }
 }

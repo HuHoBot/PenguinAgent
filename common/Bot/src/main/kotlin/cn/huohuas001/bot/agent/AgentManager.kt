@@ -188,7 +188,7 @@ object AgentManager {
             AgentApiClient(config.baseUrl, config.apiKey, config.model,
                 maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds)
         }
-        val tools = AgentTools.buildTools()
+        val tools = filterAllowedTools(AgentTools.buildTools(), config.allowedTools)
         var steps = 0
 
         while (true) {
@@ -292,13 +292,9 @@ object AgentManager {
                             sendToGroup(plugin, session, AgentMessageFormatter.error("命令 $command 在黑名单中，无法执行"))
                             continue
                         }
-                        if (config.commandMode == AgentCommandMode.AUTO) {
-                            val output = executeCommand(plugin, command)
-                            session.messages.add(toolMessage(toolCallId, "命令已执行，输出：\n$output"))
-                            sendToGroup(plugin, session, AgentMessageFormatter.executedCard(command, output))
-                        } else {
-                            requestApproval(plugin, session, toolCallId, command)
-                            return  // 等待审批，审批完成后再继续循环
+                        when (executeWithMode(plugin, session, config, toolCallId, command)) {
+                            "awaiting" -> return  // 等待审批，审批完成后再继续循环
+                            else -> Unit // 已完成（执行/拒绝/回填），继续下一轮
                         }
                     }
 
@@ -307,6 +303,56 @@ object AgentManager {
                         sendToGroup(plugin, session, AgentMessageFormatter.skillLoading(skillName))
                         val result0 = AgentTools.loadSkill(query)
                         session.messages.add(toolMessage(toolCallId, result0.aiText))
+                    }
+
+                    AgentTools.TOOL_GET_SERVER_STATUS -> {
+                        val text = AgentTools.getServerStatusText(plugin)
+                        session.messages.add(toolMessage(toolCallId, text))
+                        showFetchResult(plugin, session, AgentTools.ToolResult("服务器实时状态", text))
+                    }
+
+                    AgentTools.TOOL_GET_ONLINE_LIST -> {
+                        val online = plugin.getOnlineList()
+                        val text = "在线 ${online.size} 人：${online.joinToString("、").ifBlank { "无" }}"
+                        session.messages.add(toolMessage(toolCallId, text))
+                        showFetchResult(plugin, session, AgentTools.ToolResult("在线玩家", text))
+                    }
+
+                    AgentTools.TOOL_GET_PLAYER_INFO -> {
+                        val player = query.getString("player")?.trim().orEmpty()
+                        val text = if (player.isEmpty()) "缺少 player 参数"
+                            else plugin.getPlayerStatsText(player) ?: "玩家 $player 不在线或平台未支持"
+                        session.messages.add(toolMessage(toolCallId, text))
+                        showFetchResult(plugin, session, AgentTools.ToolResult("玩家数据", text))
+                    }
+
+                    AgentTools.TOOL_GET_PLAYER_INVENTORY -> {
+                        val player = query.getString("player")?.trim().orEmpty()
+                        val text = if (player.isEmpty()) "缺少 player 参数"
+                            else plugin.getPlayerInventory(player) ?: "暂无 $player 的背包数据（需在线或已有离线快照）"
+                        session.messages.add(toolMessage(toolCallId, text))
+                        showFetchResult(plugin, session, AgentTools.ToolResult("背包内容(文本)", text))
+                    }
+
+                    AgentTools.TOOL_CREATE_TIMED_TASK,
+                    AgentTools.TOOL_DELETE_TIMED_TASK -> {
+                        val text = AgentTools.executeTimedTaskTool(functionName, query)
+                        session.messages.add(toolMessage(toolCallId, text))
+                        showFetchResult(plugin, session, AgentTools.ToolResult("定时任务", text))
+                    }
+
+                    AgentTools.TOOL_WEB_SEARCH -> {
+                        val query0 = query.getString("query")?.trim().orEmpty()
+                        val text = if (config.searchProvider.isBlank() || config.searchProvider == "none") {
+                            "未启用搜索：请在配置中设置 agent.search.provider（bing 或 custom）"
+                        } else {
+                            val results = SearchProvider.search(
+                                SearchProvider.Config(config.searchProvider, config.searchApiUrl, config.searchApiKey),
+                                query0
+                            )
+                            SearchProvider.summarize(results)
+                        }
+                        session.messages.add(toolMessage(toolCallId, text))
                     }
 
                     // ── QQ 群管理工具 ──
@@ -476,7 +522,68 @@ object AgentManager {
         return result
     }
 
-    /** 执行服务器命令并返回输出文本。 */
+    /** 工具白名单过滤：allowedTools 为空 = 全部可用。 */
+    private fun filterAllowedTools(tools: JSONArray, allowed: List<String>): JSONArray {
+        if (allowed.isEmpty()) return tools
+        val allow = allowed.map { it.trim().lowercase() }.toSet()
+        val out = JSONArray()
+        for (i in 0 until tools.size) {
+            val tool = tools.getJSONObject(i) ?: continue
+            val function = tool.getJSONObject("function") ?: continue
+            val name = function.getString("name")?.lowercase() ?: continue
+            if (name in allow) out.add(tool)
+        }
+        return out
+    }
+
+    /** 执行命令（AUTO 直接执行 / AI 审批 / MANUAL 人工审批），返回 null 表示已挂起等待审批。 */
+    private fun executeWithMode(
+        plugin: HuHoBot,
+        session: AgentSession,
+        config: AgentConfig,
+        toolCallId: String,
+        command: String
+    ): String? {
+        when (config.commandMode) {
+            AgentCommandMode.AUTO -> {
+                val output = executeCommand(plugin, command)
+                session.messages.add(toolMessage(toolCallId, "命令已执行，输出：\n$output"))
+                sendToGroup(plugin, session, AgentMessageFormatter.executedCard(command, output))
+                return null
+            }
+            AgentCommandMode.AI -> {
+                // AI 审批：干净对话审查，拒绝则把理由回填给工作 Agent
+                val contextSummary = AgentContextManager.renderTranscript(
+                    session.messages.drop(maxOf(0, session.messages.size - 8))
+                )
+                val verdict = AiApprover.review(
+                    config,
+                    userTask = session.task.ifBlank { "（未记录）" },
+                    contextSummary = contextSummary,
+                    pendingAction = "执行服务器命令：$command",
+                    searchEnabled = config.searchProvider.isNotBlank() && config.searchProvider != "none"
+                )
+                if (verdict.approved) {
+                    val output = executeCommand(plugin, command)
+                    session.messages.add(toolMessage(toolCallId, "命令已通过 AI 审批并执行，输出：\n$output"))
+                    sendToGroup(plugin, session, AgentMessageFormatter.executedCard(command, output))
+                } else {
+                    session.messages.add(
+                        toolMessage(toolCallId, "AI 审批拒绝了该命令。理由：${verdict.reason}\n请向用户说明，不要再次尝试相同命令。")
+                    )
+                    sendToGroup(
+                        plugin, session,
+                        AgentMessageFormatter.error("AI 审批拦截了命令 $command：${verdict.reason}")
+                    )
+                }
+                return null
+            }
+            else -> {
+                requestApproval(plugin, session, toolCallId, command)
+                return "awaiting"
+            }
+        }
+    }
     private fun executeCommand(plugin: HuHoBot, command: String): String {
         return try {
             val execution = plugin.dispatchCommand(command)

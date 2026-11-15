@@ -3,6 +3,7 @@ package cn.huohuas001.bot.state
 import cn.huohuas001.bot.datapack.AdministratorAccessMode
 import cn.huohuas001.bot.datapack.BindingInfo
 import cn.huohuas001.bot.datapack.StoredCommandSettings
+import cn.huohuas001.bot.storage.SqliteStateStore
 import java.io.File
 import java.io.FileInputStream
 import java.nio.file.Files
@@ -27,6 +28,22 @@ internal class HumanReadableStateFile {
         }
 
         target = dataDirectory.resolve("command-state.ini")
+
+        // 可选 SQLite 后端：库里有数据以库为准；首次切换时把文件数据迁入库。
+        // INI 仍然照常落盘（人工可读 + 库损坏时的兜底），任何 SQLite 失败都回退纯文件模式。
+        val sqliteEnabled = runCatching {
+            cn.huohuas001.bot.provider.BotShared.getPluginOrNull()
+                ?.getStorageType()?.equals("sqlite", ignoreCase = true) == true
+        }.getOrDefault(false)
+        if (sqliteEnabled && SqliteStateStore.open(dataDirectory)) {
+            val fromDb = loadFromSqlite()
+            val snapshot = fromDb ?: (if (target!!.isFile) readIni(target!!, log) else StoredCommandSettings())
+            writeSqlite(snapshot)
+            save(snapshot)
+            if (fromDb == null) log("SQLite 存储已启用，文件数据已迁移入库")
+            return snapshot
+        }
+
         if (target!!.isFile) return readIni(target!!, log)
 
         val legacyFile = dataDirectory.resolve("command-state.properties")
@@ -37,8 +54,74 @@ internal class HumanReadableStateFile {
         return migrated
     }
 
+    /** 从 SQLite 装载状态；库为空时返回 null（走文件迁移）。 */
+    private fun loadFromSqlite(): StoredCommandSettings? {
+        if (!SqliteStateStore.isAvailable()) return null
+        val bindings = SqliteStateStore.readBindings()
+        if (bindings.isEmpty()) return null
+        return StoredCommandSettings(
+            administrators = readSectionAsUsers("administrators"),
+            authenticatedUsers = readSectionAsUsers("authenticated-users"),
+            administratorModes = readSectionAsModes("administrator-modes"),
+            fullForwarding = readSectionAsBooleans("full-forwarding"),
+            bindings = bindings.mapValues { (_, row) ->
+                cn.huohuas001.bot.datapack.BindingInfo(
+                    playerNames = row.playerNames,
+                    qqDisplayNameMode = row.qqMode,
+                    mcDisplayNameMode = row.mcMode,
+                    qqUsername = row.qqUsername,
+                    lockedPlayerNames = row.lockedNames
+                )
+            },
+            memberRoles = SqliteStateStore.readSection("member-roles")
+        )
+    }
+
+    private fun writeSqlite(snapshot: StoredCommandSettings) {
+        SqliteStateStore.writeSection("administrators", snapshot.administrators.mapValues { it.value.joinToString(",") })
+        SqliteStateStore.writeSection("authenticated-users", snapshot.authenticatedUsers.mapValues { it.value.joinToString(",") })
+        SqliteStateStore.writeSection("administrator-modes", snapshot.administratorModes.mapValues { it.value.name })
+        SqliteStateStore.writeSection("full-forwarding", snapshot.fullForwarding.mapValues { it.value.toString() })
+        SqliteStateStore.writeSection("member-roles", snapshot.memberRoles)
+        SqliteStateStore.writeBindings(
+            snapshot.bindings.mapValues { (_, info) ->
+                SqliteStateStore.BindingRow(
+                    info.playerNames, info.qqDisplayNameMode, info.mcDisplayNameMode,
+                    info.qqUsername, info.lockedPlayerNames
+                )
+            }
+        )
+    }
+
+    private fun readSectionAsUsers(section: String): LinkedHashMap<String, Set<String>> {
+        val out = LinkedHashMap<String, Set<String>>()
+        for ((key, value) in SqliteStateStore.readSection(section)) {
+            out[key] = value.split(',').map(String::trim).filter(String::isNotEmpty).toSet()
+        }
+        return out
+    }
+
+    private fun readSectionAsModes(section: String): LinkedHashMap<String, AdministratorAccessMode> {
+        val out = LinkedHashMap<String, AdministratorAccessMode>()
+        for ((key, value) in SqliteStateStore.readSection(section)) {
+            AdministratorAccessMode.entries.firstOrNull { it.name.equals(value, ignoreCase = true) }
+                ?.let { out[key] = it }
+        }
+        return out
+    }
+
+    private fun readSectionAsBooleans(section: String): LinkedHashMap<String, Boolean> {
+        val out = LinkedHashMap<String, Boolean>()
+        for ((key, value) in SqliteStateStore.readSection(section)) {
+            value.toBooleanStrictOrNull()?.let { out[key] = it }
+        }
+        return out
+    }
+
     @Synchronized
     fun save(snapshot: StoredCommandSettings) {
+        // SQLite 后端可用时同步写库；文件照常落盘作为人工可读兜底。
+        runCatching { writeSqlite(snapshot) }
         val outputFile = target ?: return
         outputFile.parentFile?.mkdirs()
         val temporaryFile = File(outputFile.absolutePath + ".tmp")

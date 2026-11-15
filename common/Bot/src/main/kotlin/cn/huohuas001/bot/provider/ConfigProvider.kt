@@ -299,6 +299,80 @@ interface ConfigProvider {
     /** Agent 请求的读超时（秒）；推理模型思考时间长时可调大。 */
     fun getAgentTimeoutSeconds(): Int = 120
 
+    /** Agent 自定义系统提示词；留空 = 使用内置默认提示词。 */
+    fun getAgentSystemPrompt(): String = ""
+
+    /** Agent 允许的工具名列表；空 = 全部可用（工具名见 AgentTools）。 */
+    fun getAgentTools(): List<String> = emptyList()
+
+    /** Agent 专属搜索 provider；空 = 不启用搜索。 */
+    fun getAgentSearchProvider(): String = ""
+    fun getAgentSearchApiUrl(): String = ""
+    fun getAgentSearchApiKey(): String = ""
+
+    // ------------------------------------------------------ 存储 / 语言 / 调试
+
+    /** 存储后端：file（默认）| sqlite */
+    fun getStorageType(): String = "file"
+
+    /** 界面语言：zh_CN（默认）| en_US */
+    fun getLanguage(): String = "zh_CN"
+
+    /** 调试模式：输出更详细的诊断日志（便于用户反馈问题时打开）。 */
+    fun isDebugEnabled(): Boolean = false
+
+    // ------------------------------------------------------ 群员聊天 AI（与工作 Agent 完全隔离）
+
+    fun getChatAiEnabled(): Boolean = false
+    fun getChatAiBaseUrl(): String? = null
+    fun getChatAiApiKey(): String? = null
+    fun getChatAiModel(): String? = null
+    /** 触发前缀（可选）；空 = 任何 @机器人 的非命令消息都会触发。 */
+    fun getChatAiTrigger(): String = ""
+    fun getChatAiThink(): Boolean = false
+    fun getChatAiThinkLevel(): String = ""
+    fun getChatAiThinkParam(): String = "reasoning_effort"
+    /** 聊天 AI 自定义系统提示词；留空 = 内置默认。 */
+    fun getChatAiSystemPrompt(): String = ""
+    /** 聊天 AI 允许的工具；空 = 仅搜索（若启用）。 */
+    fun getChatAiTools(): List<String> = emptyList()
+    /** 同群共享上下文保留条数。 */
+    fun getChatAiMaxContext(): Int = 30
+    fun getChatAiCompressTarget(): Int = 4000
+    fun getChatAiCompressKeep(): Int = 20
+    fun getChatAiSearchProvider(): String = ""
+    fun getChatAiSearchApiUrl(): String = ""
+    fun getChatAiSearchApiKey(): String = ""
+
+    // ------------------------------------------------------ 全局搜索（聊天 AI / Agent 各自可覆盖）
+
+    /** none | bing（原生必应抓取，无需密钥）| custom */
+    fun getSearchProvider(): String = "none"
+    fun getSearchApiUrl(): String = ""
+    fun getSearchApiKey(): String = ""
+    fun getSearchResultCount(): Int = 5
+
+    // ------------------------------------------------------ 网络代理（AI 请求 / 搜索 / 更新检查）
+
+    fun getProxyEnabled(): Boolean = false
+    fun getProxyType(): String = "http"
+    fun getProxyHost(): String = ""
+    fun getProxyPort(): Int = 8080
+
+    // ------------------------------------------------------ 入群自动审批
+
+    /** 是否启用入群自动审批（需要 QQ 白名单能力接口，不可用时自动降级关闭）。 */
+    fun isJoinApproveEnabled(): Boolean = false
+
+    /** 入群审批轮询间隔（秒）；0 = 不轮询。 */
+    fun getJoinApproveIntervalSeconds(): Int = 30
+
+    /** 平台服务器诊断文本（TPS/MSPT/内存/运行时长）；未实现返回 null。 */
+    fun getServerDiagnostics(): String? = null
+
+    /** 玩家统计文本（击杀/死亡/时长/等级/坐标）；玩家不在线返回 null。 */
+    fun getPlayerStatsText(playerName: String): String? = null
+
     /** 获取类工具结果只交给 AI，不在群里发卡片（默认开启）。 */
     fun isAgentFetchResultHidden(): Boolean = true
 

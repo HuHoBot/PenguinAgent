@@ -25,6 +25,27 @@ object AgentTools {
     /** 加载命令语法 SKILL（按需加载，减少 token 消耗）。 */
     const val TOOL_LOAD_SKILL = "load_skill"
 
+    // ── 服务器只读工具（新增） ──
+
+    /** 实时状态：TPS/内存/在线人数/运行时长 */
+    const val TOOL_GET_SERVER_STATUS = "get_server_status"
+
+    /** 在线玩家列表 */
+    const val TOOL_GET_ONLINE_LIST = "get_online_list"
+
+    /** 玩家统计数值（击杀/死亡/游戏时长/等级/坐标） */
+    const val TOOL_GET_PLAYER_INFO = "get_player_info"
+
+    /** 玩家背包（文本形式） */
+    const val TOOL_GET_PLAYER_INVENTORY = "get_player_inventory"
+
+    /** 定时任务管理 */
+    const val TOOL_CREATE_TIMED_TASK = "create_timed_task"
+    const val TOOL_DELETE_TIMED_TASK = "delete_timed_task"
+
+    /** 联网搜索（配置了搜索 provider 时可用） */
+    const val TOOL_WEB_SEARCH = "web_search"
+
     // ── QQ 群管理工具 ──
 
     /** 获取群基本信息 */
@@ -177,6 +198,30 @@ object AgentTools {
                 })
             })
         })
+        // ── 服务器只读工具 ──
+        add(toolDef(TOOL_GET_SERVER_STATUS, "获取服务器实时状态：TPS、内存占用、在线人数、运行时长。判断服务器是否卡顿时使用。", mapOf()))
+        add(toolDef(TOOL_GET_ONLINE_LIST, "获取当前在线玩家列表。", mapOf()))
+        add(toolDef(TOOL_GET_PLAYER_INFO, "获取玩家的统计数值：击杀数、死亡数、游戏时长、等级、所在位置。", mapOf(
+            "player" to "玩家名"
+        )))
+        add(toolDef(TOOL_GET_PLAYER_INVENTORY, "以文本形式查看玩家背包内容（主背包+盔甲+副手）。", mapOf(
+            "player" to "玩家名（在线玩家；离线玩家返回快照）"
+        )))
+        add(toolDef(TOOL_CREATE_TIMED_TASK, "创建定时任务（持久化到 timed-tasks.yml，立即生效）。动作可同时给 message 与 command。", mapOf(
+            "name" to "任务名（唯一）",
+            "cron" to "cron 表达式（分 时 日 月 周，如 \"0 9 * * *\"）；与 interval-seconds 二选一",
+            "interval_seconds" to "间隔秒数（与 cron 二选一）",
+            "group" to "目标群 OpenID（可选，空=全部群）",
+            "message" to "发送到群的消息（可选）",
+            "command" to "要执行的服务器命令（可选，会过黑名单）"
+        )))
+        add(toolDef(TOOL_DELETE_TIMED_TASK, "删除指定名称的定时任务。", mapOf(
+            "name" to "任务名"
+        )))
+        add(toolDef(TOOL_WEB_SEARCH, "联网搜索（需要在配置中启用搜索 provider）。", mapOf(
+            "query" to "搜索关键词"
+        )))
+
         // ── QQ 群管理工具 ──
         add(toolDef(TOOL_GET_GROUP_INFO, "获取当前 QQ 群基本信息（群名、人数、标签等）。group_openid 已自动绑定当前群，无需提供。", mapOf(
             "group_openid" to "群 OpenID（可选，已自动绑定当前群）"
@@ -333,6 +378,67 @@ object AgentTools {
         } catch (error: Throwable) {
             ToolResult("加载 SKILL 失败: ${error.message}")
         }
+    }
+
+    // ── 共享辅助（聊天 AI / Agent 通用） ──
+
+    /** web_search 工具定义（ChatAiManager 复用）。 */
+    fun webSearchTool(): JSONObject = JSONObject().apply {
+        put("type", "function")
+        put("function", JSONObject().apply {
+            put("name", TOOL_WEB_SEARCH)
+            put("description", "联网搜索。需要在配置中启用搜索 provider。")
+            put("parameters", JSONObject().apply {
+                put("type", "object")
+                put("properties", JSONObject().apply {
+                    put("query", JSONObject().apply {
+                        put("type", "string"); put("description", "搜索关键词")
+                    })
+                })
+                put("required", JSONArray().apply { add("query") })
+            })
+        })
+    }
+
+    /** 服务器状态文本（get_server_status 输出）。 */
+    fun getServerStatusText(plugin: HuHoBot): String {
+        val diagnostics = plugin.getServerDiagnostics()
+        val online = plugin.getOnlineList()
+        return buildString {
+            appendLine(diagnostics ?: "诊断信息不可用（当前平台未实现）")
+            appendLine("在线玩家(${online.size}): ${online.joinToString("、").ifBlank { "无" }}")
+        }.trim()
+    }
+
+    /** 定时任务工具执行（返回文本）。 */
+    fun executeTimedTaskTool(name: String, args: JSONObject): String = when (name) {
+        TOOL_CREATE_TIMED_TASK -> createTimedTask(args)
+        TOOL_DELETE_TIMED_TASK -> {
+            val ok = cn.huohuas001.bot.tasks.TimedTaskManager.remove(args.getString("name").orEmpty().trim())
+            if (ok) "定时任务已删除" else "未找到该名称的定时任务"
+        }
+        else -> "未知定时任务操作"
+    }
+
+    private fun createTimedTask(args: JSONObject): String {
+        val taskName = args.getString("name")?.trim().orEmpty()
+        if (taskName.isEmpty()) return "任务名不能为空"
+        val cron = args.getString("cron")?.trim()?.takeIf(String::isNotEmpty)
+        val interval = args.getLong("interval_seconds") ?: 0L
+        if (cron == null && interval <= 0) return "必须提供 cron 或 interval_seconds 之一"
+        val message = args.getString("message").orEmpty()
+        val command = args.getString("command").orEmpty()
+        if (message.isBlank() && command.isBlank()) return "message 与 command 至少提供一个"
+        val ok = cn.huohuas001.bot.tasks.TimedTaskManager.upsert(
+            cn.huohuas001.bot.tasks.TimedTaskManager.Task(
+                name = taskName, cron = cron, intervalSeconds = interval,
+                group = args.getString("group").orEmpty().trim(),
+                message = message, command = command
+            )
+        )
+        return if (ok) {
+            "定时任务「$taskName」已创建并生效。${if (command.isNotBlank()) "注意：命令执行会过黑名单。" else ""}"
+        } else "创建失败（无法写入 timed-tasks.yml）"
     }
 
     // ── QQ 群管理工具执行方法 ──
