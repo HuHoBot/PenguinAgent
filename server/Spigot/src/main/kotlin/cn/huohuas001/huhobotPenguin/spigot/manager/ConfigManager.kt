@@ -544,7 +544,9 @@ class ConfigManager(
     fun joinApproveStrategies(): List<com.alibaba.fastjson.JSONObject> =
         plugin.config.getMapList("join-approve.strategies").mapNotNull { map ->
             val obj = com.alibaba.fastjson.JSONObject()
-            for ((k, v) in map) obj[k] = v
+            for ((k, v) in map) {
+                if (k is String) obj[k] = v
+            }
             if (obj.getString("mode").isNullOrBlank()) null else obj
         }
 
@@ -618,7 +620,7 @@ class ConfigManager(
     }
 
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 13
+        private const val CURRENT_CONFIG_VERSION = 14
         private const val CONFIG_VERSION_PATH = "config-version"
 
         /**
@@ -723,6 +725,38 @@ class ConfigManager(
             "agent.enabled" to "AI Agent 总开关",
             "agent.base-url" to "AI Agent 的 OpenAI 兼容接口地址",
             "agent.api-key" to "AI Agent 的接口密钥",
+            "language" to "插件消息语言：zh_CN / en_US",
+            "debug" to "调试模式：输出更详细的诊断日志，便于反馈问题",
+            "storage.type" to "状态存储后端：file(默认) 或 sqlite",
+            "agent.system-prompt" to "Agent 自定义系统提示词；留空使用内置默认",
+            "agent.search.provider" to "Agent 联网搜索：bing(原生必应) / custom(自定义API)；留空关闭",
+            "agent.search.api-url" to "自定义搜索 API 地址，支持 {query} {count} {apikey} 占位符模板或 POST JSON",
+            "agent.search.api-key" to "自定义搜索 API 密钥",
+            "chat-ai.enabled" to "群员聊天 AI 总开关（与工作 Agent 完全隔离：独立 API/提示词/工具/上下文）",
+            "chat-ai.base-url" to "聊天 AI 的 OpenAI 兼容接口地址",
+            "chat-ai.api-key" to "聊天 AI 的接口密钥",
+            "chat-ai.model" to "聊天 AI 模型名",
+            "chat-ai.trigger" to "聊天 AI 触发前缀（可选）；留空=@机器人 的任何非命令消息",
+            "chat-ai.think" to "聊天 AI 思考参数开关",
+            "chat-ai.think-level" to "聊天 AI 思考程度档位",
+            "chat-ai.think-param" to "聊天 AI 思考参数名",
+            "chat-ai.system-prompt" to "聊天 AI 自定义系统提示词；留空使用内置默认",
+            "chat-ai.max-context" to "同群共享上下文保留条数（跨群隔离）",
+            "chat-ai.compress.target" to "聊天 AI 上下文压缩目标 token",
+            "chat-ai.compress.keep" to "聊天 AI 压缩时保留的最近条数",
+            "chat-ai.search.provider" to "聊天 AI 搜索：bing / custom；留空关闭",
+            "chat-ai.search.api-url" to "聊天 AI 自定义搜索地址",
+            "chat-ai.search.api-key" to "聊天 AI 自定义搜索密钥",
+            "search.provider" to "全局搜索默认：none / bing / custom",
+            "search.api-url" to "全局自定义搜索地址",
+            "search.api-key" to "全局自定义搜索密钥",
+            "search.result-count" to "搜索返回条数(1-10)",
+            "network.proxy.enabled" to "网络代理总开关（AI 请求/搜索/更新检查）",
+            "network.proxy.type" to "代理类型：http / socks",
+            "network.proxy.host" to "代理主机",
+            "network.proxy.port" to "代理端口",
+            "join-approve.enabled" to "入群自动审批开关（需 QQ 白名单能力，不可用时自动停用）",
+            "join-approve.interval-seconds" to "入群审批轮询间隔秒数(10-600)",
             "agent.model" to "AI Agent 使用的模型名",
             "agent.command-mode" to "AI Agent 命令执行模式：auto 自动执行 / manual 手动审批",
             "agent.hide-fetch-results" to "获取类工具（插件列表/命令帮助/服务器日志）结果只交给 AI，不在群里发卡片",
@@ -846,6 +880,44 @@ class ConfigManager(
             put("agent.enabled", false)
             put("agent.base-url", "")
             put("agent.api-key", "")
+
+            put("language", "zh_CN")
+            put("debug", false)
+            put("storage.type", "file")
+
+            put("agent.system-prompt", "")
+            put("agent.search.provider", "")
+            put("agent.search.api-url", "")
+            put("agent.search.api-key", "")
+
+            put("chat-ai.enabled", false)
+            put("chat-ai.base-url", "")
+            put("chat-ai.api-key", "")
+            put("chat-ai.model", "gpt-4o-mini")
+            put("chat-ai.trigger", "")
+            put("chat-ai.think", false)
+            put("chat-ai.think-level", "")
+            put("chat-ai.think-param", "reasoning_effort")
+            put("chat-ai.system-prompt", "")
+            put("chat-ai.max-context", 30)
+            put("chat-ai.compress.target", 4000)
+            put("chat-ai.compress.keep", 20)
+            put("chat-ai.search.provider", "")
+            put("chat-ai.search.api-url", "")
+            put("chat-ai.search.api-key", "")
+
+            put("search.provider", "none")
+            put("search.api-url", "")
+            put("search.api-key", "")
+            put("search.result-count", 5)
+
+            put("network.proxy.enabled", false)
+            put("network.proxy.type", "http")
+            put("network.proxy.host", "")
+            put("network.proxy.port", 8080)
+
+            put("join-approve.enabled", false)
+            put("join-approve.interval-seconds", 30)
             put("agent.model", "gpt-4o-mini")
             put("agent.command-mode", "manual")
             put("agent.hide-fetch-results", true)

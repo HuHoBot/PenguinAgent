@@ -20,6 +20,7 @@ import cn.huohuas001.huhobotPenguin.spigot.commands.HuHoBotCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.SendCommand
 import cn.huohuas001.huhobotPenguin.spigot.commands.HybridCommandExecutor
 import cn.huohuas001.huhobotPenguin.spigot.events.AccountLockGuard
+import cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler
 import cn.huohuas001.huhobotPenguin.spigot.events.ForceBindGuard
 import cn.huohuas001.huhobotPenguin.spigot.events.GameChat
 import cn.huohuas001.huhobotPenguin.spigot.events.OnBotCommand
@@ -158,6 +159,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         }
         scriptAddonLoader = null
         if (::offlineInventorySnapshots.isInitialized) offlineInventorySnapshots.close()
+        cn.huohuas001.bot.agent.JoinApproveManager.stop()
+        cn.huohuas001.bot.storage.SqliteStateStore.close()
         OnlineListBridge.handler = null
         onlineListManager?.stop()
         onlineListManager = null
@@ -542,13 +545,14 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         HuHoBotTask(server.scheduler.runTask(this, task))
 
     override fun submitAsync(task: Runnable): Cancelable =
-        HuHoBotTask(server.scheduler.runTaskAsynchronously(this, task))
+        FoliaScheduler.runAsync(this, task) ?: HuHoBotTask(server.scheduler.runTaskAsynchronously(this, task))
 
     override fun submitLater(delay: Long, task: Runnable): Cancelable =
-        HuHoBotTask(server.scheduler.runTaskLater(this, task, delay))
+        FoliaScheduler.runLater(this, delay, task) ?: HuHoBotTask(server.scheduler.runTaskLater(this, task, delay))
 
     override fun submitTimer(delay: Long, period: Long, task: Runnable): Cancelable =
-        HuHoBotTask(server.scheduler.runTaskTimer(this, task, delay, period))
+        FoliaScheduler.runTimer(this, delay, period, task)
+            ?: HuHoBotTask(server.scheduler.runTaskTimer(this, task, delay, period))
 
     override fun getOnlineList(): List<String> = server.onlinePlayers.map { it.name }.toMutableList()
 

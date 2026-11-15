@@ -1,4 +1,4 @@
-config-version: 13
+config-version: 14
 
 # WebUI 端口，访问 http://127.0.0.1:<port> 管理配置。
 webui-port: 5678
@@ -313,3 +313,79 @@ custom-commands:
   # - key: "公告"
   #   command: "say {params}"
   #   permission: 1
+
+# ─────────────────── 通用 ───────────────────
+
+# 插件消息语言：zh_CN / en_US
+language: "zh_CN"
+
+# 调试模式：输出更详细的诊断日志，便于反馈问题时打开
+debug: false
+
+# 状态存储后端：file(默认，command-state.ini) 或 sqlite(storage.db)
+storage:
+  type: "file"
+
+# ─────────────────── AI Agent 扩展 ───────────────────
+
+# Agent 联网搜索：provider 留空关闭；bing=原生必应(无需密钥)；custom=自定义 API
+agent:
+  search:
+    provider: ""
+    api-url: ""    # 支持 {query} {count} {apikey} 占位符的 GET 模板，或直接 POST {"query":...}
+    api-key: ""
+
+# ─────────────────── 群员聊天 AI ───────────────────
+# 与工作 Agent 完全隔离：独立接口/模型/提示词/工具/上下文
+# 同一群内所有群员共享一条聊天记录；不同群之间互相隔离
+
+chat-ai:
+  enabled: false
+  base-url: ""
+  api-key: ""
+  model: "gpt-4o-mini"
+  trigger: ""          # 触发前缀(可选)；留空=任何 @机器人 的非命令消息
+  think: false
+  think-level: ""
+  think-param: "reasoning_effort"
+  system-prompt: ""    # 留空使用内置默认
+  tools: []            # 允许的工具名；留空=仅搜索(若启用)
+  max-context: 30
+  compress:
+    target: 4000
+    keep: 20
+  search:
+    provider: ""
+    api-url: ""
+    api-key: ""
+
+# ─────────────────── 联网搜索(全局默认) ───────────────────
+
+search:
+  provider: "none"     # none / bing / custom
+  api-url: ""
+  api-key: ""
+  result-count: 5
+
+# ─────────────────── 网络代理 ───────────────────
+
+network:
+  proxy:
+    enabled: false
+    type: "http"       # http / socks
+    host: ""
+    port: 8080
+
+# ─────────────────── 入群自动审批 ───────────────────
+# 需要 QQ 白名单能力接口(普通机器人返回 11253 时自动停用)
+# 策略按顺序匹配，第一条命中生效；openids 空=对所有申请生效
+
+join-approve:
+  enabled: false
+  interval-seconds: 30
+  strategies: []
+  #  - name: "自动通过"
+  #    mode: "allow"        # allow=通过 / deny=拒绝
+  #    openids: []
+  #    reject-reason: ""
+
