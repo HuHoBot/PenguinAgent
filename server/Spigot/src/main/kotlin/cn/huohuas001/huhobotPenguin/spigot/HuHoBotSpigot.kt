@@ -967,6 +967,53 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getPlayerStatsText(playerName: String): String? =
         runCatching { buildPlayerStats(playerName) }.getOrNull()
 
+    override fun getProtocolSummary(): String? = runCatching { buildProtocolSummary() }.getOrNull()
+
+    /** 协议与跨版本支持摘要：本服协议 + ViaVersion 支持范围（防御式反射，失败返回 null）。 */
+    private fun buildProtocolSummary(): String? {
+        val mcVersion = try {
+            org.bukkit.Bukkit::class.java.getMethod("getMinecraftVersion").invoke(null)?.toString()
+        } catch (_: Throwable) {
+            null
+        }
+        val protocol = try {
+            val cls = Class.forName("org.bukkit.Bukkit")
+            // Bukkit.getUnsafe()?不同版本差异大，直接读 NMS version.json 太重；用 Paper 的 getMinecraftProtocolVersion 若存在
+            cls.methods.firstOrNull { it.name == "getMinecraftProtocolVersion" }?.invoke(null)?.toString()
+        } catch (_: Throwable) {
+            null
+        }
+        val viaRange = try {
+            val pvClass = Class.forName("com.viaversion.viaversion.api.protocol.version.ProtocolVersion")
+            val registered = pvClass.methods.firstOrNull { it.name == "registeredVersions" }?.invoke(null) as? Collection<*>
+            if (registered.isNullOrEmpty()) null
+            else {
+                data class Entry(val version: Int, val name: String?)
+                val entries = registered.mapNotNull { item ->
+                    val ver = pvClass.methods.firstOrNull { it.name == "getVersion" && it.parameterCount == 0 }
+                        ?.invoke(item) as? Int ?: return@mapNotNull null
+                    val name = pvClass.methods.firstOrNull { it.name == "getName" && it.parameterCount == 0 }
+                        ?.invoke(item) as? String
+                    Entry(ver, name)
+                }
+                if (entries.isEmpty()) null
+                else {
+                    val min = entries.minByOrNull { it.version }!!
+                    val max = entries.maxByOrNull { it.version }!!
+                    "支持 ${min.name ?: min.version} – ${max.name ?: max.version}(ViaVersion)"
+                }
+            }
+        } catch (_: Throwable) {
+            null
+        }
+        val parts = mutableListOf<String>()
+        if (mcVersion?.isNotBlank() == true) {
+            parts.add(if (protocol?.isNotBlank() == true) "协议 $protocol ($mcVersion)" else mcVersion)
+        }
+        viaRange?.let { parts.add(it) }
+        return if (parts.isEmpty()) null else parts.joinToString(" · ")
+    }
+
     /** 服务器实时诊断文本（TPS 反射 Paper/Spigot 双兼容，失败项自动跳过）。 */
     private fun buildServerDiagnostics(): String {
         val runtime = Runtime.getRuntime()

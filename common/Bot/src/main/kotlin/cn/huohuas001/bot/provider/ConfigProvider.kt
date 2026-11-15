@@ -376,6 +376,12 @@ interface ConfigProvider {
     /** 玩家统计文本（击杀/死亡/时长/等级/坐标）；玩家不在线返回 null。 */
     fun getPlayerStatsText(playerName: String): String? = null
 
+    /**
+     * 协议/版本支持摘要（如 "协议 767 (1.21) · 支持 1.8.8 – 1.21.11 (ViaVersion)"）；
+     * 未实现或检测失败返回 null。
+     */
+    fun getProtocolSummary(): String? = null
+
     /** 获取类工具结果只交给 AI，不在群里发卡片（默认开启）。 */
     fun isAgentFetchResultHidden(): Boolean = true
 

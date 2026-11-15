@@ -25,7 +25,8 @@ class OnlineListRenderer(
     private val avatarCache: AvatarCache,
     private val columns: Int,
     private val configuredFont: String,
-    private val footerText: String
+    private val footerText: String,
+    private val protocolSummary: String? = null
 ) {
     companion object {
         const val WIDTH = 1200
@@ -80,6 +81,7 @@ class OnlineListRenderer(
     private val contentBottomSafe = if (compact) 60 else 86
     private val fontFamily = chooseFont(configuredFont)
     private val safeFooterText = footerText.trim()
+    private val safeProtocolSummary = protocolSummary?.trim()
 
     init {
         validateSlice(header, WIDTH, HEADER_HEIGHT, "header")
@@ -331,6 +333,11 @@ class OnlineListRenderer(
         if (safeFooterText.isNotEmpty()) {
             graphics.font = font(Font.PLAIN, 18)
             drawCentered(graphics, safeFooterText, footerTop + 73, Color(226, 249, 255, 180))
+        }
+        // 协议/跨版本支持摘要(有 ViaVersion 时显示支持范围)
+        safeProtocolSummary?.takeIf(String::isNotBlank)?.let { summary ->
+            graphics.font = font(Font.PLAIN, 17)
+            drawCentered(graphics, summary, footerTop + 106, Color(226, 249, 255, 150))
         }
 
         // 用同一玻璃胶囊内的无装饰纹理覆盖原有四个方块，再写入动态页码。
