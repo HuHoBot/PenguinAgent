@@ -20,19 +20,7 @@ interface SchedulerProvider {
         }
     }
 
-    /**
-     * 延迟执行任务。
-     *
-     * @param delay 延迟，单位 **tick**（20 tick = 1 秒）。需要毫秒时请自行换算，
-     *              例如 `submitLater(ms / 50)`。
-     */
     fun submitLater(delay: Long, task: Runnable): Cancelable
 
-    /**
-     * 周期执行任务。
-     *
-     * @param delay 首次延迟，单位 **tick**（20 tick = 1 秒）
-     * @param period 周期间隔，单位 **tick**
-     */
     fun submitTimer(delay: Long, period: Long, task: Runnable): Cancelable
 }

@@ -35,20 +35,10 @@ import java.util.concurrent.TimeUnit
 object QClient {
     private const val KEYBOARD_RECALL_DELAY_SECONDS = 30L
     private const val GROUP_NAME_RETRY_MILLIS = 30_000L
-    private const val MILLIS_PER_TICK = 50L
     private const val GROUP_PANELS_SYNC_RETRY_MILLIS = 1_000L
     private const val GROUP_PANELS_SYNC_MAX_ATTEMPTS = 120
     /** 写接口限频 10 QPM，两次同步至少隔 6 秒。 */
     private const val GROUP_PANELS_SYNC_MIN_INTERVAL_MS = 6_000L
-    /** 同步失败（限频 / 面板数量上限等）后的退避重试间隔。 */
-    private const val GROUP_PANELS_SYNC_FAILURE_RETRY_MILLIS = 30_000L
-    private const val GROUP_PANELS_SYNC_FAILURE_MAX_ATTEMPTS = 5
-
-    /**
-     * [SchedulerProvider.submitLater] / [SchedulerProvider.submitTimer] 的 delay 单位是 tick，
-     * 常量按毫秒命名，调用前必须转换（20 tick = 1 秒）。
-     */
-    private fun millisToTicks(millis: Long): Long = (millis / MILLIS_PER_TICK).coerceAtLeast(1L)
 
     private val groupNameAttempts = ConcurrentHashMap<String, Long>()
 
@@ -83,10 +73,6 @@ object QClient {
     private var groupPanelsSyncThrottled: Cancelable? = null
 
     @Volatile
-    private var groupPanelsSyncFailureRetry: Cancelable? = null
-    private val groupPanelsSyncFailureAttempts = java.util.concurrent.atomic.AtomicInteger(0)
-
-    @Volatile
     private var lastGroupPanelsSyncAt = 0L
 
     /** 获取 QQ Bot Starter 实例（供 Agent 群管理 API 使用）。 */
@@ -106,8 +92,7 @@ object QClient {
     private fun scheduleGroupPanelsSyncRetry() {
         if (groupPanelsSyncRetry != null) return
         var attempts = 0
-        val retryTicks = millisToTicks(GROUP_PANELS_SYNC_RETRY_MILLIS)
-        groupPanelsSyncRetry = BotShared.getPlugin().submitTimer(retryTicks, retryTicks) {
+        groupPanelsSyncRetry = BotShared.getPlugin().submitTimer(GROUP_PANELS_SYNC_RETRY_MILLIS, GROUP_PANELS_SYNC_RETRY_MILLIS) {
             if (!groupPanelsSyncPending) return@submitTimer
             attempts++
             if (isQqAuthenticated()) {
@@ -118,29 +103,6 @@ object QClient {
                 groupPanelsSyncRetry = null
                 BotShared.getPlugin().log_warning("面板同步: 等待 QQ 鉴权超时，已放弃本次同步")
             }
-        }
-    }
-
-    /**
-     * 面板同步失败后的退避重试。
-     *
-     * 40030009（操作进行中 / 限频）和 30013（面板数量上限）都是一次失败后可以再试的场景；
-     * 没有重试的话，WebUI 保存或启动时的单次失败会让群面板一直不刷新。
-     */
-    private fun scheduleGroupPanelsSyncFailureRetry() {
-        if (groupPanelsSyncFailureRetry != null) return
-        val attempt = groupPanelsSyncFailureAttempts.incrementAndGet()
-        if (attempt > GROUP_PANELS_SYNC_FAILURE_MAX_ATTEMPTS) {
-            BotShared.getPlugin().log_warning(
-                "面板同步连续失败 $GROUP_PANELS_SYNC_FAILURE_MAX_ATTEMPTS 次，已停止自动重试；" +
-                    "请检查 QQ 开放平台上面板数量是否已达 20 个上限"
-            )
-            return
-        }
-        val delayMs = GROUP_PANELS_SYNC_FAILURE_RETRY_MILLIS * attempt
-        groupPanelsSyncFailureRetry = BotShared.getPlugin().submitLater(millisToTicks(delayMs)) {
-            groupPanelsSyncFailureRetry = null
-            syncGroupPanels()
         }
     }
 
@@ -180,12 +142,6 @@ object QClient {
      *    （限频会返回 40030009）或自己和自己撞出 30019。
      */
     fun syncGroupPanels() {
-        // 同步里有阻塞 HTTP 与限频 sleep，必须离开主线程；调度器回调也可能落在主线程。
-        // 关服/重载期间调度器可能已关闭，忽略提交失败即可。
-        runCatching { BotShared.getPlugin().submitAsync { runGroupPanelsSync() } }
-    }
-
-    private fun runGroupPanelsSync() {
         if (!groupPanelsSyncRunning.compareAndSet(false, true)) {
             groupPanelsSyncQueued.set(true)
             return
@@ -212,7 +168,7 @@ object QClient {
     /** 节流后的补跑；同时只会有一个待跑定时器。 */
     private fun scheduleGroupPanelsSyncThrottle(delayMs: Long) {
         if (groupPanelsSyncThrottled != null) return
-        groupPanelsSyncThrottled = BotShared.getPlugin().submitLater(millisToTicks(delayMs)) {
+        groupPanelsSyncThrottled = BotShared.getPlugin().submitLater(delayMs.coerceAtLeast(0L)) {
             groupPanelsSyncThrottled = null
             syncGroupPanels()
         }
@@ -243,19 +199,12 @@ object QClient {
                 onlyAdmin = it.permission > 0
             )
         }
-        val synced = MenuManager.syncGroupPanels(
+        MenuManager.syncGroupPanels(
             starter = starter,
             groupOpenIds = plugin.getGroupOpenIdList(),
             allBuiltInCommands = allCommands,
             customCommands = customCommands
         )
-        if (synced) {
-            groupPanelsSyncFailureAttempts.set(0)
-            groupPanelsSyncFailureRetry?.cancel()
-            groupPanelsSyncFailureRetry = null
-        } else {
-            scheduleGroupPanelsSyncFailureRetry()
-        }
     }
 
     fun launchClient(appid: String, secret: String, logFilePattern: String? = null) {

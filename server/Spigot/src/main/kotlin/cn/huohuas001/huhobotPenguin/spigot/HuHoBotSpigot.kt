@@ -202,8 +202,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
      */
     private fun scheduleForceBindCheck() {
         if (!configManager.isForceBindEnabled()) return
-        // submitLater 的 delay 单位是 tick（20 tick = 1 秒）
-        submitLater(FORCE_BIND_CHECK_DELAY_MS / 50L) {
+        submitLater(FORCE_BIND_CHECK_DELAY_MS) {
             ensureForceBindAvailable()
         }
     }

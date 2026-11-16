@@ -23,66 +23,33 @@ object MenuManager {
     private const val MAX_DUPLICATE_DELETES_PER_SYNC = 10
     /** 官方文档：指令面板写操作限频 10 QPM。 */
     private const val PANEL_UPDATE_RETRY_DELAY_MS = 1_000L
-    /** 多次写操作之间的最小间隔：10 QPM ≈ 每 6 秒一次，留一点余量。 */
-    private const val PANEL_WRITE_INTERVAL_MS = 6_500L
 
-    private const val LEGACY_REMARK = "HuHoBot 指令面板"
-
-    /**
-     * 同一份有效配置的群共享一个面板。
-     *
-     * [signature] 只用于本次同步内分组，**不写进面板备注**——备注必须跨次同步保持稳定，
-     * 否则命令或配置一变就会创建新面板并删除旧面板（见 [syncGroupPanels] 的说明）。
-     */
     private data class PanelProfile(
         val signature: String,
-        val items: List<JSONObject>,
-        val groups: MutableList<String> = mutableListOf()
-    )
-
-    /** 一个 profile 最终落到的面板。 */
-    private data class PanelAssignment(
-        val profile: PanelProfile,
         val remark: String,
-        /** 复用已有面板时的详情（含当前关联群）；新建面板为 null。 */
-        val record: PanelRecord?
+        val items: List<JSONObject>,
+        val groups: MutableList<String>
     )
 
-    /**
-     * 同步所有群的指令面板。
-     *
-     * **复用已有受管面板，不要删旧建新。** QQ 客户端会缓存群当前的面板 ID：
-     * 1.21.0 把配置哈希写进面板备注，命令或群配置一变就创建新面板、删除旧面板，
-     * 结果群上短暂或长期挂着多个面板 / 已失效的 panel_id，表现为「QQ 面板不再弹出」；
-     * 反复创建还会撞上 QQ 的 20 个面板上限和 10 QPM 写频率限制。
-     *
-     * 现在的策略：
-     * 1. 按有效配置分组，槽位 0 使用旧备注，升级时直接接管历史面板（panel_id 保持不变）；
-     * 2. 优先按备注匹配面板，匹配不到就复用一个空闲受管面板并原位更新；
-     * 3. 只有受管面板数量不够时才新建；
-     * 4. 最后对齐复用面板的关联群，再清理多余的历史面板。
-     *
-     * @return true 表示本次同步没有出现创建/更新失败（目标群对齐失败只记日志，不影响返回值）。
-     */
     fun syncGroupPanels(
         starter: Starter,
         groupOpenIds: List<String>,
         allBuiltInCommands: Collection<RegisteredCommand>,
         customCommands: Collection<RegisteredCommand> = emptyList()
-    ): Boolean {
-        val plugin = BotShared.getPlugin() ?: return false
+    ) {
+        val plugin = BotShared.getPlugin() ?: return
         val groups = groupOpenIds.map(String::trim).filter(String::isNotEmpty).distinct()
         if (groups.isEmpty()) {
             plugin.log_warning("面板同步跳过: 未配置群 OpenId")
-            return true
+            return
         }
 
-        return try {
+        try {
             val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
             val token = start0.accessToken
             if (token == null) {
                 plugin.log_warning("面板同步跳过: accessToken 为空")
-                return true
+                return
             }
             val authHeader = "QQBot $token"
 
@@ -93,79 +60,44 @@ object MenuManager {
                 if (items.isEmpty()) continue
                 val limited = if (items.size > MAX_ITEMS) items.take(MAX_ITEMS) else items
                 val signature = panelSignature(limited, plugin.showAdminCommandsInMenu(groupId))
-                profiles.getOrPut(signature) { PanelProfile(signature, limited) }.groups += groupId
-            }
-            if (profiles.isEmpty()) {
-                plugin.log_warning("没有可推送到指令面板的命令，跳过指令面板同步")
-                return true
-            }
-
-            val managed = listPanels(authHeader, "group")
-                .filter { isManagedRemark(it.remark) }
-                // 列表接口不返回 group_openids，取一次详情用于复用打分与目标群增删
-                .map { record -> getPanel(authHeader, record.id) ?: record }
-            val freePanels = managed.toMutableList()
-            val assignments = linkedMapOf<String, PanelAssignment>()
-            var createFailed = false
-
-            profiles.values.forEachIndexed { index, profile ->
-                val remark = remarkForSlot(index)
-                // 先找同名备注；找不到就挑一个空闲面板复用（优先已关联本 profile 群的）
-                val reused = choosePanelForReuse(freePanels, remark, profile.groups)
-                if (reused != null) freePanels.remove(reused)
-
-                var panelId: String? = null
-                if (reused != null) {
-                    val updated = runCatching {
-                        updatePanelWithVersion(authHeader, reused, profile.items, remark)
-                    }.onFailure {
-                        plugin.log_warning("更新指令面板失败 (${reused.id}, $remark): ${it.message}")
-                    }.isSuccess
-                    if (updated) panelId = reused.id
+                val profile = profiles.getOrPut(signature) {
+                    PanelProfile(signature, "$PANEL_REMARK #$signature", limited, mutableListOf())
                 }
-                if (panelId == null) {
-                    panelId = createPanelForGroups(authHeader, remark, profile.items, profile.groups)
-                    if (panelId == null) {
-                        createFailed = true
-                        plugin.log_warning("指令面板注册失败（$remark）: 未获取到 panel_id")
-                        if (reused != null) freePanels.add(reused)
-                    } else {
-                        plugin.log_info(
-                            "指令面板已创建 ($remark, panel_id=$panelId, " +
-                                "commands=${profile.items.size}, groups=${profile.groups.size})"
-                        )
-                    }
+                profile.groups += groupId
+            }
+
+            val allPanels = listPanels(authHeader, "group")
+            val managed = allPanels.filter { isManagedRemark(it.remark) }
+            val managedByRemark = managed.associateBy { it.remark }.toMutableMap()
+            val usedPanelIds = mutableSetOf<String>()
+
+            for (profile in profiles.values) {
+                val existing = managedByRemark[profile.remark]?.let { getPanel(authHeader, it.id) ?: it }
+                val panelId = if (existing != null) {
+                    updatePanelWithVersion(authHeader, existing, profile.items)
+                    syncPanelTargets(authHeader, existing, profile.groups)
+                    existing.id
                 } else {
-                    assignments[panelId] = PanelAssignment(profile, remark, reused)
-                    plugin.log_info(
-                        "指令面板已同步 ($remark, panel_id=$panelId, " +
-                            "commands=${profile.items.size}, groups=${profile.groups.size})"
-                    )
-                }
-                // QQ 写操作限频 10 QPM，多面板时主动留间隔
-                if (profiles.size > 1) Thread.sleep(PANEL_WRITE_INTERVAL_MS)
-            }
-
-            // 新建面板时已带好目标群；复用面板需要按 profile 调整关联群
-            for ((panelId, assignment) in assignments) {
-                val record = assignment.record ?: continue
-                runCatching { syncPanelTargets(authHeader, record, assignment.profile.groups) }
-                    .onFailure {
-                        plugin.log_warning("指令面板关联群同步失败 ($panelId): ${it.message}")
+                    val id = createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
+                    if (id == null) {
+                        plugin.log_warning("指令面板注册失败（${profile.remark}）: 未获取到 panel_id")
+                        continue
                     }
+                    id
+                }
+                usedPanelIds += panelId
+                plugin.log_info(
+                    "指令面板已同步 (${profile.remark}, panel_id=$panelId, commands=${profile.items.size}, groups=${profile.groups.size})"
+                )
+                // QQ 写操作限频 10 QPM，多面板时主动留间隔
+                if (profiles.size > 1) Thread.sleep(700)
             }
 
-            // 清理不再使用的历史受管面板；创建失败时保留，避免目标群彻底没有面板可显示
-            val stale = if (createFailed) {
-                plugin.log_warning("本次有面板创建失败，跳过清理 ${freePanels.size} 个历史面板，等待下次同步")
-                emptyList()
-            } else {
-                managed.filter { it.id !in assignments }
-            }
+            // 清理不再使用的受管面板（群配置变化后遗留的 profile）
+            val stale = managed.filter { it.id !in usedPanelIds }
             stale.take(MAX_DUPLICATE_DELETES_PER_SYNC).forEach {
                 runCatching { deletePanel(authHeader, it.id) }
-                    .onFailure { error -> plugin.log_warning("删除历史指令面板失败 (${it.id}): ${error.message}") }
-                if (stale.size > 1) Thread.sleep(PANEL_WRITE_INTERVAL_MS)
+                if (profiles.size + stale.size > 1) Thread.sleep(700)
             }
             if (stale.size > MAX_DUPLICATE_DELETES_PER_SYNC) {
                 plugin.log_warning(
@@ -173,39 +105,13 @@ object MenuManager {
                         "$MAX_DUPLICATE_DELETES_PER_SYNC 个；下次同步会继续清理"
                 )
             }
-            !createFailed
         } catch (error: Exception) {
             plugin.log_error("指令面板同步失败: ${error.message}")
-            false
         }
     }
 
-    /** 槽位备注固定为「旧备注」与「旧备注 #2、#3…」，保证跨次同步稳定（不随命令内容变化）。 */
-    internal fun remarkForSlot(index: Int): String =
-        if (index == 0) PANEL_REMARK else "$PANEL_REMARK #${index + 1}"
-
-    /** 兼容 1.20 的旧备注、1.21.0 的内容哈希备注与新版的槽位备注。 */
-    internal fun isManagedRemark(remark: String): Boolean {
-        val value = remark.trim()
-        return value == PANEL_REMARK || value == LEGACY_REMARK || value.startsWith("$PANEL_REMARK #")
-    }
-
-    /**
-     * 为一个 profile 选择要复用的受管面板。
-     *
-     * 优先同名备注（改动最小），否则挑一个已关联最多目标群的空闲面板。
-     * 返回 null 表示没有可复用的面板，需要新建。
-     *
-     * 这是「不要删旧建新」的核心：只要还有空闲的受管面板，就原位更新它，
-     * 保持 group 看到的 panel_id 不变。
-     */
-    internal fun choosePanelForReuse(
-        freePanels: List<PanelRecord>,
-        remark: String,
-        groups: Collection<String>
-    ): PanelRecord? =
-        freePanels.firstOrNull { it.remark == remark }
-            ?: freePanels.maxByOrNull { panel -> panel.groupOpenIds.count { it in groups } }
+    private fun isManagedRemark(remark: String): Boolean =
+        remark == PANEL_REMARK || remark == "HuHoBot 指令面板" || remark.startsWith("$PANEL_REMARK #")
 
     private fun panelSignature(items: List<JSONObject>, showAdminCommands: Boolean): String {
         val raw = buildString {
@@ -387,7 +293,7 @@ object MenuManager {
     private fun parsePanelRecord(value: JSONObject): PanelRecord? {
         val id = value.getString("panel_id") ?: return null
         val panel = value.getJSONObject("panel")
-        val remark = (panel?.getString("remark") ?: value.getString("remark").orEmpty()).trim()
+        val remark = panel?.getString("remark") ?: value.getString("remark").orEmpty()
         val targets = value.getJSONArray("group_openids")?.mapNotNull { it?.toString() }.orEmpty()
         // version 在详情响应里顶层和 panel 内各有一份，两个位置都认
         val version = value.getInteger("version") ?: panel?.getInteger("version")
@@ -423,10 +329,10 @@ object MenuManager {
     private fun updatePanelWithVersion(
         authHeader: String,
         record: PanelRecord,
-        items: List<JSONObject>,
-        remark: String = record.remark.ifBlank { PANEL_REMARK }
+        items: List<JSONObject>
     ): Boolean {
         val plugin = BotShared.getPlugin()
+        val remark = record.remark.ifBlank { PANEL_REMARK }
         val response = updatePanel(authHeader, record.id, panelPayload(items, record.version, remark))
         if (response.success) return true
         if (!response.isRetryableConflict) {
@@ -538,7 +444,7 @@ object MenuManager {
         }
     }
 
-    internal data class PanelRecord(
+    private data class PanelRecord(
         val id: String,
         val remark: String,
         val groupOpenIds: List<String>,
