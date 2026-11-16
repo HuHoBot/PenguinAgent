@@ -96,20 +96,28 @@ object MenuManager {
                         syncPanelTargets(authHeader, existing, profile.groups)
                         existing.id
                     } else {
-                        val id = createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
-                        if (id == null) {
-                            plugin.log_warning("指令面板注册失败（${profile.remark}）: 未获取到 panel_id")
-                            continue
-                        }
-                        id
+                        createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
                     }
-                    usedPanelIds += panelId
-                    succeededProfiles++
-                    plugin.log_info(
-                        "指令面板已同步 (${profile.remark}, panel_id=$panelId, commands=${profile.items.size}, groups=${profile.groups.size})"
-                    )
+                    if (panelId != null) {
+                        usedPanelIds += panelId
+                        succeededProfiles++
+                        plugin.log_info(
+                            "指令面板已同步 (${profile.remark}, panel_id=$panelId, commands=${profile.items.size}, groups=${profile.groups.size})"
+                        )
+                    } else {
+                        plugin.log_warning("指令面板注册失败（${profile.remark}）: 未获取到 panel_id")
+                        if (reuseOrphanPanel(authHeader, managed, usedPanelIds, profile)) succeededProfiles++
+                    }
                 } catch (error: Exception) {
                     plugin.log_error("指令面板 ${profile.remark} 同步失败: ${error.message}（保留现有面板）")
+                    // 创建/更新抛异常（QQ 服务异常、限频、网络中断、配额用满 30013）时同样
+                    // 降级复用旧面板，否则该 profile 的旧面板会因不在 usedPanelIds 里被
+                    // stale 清理删掉，导致面板消失（issue #36 同类事故）。
+                    runCatching {
+                        if (reuseOrphanPanel(authHeader, managed, usedPanelIds, profile)) succeededProfiles++
+                    }.onFailure { retryError ->
+                        plugin.log_error("指令面板 ${profile.remark} 回退复用也失败: ${retryError.message}")
+                    }
                 }
                 // QQ 写操作限频 10 QPM，多面板时主动留间隔
                 if (profiles.size > 1) Thread.sleep(700)
@@ -161,6 +169,36 @@ object MenuManager {
             h *= 0x01000193
         }
         return (h.toLong() and 0xffffffffL).toString(16).padStart(8, '0')
+    }
+
+    /**
+     * 创建失败的降级路径：从受管面板里挑一个本轮未被认领的，原位改成当前
+     * profile 的内容、目标群并认领其 remark。宁可"旧面板换新内容"，也不能
+     * 因为新建失败（QQ 服务异常、面板配额用满、网络抖动）就让群彻底失去面板。
+     * 把 remark 覆写为当前 profile 的，下次同步即可被 managedByRemark 命中并收敛。
+     */
+    private fun reuseOrphanPanel(
+        authHeader: String,
+        managed: List<PanelRecord>,
+        usedPanelIds: MutableSet<String>,
+        profile: PanelProfile
+    ): Boolean {
+        val plugin = BotShared.getPlugin() ?: return false
+        val orphan = managed.firstOrNull { it.id !in usedPanelIds } ?: run {
+            plugin.log_warning(
+                "指令面板 ${profile.remark} 创建失败且没有可复用的受管面板；" +
+                    "现有面板保持原样（如 QQ 端面板数达 20 上限，请到开放平台清理旧面板后重试）"
+            )
+            return false
+        }
+        val full = getPanel(authHeader, orphan.id) ?: orphan
+        updatePanelWithVersion(authHeader, full, profile.items, remarkOverride = profile.remark)
+        syncPanelTargets(authHeader, full, profile.groups)
+        usedPanelIds += full.id
+        plugin.log_warning(
+            "指令面板创建失败，已回退复用现有受管面板（panel_id=${full.id} → ${profile.remark}）"
+        )
+        return true
     }
 
     private fun createPanelForGroups(
@@ -362,10 +400,11 @@ object MenuManager {
     private fun updatePanelWithVersion(
         authHeader: String,
         record: PanelRecord,
-        items: List<JSONObject>
+        items: List<JSONObject>,
+        remarkOverride: String? = null
     ): Boolean {
         val plugin = BotShared.getPlugin()
-        val remark = record.remark.ifBlank { PANEL_REMARK }
+        val remark = remarkOverride ?: record.remark.ifBlank { PANEL_REMARK }
         val response = updatePanel(authHeader, record.id, panelPayload(items, record.version, remark))
         if (response.success) return true
         if (!response.isRetryableConflict) {
