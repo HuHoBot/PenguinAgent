@@ -5,24 +5,18 @@ import cn.huohuas001.bot.QClient
 import cn.huohuas001.bot.state.CommandRepositories
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent
 
-/** Agent 内置背包与末影箱查询；每个 QQ 用户只对应一个绑定账户。 */
+/** Agent 内置背包与末影箱查询；一个 QQ 用户可绑定多个游戏账户。 */
 class InventoryCommands : CommandSupport() {
 
     @Commands(command = "我的背包", describe = "查看绑定账户的背包")
     fun myInventory(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
-        val playerName = boundPlayer(event) ?: run {
-            reply(plugin, event, "你还没有绑定 Minecraft 账户，请先使用 /绑定 <游戏ID>")
-            return
-        }
+        val playerName = boundPlayer(plugin, event, params) ?: return
         sendInventory(plugin, event, playerName)
     }
 
     @Commands(command = "我的末影箱", describe = "查看绑定账户的末影箱")
     fun myEnderChest(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
-        val playerName = boundPlayer(event) ?: run {
-            reply(plugin, event, "你还没有绑定 Minecraft 账户，请先使用 /绑定 <游戏ID>")
-            return
-        }
+        val playerName = boundPlayer(plugin, event, params) ?: return
         sendEnderChest(plugin, event, playerName)
     }
 
@@ -38,8 +32,28 @@ class InventoryCommands : CommandSupport() {
         sendEnderChest(plugin, event, playerName)
     }
 
-    private fun boundPlayer(event: GroupMessageEvent): String? =
-        CommandRepositories.bindings.getBinding(userId(event))?.playerName
+    /**
+     * 解析要查看的绑定账户。
+     *
+     * 不填参数时使用主账号；绑定多个账号时可显式指定，避免只能看第一个。
+     */
+    private fun boundPlayer(plugin: HuHoBot, event: GroupMessageEvent, params: String): String? {
+        val binding = CommandRepositories.bindings.getBinding(userId(event))
+        if (binding == null) {
+            reply(plugin, event, "你还没有绑定 Minecraft 账户，请先使用 /绑定 <游戏ID>")
+            return null
+        }
+
+        val requested = params.trim()
+        if (requested.isEmpty()) return binding.playerName
+
+        val target = binding.playerNames.firstOrNull { it.equals(requested, ignoreCase = true) }
+        if (target == null) {
+            val list = binding.playerNames.joinToString("、")
+            reply(plugin, event, "你未绑定角色「$requested」\n当前绑定：$list")
+        }
+        return target
+    }
 
     private fun requestedPlayer(
         plugin: HuHoBot,
