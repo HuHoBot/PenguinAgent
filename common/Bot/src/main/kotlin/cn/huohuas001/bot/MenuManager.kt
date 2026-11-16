@@ -32,7 +32,9 @@ object MenuManager {
         val signature: String,
         val remark: String,
         val items: List<JSONObject>,
-        val groups: MutableList<String>
+        val groups: MutableList<String>,
+        /** true = QQ 全局面板（target_type=all），覆盖所有群，包括未写进配置的群。 */
+        val allTargets: Boolean
     )
 
     fun syncGroupPanels(
@@ -58,6 +60,13 @@ object MenuManager {
             val authHeader = "QQBot $token"
 
             // 按群的有效配置分组：相同配置共享一个面板，避免不必要的面板数量
+            val allMode = groups.all { !cn.huohuas001.bot.state.GroupCommandConfigStore.hasOverrides(it) }
+            if (allMode) {
+                plugin.log_info(
+                    "所有配置群均无单独面板覆盖：使用 QQ 全局面板（target_type=all），" +
+                        "未写进配置的群也会显示默认面板"
+                )
+            }
             val profiles = linkedMapOf<String, PanelProfile>()
             for (groupId in groups) {
                 val items = buildItemsForGroup(plugin, groupId, allBuiltInCommands, customCommands)
@@ -65,7 +74,7 @@ object MenuManager {
                 val limited = if (items.size > MAX_ITEMS) items.take(MAX_ITEMS) else items
                 val signature = panelSignature(limited, plugin.showAdminCommandsInMenu(groupId))
                 val profile = profiles.getOrPut(signature) {
-                    PanelProfile(signature, "$PANEL_REMARK #$signature", limited, mutableListOf())
+                    PanelProfile(signature, "$PANEL_REMARK #$signature", limited, mutableListOf(), allMode)
                 }
                 profile.groups += groupId
             }
@@ -90,13 +99,27 @@ object MenuManager {
             for (profile in profiles.values) {
                 // 逐个 profile 隔离：一个失败不拖垮其余面板，更不清空旧面板
                 try {
-                    val existing = managedByRemark[profile.remark]?.let { getPanel(authHeader, it.id) ?: it }
+                    // targetType 必须一致才复用：specific/all 模式切换时旧面板走
+                    // 重新创建 + stale 清理，而不是把旧面板原位改写成新模式
+                    // （all 面板不支持 targets 增删，specific 面板覆盖不到未配置群）。
+                    val expectedType = if (profile.allTargets) "all" else "specific"
+                    val existing = managedByRemark[profile.remark]
+                        ?.takeIf { it.targetType == expectedType }
+                        ?.let { getPanel(authHeader, it.id) ?: it }
                     val panelId = if (existing != null) {
                         updatePanelWithVersion(authHeader, existing, profile.items)
-                        syncPanelTargets(authHeader, existing, profile.groups)
+                        if (existing.targetType != "all") {
+                            syncPanelTargets(authHeader, existing, profile.groups)
+                        }
                         existing.id
                     } else {
-                        createPanelForGroups(authHeader, profile.remark, profile.items, profile.groups)
+                        createPanelForGroups(
+                            authHeader,
+                            profile.remark,
+                            profile.items,
+                            profile.groups,
+                            profile.allTargets
+                        )
                     }
                     if (panelId != null) {
                         usedPanelIds += panelId
@@ -184,7 +207,8 @@ object MenuManager {
         profile: PanelProfile
     ): Boolean {
         val plugin = BotShared.getPlugin() ?: return false
-        val orphan = managed.firstOrNull { it.id !in usedPanelIds } ?: run {
+        val expectedType = if (profile.allTargets) "all" else "specific"
+        val orphan = managed.firstOrNull { it.id !in usedPanelIds && it.targetType == expectedType } ?: run {
             plugin.log_warning(
                 "指令面板 ${profile.remark} 创建失败且没有可复用的受管面板；" +
                     "现有面板保持原样（如 QQ 端面板数达 20 上限，请到开放平台清理旧面板后重试）"
@@ -193,7 +217,9 @@ object MenuManager {
         }
         val full = getPanel(authHeader, orphan.id) ?: orphan
         updatePanelWithVersion(authHeader, full, profile.items, remarkOverride = profile.remark)
-        syncPanelTargets(authHeader, full, profile.groups)
+        if (full.targetType != "all") {
+            syncPanelTargets(authHeader, full, profile.groups)
+        }
         usedPanelIds += full.id
         plugin.log_warning(
             "指令面板创建失败，已回退复用现有受管面板（panel_id=${full.id} → ${profile.remark}）"
@@ -205,19 +231,28 @@ object MenuManager {
         authHeader: String,
         remark: String,
         items: List<JSONObject>,
-        groups: List<String>
+        groups: List<String>,
+        allTargets: Boolean = false
     ): String? {
-        val initialGroups = groups.take(MAX_TARGETS_PER_REQUEST)
+        // 全局面板（target_type=all）覆盖机器人所在的所有群，且官方不支持对它
+        // 做关联对象的增删（错误码 40030021），因此创建时既不传群列表、之后也
+        // 不做 targets 同步。
         val panelBody = JSONObject().apply {
             put("scope", "group")
-            put("target_type", "specific")
-            put("group_openids", JSONArray(initialGroups))
+            if (allTargets) {
+                put("target_type", "all")
+            } else {
+                put("target_type", "specific")
+                put("group_openids", JSONArray(groups.take(MAX_TARGETS_PER_REQUEST)))
+            }
             put("panel", panelPayload(items, remark = remark))
         }
         val panelId = createPanel(authHeader, panelBody) ?: return null
-        groups.drop(MAX_TARGETS_PER_REQUEST)
-            .chunked(MAX_TARGETS_PER_REQUEST)
-            .forEach { updateTargets(authHeader, panelId, "add", it) }
+        if (!allTargets) {
+            groups.drop(MAX_TARGETS_PER_REQUEST)
+                .chunked(MAX_TARGETS_PER_REQUEST)
+                .forEach { updateTargets(authHeader, panelId, "add", it) }
+        }
         return panelId
     }
 
@@ -368,7 +403,10 @@ object MenuManager {
         val targets = value.getJSONArray("group_openids")?.mapNotNull { it?.toString() }.orEmpty()
         // version 在详情响应里顶层和 panel 内各有一份，两个位置都认
         val version = value.getInteger("version") ?: panel?.getInteger("version")
-        return PanelRecord(id, remark, targets, version)
+        val targetType = value.getString("target_type")
+            ?: panel?.getString("target_type")
+            ?: "specific"
+        return PanelRecord(id, remark, targets, version, targetType)
     }
 
     private fun getPanel(authHeader: String, panelId: String): PanelRecord? {
@@ -521,7 +559,9 @@ object MenuManager {
         val remark: String,
         val groupOpenIds: List<String>,
         /** 面板当前版本号；原位更新时必须回传，null 表示接口没给。 */
-        val version: Int? = null
+        val version: Int? = null,
+        /** QQ 面板 target_type：all = 全局面板（不能对它做 targets 增删），specific = 指定群。 */
+        val targetType: String = "specific"
     )
 
     private data class ApiResponse(val status: Int, val body: String) {
