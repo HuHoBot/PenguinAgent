@@ -109,24 +109,22 @@ tasks {
         relocate("org.bstats", "${project.group}.bstats")
         // 自带一份 Adventure，避免和 Paper / 其他插件的版本冲突。
         relocate("net.kyori", "${project.group}.libs.kyori")
-        // sqlite-jdbc 自带全部平台 native（org/sqlite/native/<OS>/<arch>/）；只保留主流平台，控制 jar 体积
-        exclude("org/sqlite/native/Linux/x86/**")
+        // sqlite-jdbc 自带全部平台 native；只保留主流平台（路径按 jar 内真实目录）
+        exclude("org/sqlite/native/Linux-Android/**")
+        exclude("org/sqlite/native/Linux-Musl/**")
         exclude("org/sqlite/native/Linux/arm/**")
-        exclude("org/sqlite/native/Linux/armv6l/**")
-        exclude("org/sqlite/native/Linux/armv7l/**")
-        exclude("org/sqlite/native/Linux/armhf/**")
-        exclude("org/sqlite/native/Linux/Android/**")
-        exclude("org/sqlite/native/Linux/aarch64/alpine/**")
-        exclude("org/sqlite/native/Linux/musl/**")
+        exclude("org/sqlite/native/Linux/armv6/**")
+        exclude("org/sqlite/native/Linux/armv7/**")
+        exclude("org/sqlite/native/Linux/x86/**")
         exclude("org/sqlite/native/Linux/ppc64/**")
-        exclude("org/sqlite/native/Linux/ppc64le/**")
         exclude("org/sqlite/native/Linux/s390x/**")
         exclude("org/sqlite/native/Linux/riscv64/**")
-        exclude("org/sqlite/native/Linux-loongarch64/**")
-        exclude("org/sqlite/native/Linux-musl/**")
         exclude("org/sqlite/native/FreeBSD/**")
+        exclude("org/sqlite/native/Windows/armv7/**")
+        exclude("org/sqlite/native/Windows/aarch64/**")
         exclude("org/sqlite/native/Windows/x86/**")
-        exclude("org/sqlite/native/Windows/arm64/**")
+        // BouncyCastle 的后量子密码资源(QQ 登录用不到)——体积大头之一
+        exclude("org/bouncycastle/pqc/**")
         mergeServiceFiles()
         exclude(
             "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA",
