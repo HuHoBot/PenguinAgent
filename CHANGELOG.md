@@ -4,6 +4,7 @@
 
 ### 修复
 
+- fix: Folia 内测适配 —— 真机测试抓到 `OfflineInventorySnapshots` 直接使用传统调度器导致 `onEnable` 崩溃；修复 13 处直接调度调用统一走 `FoliaScheduler`（广播/事件同步/踢人/白名单/命令输出回读/在线列表快照/背包快照/ProxyBridge），新增 `runForEntity`（Folia 下操作玩家必须走实体区域线程）；三种路径实测：内测开=完整加载零异常，开关未开=干净自禁用并给出明确日志
 - fix: 指令面板创建失败时降级复用旧受管面板 —— QQ 服务异常/限频/面板配额用满（30013）导致新建失败时，从本轮未认领的受管面板中挑一个原位改写内容与目标群并接管其 remark，下次同步自动收敛；修复创建失败路径下面板被 stale 清理误删、群彻底失去面板的问题（#36 同类事故面）
 - fix: 面板 stale 清理的安全边界 —— 只有本轮至少一个面板成功落地时才清理；`updatePanelWithVersion` 支持 `remarkOverride`
 
