@@ -27,7 +27,7 @@ class OfflineInventorySnapshots(private val plugin: JavaPlugin) : Listener {
     private val writer = Executors.newSingleThreadExecutor { task ->
         Thread(task, "PenguinAgent-InventorySnapshots").apply { isDaemon = true }
     }
-    private var periodicTask: BukkitTask? = null
+    private var periodicTask: cn.huohuas001.bot.tools.Cancelable? = null
 
     fun start() {
         if (!directory.exists() && !directory.mkdirs()) {
@@ -49,7 +49,12 @@ class OfflineInventorySnapshots(private val plugin: JavaPlugin) : Listener {
                 }
             }
         plugin.server.pluginManager.registerEvents(this, plugin)
-        periodicTask = plugin.server.scheduler.runTaskTimer(plugin, Runnable { captureAllOnline() }, 6000L, 6000L)
+        periodicTask =
+            cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runTimer(
+                plugin, 6000L, 6000L, Runnable { captureAllOnline() }
+            ) ?: cn.huohuas001.huhobotPenguin.spigot.HuHoBotTask(
+                plugin.server.scheduler.runTaskTimer(plugin, Runnable { captureAllOnline() }, 6000L, 6000L)
+            )
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

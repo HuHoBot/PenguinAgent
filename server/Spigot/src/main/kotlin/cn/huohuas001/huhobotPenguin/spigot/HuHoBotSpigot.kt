@@ -70,6 +70,16 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun onEnable() {
         instance = this
+        // 内测调试开关：仅当 jar 内 plugin.yml 的 foiladebug 设为 true 才启用基于
+        // 该运行时（多核区域化调度）的内测调试逻辑。开关未开而运行时命中时直接
+        // 停用插件——绝不以传统调度器硬跑导致服务端出错或崩溃。
+        val foiladebug = readPluginYamlSwitch("foiladebug")
+        FoliaScheduler.setDebugEnabled(foiladebug)
+        if (FoliaScheduler.detectRuntime() && !foiladebug) {
+            log_warning("检测到内测调试运行时，但内测调试开关未开启（jar 内 plugin.yml: foiladebug）；插件已停用")
+            server.pluginManager.disablePlugin(this)
+            return
+        }
         configManager = ConfigManager(this)
         configManager.initialize()
         GroupCommandConfigStore.configureDataDir(dataFolder)
@@ -254,7 +264,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         registerBukkitCommands()
 
         // 4. 重启 QQ 客户端（异步，直接创建新实例，不 shutdown 旧的）
-        server.scheduler.runTaskAsynchronously(this, Runnable {
+        FoliaScheduler.runAsync(this, Runnable {
             try {
                 QClient.launchClient(
                     getBotAppId(),
@@ -342,11 +352,12 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         }
 
     override fun broadcastMessage(msg: String) {
-        server.scheduler.runTask(this, Runnable { Bukkit.broadcastMessage(msg) })
+        FoliaScheduler.runNow(this, Runnable { Bukkit.broadcastMessage(msg) })
+            ?: server.scheduler.runTask(this, Runnable { Bukkit.broadcastMessage(msg) })
     }
 
     override fun broadcastMessage(msg: String, highlightedPlayers: List<String>) {
-        server.scheduler.runTask(this, Runnable {
+        FoliaScheduler.runNow(this, Runnable {
             Bukkit.broadcastMessage(msg)
             if (highlightedPlayers.isNotEmpty()) {
                 for (playerName in highlightedPlayers) {
@@ -412,10 +423,14 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             return event
         }
         return try {
-            server.scheduler.callSyncMethod(this) {
-                server.pluginManager.callEvent(event)
+            if (FoliaScheduler.runNow(this, Runnable { server.pluginManager.callEvent(event) }) != null) {
                 event
-            }.get()
+            } else {
+                server.scheduler.callSyncMethod(this) {
+                    server.pluginManager.callEvent(event)
+                    event
+                }.get()
+            }
         } catch (error: Exception) {
             log_error("同步触发 Bukkit 事件失败: ${error.message}")
             event
@@ -544,7 +559,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun showAdminCommandsInMenu(): Boolean = configManager.showAdminCommandsInMenu()
 
     override fun submit(task: Runnable): Cancelable =
-        HuHoBotTask(server.scheduler.runTask(this, task))
+        FoliaScheduler.runNow(this, task) ?: HuHoBotTask(server.scheduler.runTask(this, task))
 
     override fun submitAsync(task: Runnable): Cancelable =
         FoliaScheduler.runAsync(this, task) ?: HuHoBotTask(server.scheduler.runTaskAsynchronously(this, task))
@@ -557,6 +572,17 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             ?: HuHoBotTask(server.scheduler.runTaskTimer(this, task, delay, period))
 
     override fun getOnlineList(): List<String> = server.onlinePlayers.map { it.name }.toMutableList()
+
+    /** 读取 jar 内 plugin.yml 的自定义布尔键（不经过 DescriptionFile 的公开 API）。 */
+    private fun readPluginYamlSwitch(key: String): Boolean = runCatching {
+        val text = javaClass.classLoader.getResource("plugin.yml")?.readText() ?: return false
+        val map = org.yaml.snakeyaml.Yaml().load(text) as? Map<*, *> ?: return false
+        when (val v = map[key]) {
+            is Boolean -> v
+            is String -> v.toBooleanStrictOrNull() ?: false
+            else -> false
+        }
+    }.getOrDefault(false)
 
     override fun getPlayerInventory(playerName: String): String? {
         val snapshot = findInventorySnapshot(playerName) ?: return null
@@ -626,7 +652,12 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     private fun <T> onServerThread(action: () -> T): T? =
         if (server.isPrimaryThread) action()
         else try {
-            server.scheduler.callSyncMethod(this, Callable { action() })
+            val future = java.util.concurrent.CompletableFuture<T>()
+            val scheduled = FoliaScheduler.runNow(this, Runnable {
+                runCatching { future.complete(action()) }
+            })
+            if (scheduled != null) future.get(10, java.util.concurrent.TimeUnit.SECONDS)
+            else server.scheduler.callSyncMethod(this, Callable { action() })
                 .get(10, java.util.concurrent.TimeUnit.SECONDS)
         } catch (error: Exception) {
             log_error("同步调用服务器线程失败: ${error.message}")
@@ -1157,8 +1188,9 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             appendLine("${ChatColor.GRAY}你的 QQ 绑定已被解除，本次游戏会话已结束。")
             appendLine("${ChatColor.GRAY}重新进入服务器时需要重新绑定。")
         }
-        // 放到下一 tick，避免在消息回调里直接改变玩家状态
-        server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
+        // 放到下一 tick，避免在消息回调里直接改变玩家状态（Folia 下必须走实体区域线程）
+        FoliaScheduler.runForEntity(this, target, Runnable { target.kickPlayer(reason) })
+            ?: server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
         log_info("强制绑定: $playerName 已解除绑定，踢出在线会话")
         return true
     }
@@ -1179,8 +1211,9 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
             appendLine("${ChatColor.GRAY}该游戏账号已被绑定者锁定，本次游戏会话已结束。")
             appendLine("${ChatColor.GRAY}如需恢复，请在 QQ 群执行 /解除锁定 后再重新连接。")
         }
-        // 放到下一 tick，避免在消息回调里直接改变玩家状态
-        server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
+        // 放到下一 tick，避免在消息回调里直接改变玩家状态（Folia 下必须走实体区域线程）
+        FoliaScheduler.runForEntity(this, target, Runnable { target.kickPlayer(reason) })
+            ?: server.scheduler.runTask(this, Runnable { target.kickPlayer(reason) })
         log_info("账号锁定: $playerName 已被锁定，踢出在线会话")
         return true
     }

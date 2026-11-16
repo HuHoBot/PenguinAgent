@@ -68,7 +68,9 @@ object ProxyBridge {
             } ?: return
             if (!"chat".equals(json.getString("type"))) return
             val message = json.getString("message") ?: return
-            plugin.server.scheduler.runTask(plugin, java.lang.Runnable {
+            cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runNow(plugin, java.lang.Runnable {
+                org.bukkit.Bukkit.broadcastMessage(org.bukkit.ChatColor.GRAY.toString() + message)
+            }) ?: plugin.server.scheduler.runTask(plugin, java.lang.Runnable {
                 org.bukkit.Bukkit.broadcastMessage(org.bukkit.ChatColor.GRAY.toString() + message)
             })
         }

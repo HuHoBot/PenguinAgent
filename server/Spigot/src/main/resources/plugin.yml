@@ -4,6 +4,8 @@ version: '@version@'
 main: cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
 api-version: '1.18'
 folia-supported: false
+# internal
+foiladebug: false
 softdepend: [PlaceholderAPI, ViaVersion]
 
 commands:

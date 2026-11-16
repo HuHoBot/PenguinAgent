@@ -55,7 +55,9 @@ class QqBindCommand : CommandExecutor {
             val whitelist = plugin.getWhiteList()
             if (whitelist.addCommand.isNotBlank()) {
                 val cmd = whitelist.addCommand.replace("{name}", playerName)
-                Bukkit.getScheduler().runTask(plugin) { _: Any? ->
+                cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runNow(plugin, Runnable {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
+                }) ?: Bukkit.getScheduler().runTask(plugin) { _: Any? ->
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
                 }
             }

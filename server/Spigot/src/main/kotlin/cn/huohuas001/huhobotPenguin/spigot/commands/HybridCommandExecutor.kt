@@ -33,20 +33,21 @@ class HybridCommandExecutor(private val plugin: HuHoBotSpigot) : HExecution {
     override fun getRawString(): String = sender.getRawString()
 
     private fun completeAfterCommandOutput(result: CompletableFuture<HExecution>) {
-        Bukkit.getScheduler().runTaskLater(
+        val flush = Runnable {
+            val senderMessages = sender.getAndClearMessages()
+            val loggedMessages = outputAppender.stopCapture()
+
+            (senderMessages + loggedMessages)
+                .distinct()
+                .forEach(sender::sendMessage)
+
+            result.complete(sender)
+        }
+        cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runLater(
             plugin,
-            Runnable {
-                val senderMessages = sender.getAndClearMessages()
-                val loggedMessages = outputAppender.stopCapture()
-
-                (senderMessages + loggedMessages)
-                    .distinct()
-                    .forEach(sender::sendMessage)
-
-                result.complete(sender)
-            },
-            COMMAND_OUTPUT_DELAY_TICKS
-        )
+            COMMAND_OUTPUT_DELAY_TICKS,
+            flush
+        ) ?: Bukkit.getScheduler().runTaskLater(plugin, flush, COMMAND_OUTPUT_DELAY_TICKS)
     }
 
     private companion object {

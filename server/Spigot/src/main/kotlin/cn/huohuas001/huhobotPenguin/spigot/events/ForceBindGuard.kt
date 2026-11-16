@@ -45,7 +45,12 @@ class ForceBindGuard(private val plugin: HuHoBotSpigot) : Listener {
         val serverName = plugin.getServerName()
 
         // 下一 tick 再踢，让入服流程走完；信息全部放在踢出理由里，不再另外发标题
-        plugin.server.scheduler.runTask(plugin, Runnable {
+        cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runForEntity(plugin, player, Runnable {
+            if (player.isOnline) {
+                player.kickPlayer(buildKickMessage(serverName, code, groups))
+                plugin.log_info("强制绑定: 已踢出未绑定玩家 ${player.name}，验证码 $code")
+            }
+        }) ?: plugin.server.scheduler.runTask(plugin, Runnable {
             if (player.isOnline) {
                 player.kickPlayer(buildKickMessage(serverName, code, groups))
                 plugin.log_info("强制绑定: 已踢出未绑定玩家 ${player.name}，验证码 $code")

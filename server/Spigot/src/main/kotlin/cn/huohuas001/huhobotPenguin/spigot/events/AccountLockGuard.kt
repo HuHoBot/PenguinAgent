@@ -25,7 +25,12 @@ class AccountLockGuard(private val plugin: HuHoBotSpigot) : Listener {
         if (!CommandRepositories.bindings.isLocked(player.name)) return
 
         // 下一 tick 再踢，让入服流程走完；理由整段放进踢出画面
-        plugin.server.scheduler.runTask(plugin, Runnable {
+        cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runForEntity(plugin, player, Runnable {
+            if (player.isOnline) {
+                player.kickPlayer(buildKickMessage())
+                plugin.log_info("账号锁定: 已拒绝 ${player.name} 进入服务器")
+            }
+        }) ?: plugin.server.scheduler.runTask(plugin, Runnable {
             if (player.isOnline) {
                 player.kickPlayer(buildKickMessage())
                 plugin.log_info("账号锁定: 已拒绝 ${player.name} 进入服务器")

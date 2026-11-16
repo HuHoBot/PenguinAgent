@@ -19,15 +19,8 @@ project(":server-AdapterCommon").projectDir = file("server/AdapterCommon")
 include(":server-Spigot")
 project(":server-Spigot").projectDir = file("server/Spigot")
 
-// 目前仅构建 Spigot 平台；如需其他平台可取消下方注释。
-// include(":server-Allay")
-// project(":server-Allay").projectDir = file("server/Allay")
-//
-// include(":server-Nukkit")
-// project(":server-Nukkit").projectDir = file("server/Nukkit")
-//
-// include(":server-Proxy")
-// project(":server-Proxy").projectDir = file("server/Proxy")
+include(":server-Proxy")
+project(":server-Proxy").projectDir = file("server/Proxy")
 
 // 可选引擎包：不进主插件产物。构建后放到 plugins/HuHoBotPenguin/engines/。
 //   ./gradlew :addon-GraalJs:shadowJar   Spigot 的 GraalJS 引擎

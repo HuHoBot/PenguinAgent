@@ -150,11 +150,12 @@ class BukkitConsoleSender(private val plugin: HuHoBotSpigot) : ConsoleCommandSen
     }
 
     private fun completeAfterCommandOutput(result: CompletableFuture<HExecution>) {
-        Bukkit.getScheduler().runTaskLater(
+        val flush = Runnable { result.complete(this) }
+        cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runLater(
             plugin,
-            Runnable { result.complete(this) },
-            COMMAND_OUTPUT_DELAY_TICKS
-        )
+            COMMAND_OUTPUT_DELAY_TICKS,
+            flush
+        ) ?: Bukkit.getScheduler().runTaskLater(plugin, flush, COMMAND_OUTPUT_DELAY_TICKS)
     }
 
     private companion object {

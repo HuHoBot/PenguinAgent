@@ -142,7 +142,13 @@ class OnlineListManager(
     fun captureSnapshotAsync(): ServerSnapshot? {
         if (Bukkit.isPrimaryThread()) return captureSnapshot()
         return try {
-            plugin.server.scheduler.callSyncMethod(plugin, Callable { captureSnapshot() })
+            val future = java.util.concurrent.CompletableFuture<ServerSnapshot?>()
+            val scheduled = cn.huohuas001.huhobotPenguin.spigot.manager.FoliaScheduler.runNow(
+                plugin,
+                Runnable { runCatching { future.complete(captureSnapshot()) } }
+            )
+            if (scheduled != null) future.get(5, TimeUnit.SECONDS)
+            else plugin.server.scheduler.callSyncMethod(plugin, Callable { captureSnapshot() })
                 .get(5, TimeUnit.SECONDS)
         } catch (error: Throwable) {
             plugin.log_warning("在线列表快照获取失败: ${error.message}")

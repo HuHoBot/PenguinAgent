@@ -657,7 +657,17 @@ plugins/HuHoBotPenguin/addons/hello/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.21.1（最新）
+### v26.1（最新）
+
+**修复：**
+- fix: 指令面板创建失败时降级复用旧受管面板，QQ 服务异常/配额用满不再导致面板消失（#36 同类事故面）
+
+**新功能：**
+- feat: 指令面板全局面板模式 —— 未单独配置的群默认显示完整面板（QQ `target_type=all`）
+- feat: 代理端适配恢复构建 —— 一个 jar 同时支持 Velocity / BungeeCord，含 Redis 互通桥
+- feat: Folia 内测调度适配（`plugin.yml` 隐藏开关 `foiladebug`，默认关闭）
+
+### v1.21.1
 
 **新功能：**
 - feat: 多账号绑定（#35）—— 一个 QQ 号可在 `binding.max-bindings` 上限内绑定多个游戏账号，`/解除绑定 <游戏ID>` 解除指定角色
