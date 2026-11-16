@@ -2,86 +2,300 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HuHoBot 配置中心</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#070b14">
+    <meta name="color-scheme" content="dark">
+    <title>HuHoBot · 管理控制台</title>
     <link rel="stylesheet" href="/style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>">
 </head>
 <body>
-    <div id="app">
-        <!-- 登录界面 -->
-        <div id="login-view" class="login-view hidden">
-            <div class="login-card">
-                <div class="login-logo">🤖</div>
-                <h1 class="login-title">HuHoBot 配置中心</h1>
-                <p class="login-subtitle">管理 QQ 机器人、聊天格式、AI Agent 等全部配置</p>
-                <input id="login-password" type="password" class="input" placeholder="请输入管理密码" autocomplete="current-password">
-                <button id="login-btn" class="btn btn-primary btn-block">登 录</button>
-                <p id="login-error" class="login-error hidden"></p>
-                <p class="login-tip">密码由服务器启动时自动生成并打印在日志中<br>可通过游戏内 /hb password 修改</p>
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 4.5v3.5M8 4.5h8"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9.5 16.5h5"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/><path d="M7 7.2h.01M7 16.8h.01M11 7.2h5M11 16.8h5"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 15.5a3 3 0 0 1-3 3H8l-4 2v-13a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3z"/><path d="M8 8.5h8M8 12h5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14.5 18 8.5"/><path d="M10 19a2.2 2.2 0 0 0 4 0"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 20 6v5.5c0 5-3.4 8.2-8 9.3-4.6-1.1-8-4.3-8-9.3V6z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="m4 8 3.8 3L12 5l4.2 6L20 8l-1.4 9.5H5.4z"/><path d="M6 20h12"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7L11 6.8"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 0 0 5.7 5.7L13 17.2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6.2 7.3V19l-3.6 2v-8.7z"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.8 5.8 12.4 12.4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h7M15 7h5M4 17h5M13 17h7"/><circle cx="13" cy="7" r="2"/><circle cx="11" cy="17" r="2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="m18.5 15 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+    <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M9.5 4.5h5V7a2.5 2.5 0 1 0 5 0h.5v5h-2.5a2.5 2.5 0 1 0 0 5H20v2.5a2 2 0 0 1-2 2h-4v-2.5a2.5 2.5 0 1 0-5 0V21H5a2 2 0 0 1-2-2v-4h2.5a2.5 2.5 0 1 0 0-5H3V7a2 2 0 0 1 2-2h4.5z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 6.7"/><path d="M20 4v7h-7"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 8 6 12l4 4M6 12h10"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 4l4 4M14 6l2 2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l.8 13h9.4l.8-13M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-3 3.7M6.4 7.6A17 17 0 0 0 2.5 12S6 18 12 18a10 10 0 0 0 4.1-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20h.01"/></symbol>
+    <symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M4 7l16 10M20 7 4 17"/><path d="m9 4.5 3 2 3-2M9 19.5l3-2 3 2"/></symbol>
+</svg>
+
+<div id="app">
+    <!-- ───────────── 登录 ───────────── -->
+    <div id="login-view" class="login hidden">
+        <section class="login-showcase" aria-hidden="true">
+            <div class="showcase-brand">
+                <span class="brand-art sm"></span>
+                <div class="brand-copy">
+                    <strong>HuHoBot</strong>
+                    <span>PenguinAgent · Minecraft × QQ</span>
+                </div>
             </div>
-        </div>
 
-        <!-- 主界面 -->
-        <div id="main-view" class="main-view hidden">
-            <aside class="sidebar">
-                <div class="sidebar-brand">
-                    <span class="brand-icon">🤖</span>
-                    <span class="brand-name">HuHoBot</span>
+            <div class="showcase-main">
+                <div class="showcase-art">
+                    <span class="brand-art xl"></span>
                 </div>
-                <nav id="sidebar-nav" class="sidebar-nav"></nav>
-                <div class="sidebar-footer">
-                    <button id="status-btn" class="btn btn-ghost btn-block">状态</button>
-                    <button id="logout-btn" class="btn btn-ghost btn-block">退出登录</button>
-                </div>
-            </aside>
+                <p class="showcase-kicker">Minecraft × QQ</p>
+                <h2>让群聊与服务器<br>保持同一频道</h2>
+                <p class="showcase-text">双向聊天、白名单、MOTD、AI Agent 与命令面板，在一个轻量控制台里完成配置。</p>
+                <ul class="feature-list">
+                    <li><svg class="icon"><use href="#i-chat"></use></svg><span>游戏与 QQ 群消息实时互通</span></li>
+                    <li><svg class="icon"><use href="#i-spark"></use></svg><span>AI Agent 自动处理群管理任务</span></li>
+                    <li><svg class="icon"><use href="#i-shield"></use></svg><span>危险操作审批与命令黑名单</span></li>
+                </ul>
+            </div>
 
-            <main class="content">
-                <!-- 状态面板 -->
-                <section id="status-panel" class="panel hidden">
-                    <h2 class="panel-title">系统状态</h2>
-                    <div id="status-cards" class="status-grid"></div>
+            <div class="showcase-foot">
+                <span>AGPL-3.0</span>
+                <span class="dot"></span>
+                <span>本地部署 · 数据不出服务器</span>
+            </div>
+        </section>
+
+        <section class="login-panel">
+            <form id="login-form" class="login-card" novalidate>
+                <div class="login-mobile-brand">
+                    <span class="brand-art sm"></span>
+                    <strong>HuHoBot</strong>
+                </div>
+                <p class="eyebrow">管理控制台</p>
+                <h1>欢迎回来</h1>
+                <p class="login-sub">使用服务器控制台打印的管理密码登录。</p>
+
+                <label class="field-label" for="login-password">管理密码</label>
+                <div class="input-wrap">
+                    <svg class="icon input-icon"><use href="#i-key"></use></svg>
+                    <input id="login-password" class="input has-icon" type="password" placeholder="请输入管理密码"
+                           autocomplete="current-password" required>
+                    <button id="login-eye" class="icon-btn input-action" type="button" aria-label="显示密码" aria-pressed="false">
+                        <svg class="icon"><use href="#i-eye"></use></svg>
+                    </button>
+                </div>
+                <p id="login-error" class="form-error hidden" role="alert"></p>
+                <button id="login-btn" class="btn btn-primary btn-block btn-lg" type="submit">进入控制台</button>
+
+                <div class="login-help">
+                    <span><svg class="icon"><use href="#i-info"></use></svg> 密码首次启动时自动生成</span>
+                    <span>可用 <code>/hb password</code> 修改</span>
+                </div>
+            </form>
+            <p class="login-copyright">HuHoBot Penguin · 仅监听本机，请勿直接暴露到公网</p>
+        </section>
+    </div>
+
+    <!-- ───────────── 主界面 ───────────── -->
+    <div id="main-view" class="shell hidden">
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-art sm"></span>
+                <div class="brand-copy">
+                    <strong>HuHoBot</strong>
+                    <span>PenguinAgent · 管理控制台</span>
+                </div>
+                <button id="sidebar-close" class="icon-btn sidebar-close" type="button" aria-label="关闭导航">
+                    <svg class="icon"><use href="#i-x"></use></svg>
+                </button>
+            </div>
+
+            <nav id="sidebar-nav" class="nav" aria-label="配置导航"></nav>
+
+            <div class="sidebar-foot">
+                <div id="sidebar-meta" class="sidebar-meta">
+                    <span class="status-dot"></span>
+                    <span id="sidebar-platform">正在连接…</span>
+                </div>
+                <div class="sidebar-actions">
+                    <button id="status-btn" class="side-action" type="button">
+                        <svg class="icon"><use href="#i-grid"></use></svg><span>运行状态</span>
+                    </button>
+                    <button id="password-btn" class="side-action" type="button">
+                        <svg class="icon"><use href="#i-key"></use></svg><span>修改密码</span>
+                    </button>
+                    <button id="logout-btn" class="side-action danger" type="button">
+                        <svg class="icon"><use href="#i-logout"></use></svg><span>退出登录</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+        <div id="sidebar-scrim" class="scrim" hidden></div>
+
+        <div class="workspace">
+            <header class="topbar">
+                <button id="menu-btn" class="icon-btn menu-btn" type="button" aria-label="打开导航">
+                    <svg class="icon"><use href="#i-menu"></use></svg>
+                </button>
+                <div class="crumbs">
+                    <span>控制台</span>
+                    <span class="crumb-sep">/</span>
+                    <span id="crumb" class="crumb-current">运行状态</span>
+                </div>
+                <div class="topbar-right">
+                    <button id="conn-pill" class="pill" type="button" title="查看运行状态">
+                        <span class="status-dot"></span>
+                        <span id="conn-text">检测中</span>
+                    </button>
+                </div>
+            </header>
+
+            <main class="content" id="content">
+                <!-- 运行状态 -->
+                <section id="status-panel" class="panel hidden" aria-labelledby="status-title">
+                    <div class="page-head">
+                        <div>
+                            <p class="eyebrow">工作台</p>
+                            <h1 id="status-title">运行状态</h1>
+                            <p class="page-desc">机器人连接、服务器信息与群组概览。</p>
+                        </div>
+                        <div class="page-actions">
+                            <button id="status-refresh-btn" class="btn btn-ghost" type="button">
+                                <svg class="icon"><use href="#i-refresh"></use></svg>刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div id="status-content" class="status-content"></div>
                 </section>
 
-                <!-- 配置面板 -->
-                <section id="config-panel" class="panel hidden">
-                    <div class="config-header">
-                        <h2 id="config-section-title" class="panel-title">配置</h2>
-                        <button id="save-btn" class="btn btn-primary">💾 保存全部</button>
+                <!-- 配置 -->
+                <section id="config-panel" class="panel hidden" aria-labelledby="config-section-title">
+                    <div class="page-head">
+                        <div>
+                            <p id="page-eyebrow" class="eyebrow">配置</p>
+                            <h1 id="config-section-title">配置</h1>
+                            <p id="config-section-desc" class="page-desc"></p>
+                        </div>
+                        <div class="page-actions">
+                            <span id="dirty-chip" class="dirty-chip hidden" role="status">未保存</span>
+                            <button id="save-btn" class="btn btn-primary" type="button">
+                                <svg class="icon"><use href="#i-check"></use></svg><span>保存更改</span>
+                            </button>
+                        </div>
                     </div>
-                    <p id="config-section-desc" class="panel-desc"></p>
-                    <form id="config-form" class="config-form"></form>
+                    <div id="config-form" class="form"></div>
                 </section>
             </main>
         </div>
     </div>
+</div>
 
-    <!-- 扫码连接弹层 -->
-    <div id="qr-modal" class="modal-overlay hidden">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3 class="modal-title">扫码连接 QQ 机器人</h3>
-                <button id="qr-close-btn" class="modal-close" type="button" aria-label="关闭">&times;</button>
-            </div>
-            <div class="qr-stage">
-                <div class="qr-image-box">
-                    <img id="qr-image" class="hidden" alt="扫码二维码">
-                    <div id="qr-placeholder" class="qr-placeholder">正在获取二维码…</div>
-                </div>
-                <div id="qr-state" class="qr-state"></div>
-                <div id="qr-link-wrap" class="qr-link-wrap hidden">
-                    <a id="qr-link" href="#" target="_blank" rel="noopener">在新窗口打开授权链接</a>
-                </div>
-            </div>
-            <div class="qr-actions">
-                <button id="qr-cancel-btn" class="btn btn-ghost hidden" type="button">取消授权</button>
-                <button id="qr-retry-btn" class="btn btn-primary hidden" type="button">重新获取二维码</button>
+<!-- ───────────── 扫码连接 ───────────── -->
+<dialog id="qr-dialog" class="modal" aria-labelledby="qr-title">
+    <div class="modal-head">
+        <div>
+            <p class="eyebrow">快速接入</p>
+            <h3 id="qr-title">扫码连接 QQ 机器人</h3>
+        </div>
+        <button id="qr-close-btn" class="icon-btn" type="button" aria-label="关闭">
+            <svg class="icon"><use href="#i-x"></use></svg>
+        </button>
+    </div>
+    <div class="qr-stage">
+        <div class="qr-image-box">
+            <img id="qr-image" class="qr-image hidden" alt="扫码二维码">
+            <div id="qr-placeholder" class="qr-placeholder">
+                <svg class="icon"><use href="#i-qr"></use></svg>
+                <span>正在获取二维码…</span>
             </div>
         </div>
+        <p id="qr-state" class="qr-state" role="status" aria-live="polite">等待开始</p>
+        <a id="qr-link" class="qr-link hidden" href="#" target="_blank" rel="noopener">在新窗口打开授权链接</a>
     </div>
+    <div class="modal-actions">
+        <button id="qr-cancel-btn" class="btn btn-ghost hidden" type="button">取消授权</button>
+        <button id="qr-retry-btn" class="btn btn-primary hidden" type="button">
+            <svg class="icon"><use href="#i-refresh"></use></svg>重新获取
+        </button>
+    </div>
+</dialog>
 
-    <div id="toast" class="toast hidden"></div>
+<!-- ───────────── 修改密码 ───────────── -->
+<dialog id="password-dialog" class="modal modal-sm" aria-labelledby="password-title">
+    <div class="modal-head">
+        <div>
+            <p class="eyebrow">安全</p>
+            <h3 id="password-title">修改管理密码</h3>
+        </div>
+        <button id="password-close-btn" class="icon-btn" type="button" aria-label="关闭">
+            <svg class="icon"><use href="#i-x"></use></svg>
+        </button>
+    </div>
+    <form id="password-form" class="modal-body" novalidate>
+        <label class="field-label" for="password-new">新密码</label>
+        <input id="password-new" class="input" type="password" minlength="6" autocomplete="new-password" placeholder="至少 6 位">
+        <label class="field-label" for="password-confirm">确认新密码</label>
+        <input id="password-confirm" class="input" type="password" minlength="6" autocomplete="new-password" placeholder="再次输入">
+        <p id="password-error" class="form-error hidden" role="alert"></p>
+        <p class="form-hint">修改后所有已登录的浏览器都会被登出。</p>
+        <div class="modal-actions">
+            <button id="password-cancel-btn" class="btn btn-ghost" type="button">取消</button>
+            <button id="password-save-btn" class="btn btn-primary" type="submit">更新密码</button>
+        </div>
+    </form>
+</dialog>
 
-    <script src="/app.js"></script>
+<!-- ───────────── 确认框 ───────────── -->
+<dialog id="confirm-dialog" class="modal modal-sm" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <div class="modal-head">
+        <div>
+            <p class="eyebrow">请确认</p>
+            <h3 id="confirm-title">确认操作</h3>
+        </div>
+        <button id="confirm-close-btn" class="icon-btn" type="button" aria-label="关闭">
+            <svg class="icon"><use href="#i-x"></use></svg>
+        </button>
+    </div>
+    <div class="modal-body">
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="modal-actions">
+            <button id="confirm-cancel-btn" class="btn btn-ghost" type="button">取消</button>
+            <button id="confirm-ok-btn" class="btn btn-primary" type="button">确定</button>
+        </div>
+    </div>
+</dialog>
+
+<button id="fab-save" class="fab hidden" type="button">
+    <svg class="icon"><use href="#i-check"></use></svg><span>保存更改</span>
+</button>
+
+<div id="toast" class="toast" role="status" aria-live="polite">
+    <svg class="icon"><use href="#i-info"></use></svg>
+    <span id="toast-text"></span>
+</div>
+
+<script src="/app.js"></script>
 </body>
 </html>
