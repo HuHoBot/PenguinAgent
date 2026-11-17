@@ -1,31 +1,40 @@
 # Changelog
 
-## v26.1（2026-11-16）
-
-### 修复
-
-- fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机复现）—— v26.1 瘦身时裁掉 `org/bouncycastle/pqc/**`，但 `BouncyCastleProvider` 初始化会反射加载全部算法注册（含 PQC），生产环境（Leaf 1.21.11 + 29 插件）配置好凭据后即抛 `NoClassDefFoundError: SPHINCSPlusKeyFactorySpi`。已恢复完整 BC；修复后假凭据实测 QQ 客户端完整走通启动链路（HTTP 网关请求正常发出，401 为假凭据预期结果）
-- fix: 代理端描述文件占位入口 —— Spigot jar 内残留指向不存在类的 `bungee.yml` / `velocity-plugin.json`，已删除；代理端描述现在由真实入口类提供且版本号正确展开
-- fix: Folia 内测适配 —— 真机测试抓到 `OfflineInventorySnapshots` 直接使用传统调度器导致 `onEnable` 崩溃；修复 13 处直接调度调用统一走 `FoliaScheduler`（广播/事件同步/踢人/白名单/命令输出回读/在线列表快照/背包快照/ProxyBridge），新增 `runForEntity`（Folia 下操作玩家必须走实体区域线程）；三种路径实测：内测开=完整加载零异常，开关未开=干净自禁用并给出明确日志
-- fix: 指令面板创建失败时降级复用旧受管面板 —— QQ 服务异常/限频/面板配额用满（30013）导致新建失败时，从本轮未认领的受管面板中挑一个原位改写内容与目标群并接管其 remark，下次同步自动收敛；修复创建失败路径下面板被 stale 清理误删、群彻底失去面板的问题（#36 同类事故面）
-- fix: 面板 stale 清理的安全边界 —— 只有本轮至少一个面板成功落地时才清理；`updatePanelWithVersion` 支持 `remarkOverride`
+## v26.1（2026-11-17）
 
 ### 新功能
 
-- feat: 指令面板全局面板模式 —— 所有配置群均无单独覆盖（`groups/<id>/config.yml` 不存在）时，面板以 `target_type=all` 创建（QQ 全局面板），覆盖机器人所在的**所有**群，包括没写进 `bot.groups` 的群；未单独配置的群默认显示完整面板信息，不再"配置里没写就没有面板"
-- feat: 代理端适配恢复构建 —— `server-Proxy` 模块重新纳入主构建，一个 jar 同时支持装到 **Velocity** 与 **BungeeCord**：游戏↔QQ 聊天互转、进服/退服通知、白名单/命令通过 Redis 互通桥转发到子服（`redis.enabled` 开启后 `服务器名:命令` / `ALL:命令`），Redis 关闭时优雅降级并给出明确提示
-- feat: Folia 内测调度适配（隐藏开关）—— `plugin.yml` 新增 `foiladebug` 内测调试项（默认关闭，不在文档明示）。手动改为 true 才启用多核区域化调度（`AsyncScheduler` / `GlobalRegionScheduler` 反射适配）；开关未开而在对应运行时上加载时插件直接停用并给出详细日志，绝不以传统调度器硬跑导致服务端出错
+- feat: **TTS 语音合成工具**（聊天 AI 与工作 Agent 均可调用 `speak_tts`）—— 预制音色 / 自然语言生成音色 / 音色克隆三种模式，各配一个模型 ID（不填则该能力对 AI 不可见）；统一 OpenAI 兼容 `chat/completions` 接口（默认小米 MiMo-V2.5 TTS 系列）；克隆参考音频放 `tts-voices/` 目录；每条消息最多合成 `tts.max-per-turn` 条；音频经 WebUI `/tts-cache/` 以公网 URL 提供给 QQ 富媒体语音消息（`file_type=3`）
+- feat: **命令映射与切换** —— `command-aliases.map`（原名与新名都可用）与 `command-aliases.rename`（原名彻底停用），配置文件中命令名不带斜杠；指令面板自动显示映射后的名字、隐藏被切换的原名；config.yml 内置完整教程注释
+- feat: **聊天 AI 默认前缀 `/ai`** —— `/agent` 为工作 Agent、`/ai` 为群员聊天 AI；聊天 AI 仅保留只读工具（联网搜索 / 服务器状态 / 在线列表 / TTS），绝不具备命令执行能力
+- feat: **在线列表图片信息增强** —— 彩色 MOTD（§ 颜色代码解析）、服务器图标（`server-icon.png`）、连接地址（未配置时给出明确指引）、在线/最大人数、服务端品牌、核心版本、协议版本、ViaVersion 支持范围；`online-list.max-render-players` 单图上限，超出时图片只画前 N 位并追加 Markdown 完整名单
+
+### 修复
+
+- fix: **内置字体覆盖不全** —— 原 1.8MB 裁剪字体缺"昉/雲"等生僻汉字（服务器名会显示方块），替换为完整 CJK 文泉驿微米黑（约 5MB，实测 0 缺字）
+- fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机 Leaf + 生产插件环境复现），已恢复完整 BC；修复后假凭据实测 QQ 客户端完整走通启动链路
+- fix: 代理端描述文件占位入口 —— 删除指向不存在类的 `bungee.yml` / `velocity-plugin.json`
+- fix: Folia 内测适配 —— 13 处调度统一走 `FoliaScheduler` + `runForEntity` 实体调度；三种路径实测（内测开=完整加载零异常，开关未开=干净自禁用）
+- fix: 指令面板创建失败时降级复用旧受管面板 —— QQ 服务异常/限频/配额用满（30013）不再导致面板消失（#36 同类事故面）
+- fix: 面板 stale 清理的安全边界 —— 只有本轮至少一个面板成功落地时才清理
 
 ### 改进
 
-- change: 单 jar 多端 —— `HuHoBot-Penguin-26.1.jar` 一个包同时支持 Spigot/Paper/Leaf/Purpur/Folia 与 BungeeCord/Velocity（各端只加载自己的入口类与描述文件），不再区分 Spigot/Proxy 两个 jar
+- change: **单 jar 多端** —— `HuHoBot-Penguin-26.1.jar` 一个包同时支持 Spigot/Paper/Leaf/Purpur/Folia 与 BungeeCord/Velocity（各端只加载自己的入口类与描述文件）
+- change: 指令面板全局面板模式 —— 未单独配置的群默认显示完整面板（QQ `target_type=all`）
 - change: 版本号 1.21.1 → 26.1，Gradle / plugin.yml / `/版本` 全链路同步
-- change: 面板复用按 remark + target_type 双匹配，specific/all 模式切换时旧面板走创建 + stale 清理，不原位改写
+- change: 渲染视觉验证 —— 3 场景 PNG 实测（满员/未配置/空服），中文字形、彩色 MOTD、截断提示全部符合预期
+
+### 支持范围
+
+- Minecraft **1.18 ～ 1.21.11**（`api-version: '1.18'`，编译目标 Paper API 1.21.11）
+- 服务端实测：Paper 1.21.11、Leaf 1.21.11（真实生产环境 29 插件）、Folia 1.21.11（内测开关）、Velocity 3.3、BungeeCord 最新构建
+- JDK：Bukkit 端 Java 17+ 建议（Leaf/Paper 1.21.11 运行 Java 25 正常）；代理端 Java 17+
 
 ### 升级提示
 
-- 无配置变更；老用户升级后面板行为不变（已单独配置的群仍走专属面板），未配置的群新增默认面板覆盖
-- 代理端用户：Redis 默认关闭，仅影响 `服务器名:命令` 跨服转发，其余功能照常
+- 无破坏性配置变更；老 `config.yml` 启动时自动追加 16 个新配置项（tts.* / command-aliases.* / online-list.max-render-players）
+- TTS 需要配置 `tts.api-key` 与 `tts.public-base-url`（WebUI 公网地址）；QQ 官方语音要求 silk 格式，wav/mp3 在部分环境可用，被拒时请配合 silk 转码服务
 
 ---
 

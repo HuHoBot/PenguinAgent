@@ -660,14 +660,21 @@ plugins/HuHoBotPenguin/addons/hello/
 ### v26.1（最新）
 
 **修复：**
-- fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机 Leaf + 生产插件环境复现），已恢复完整 BC
+- fix: 内置字体覆盖不全（生僻字方块）→ 替换为完整 CJK 文泉驿微米黑
+- fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机环境复现），已恢复完整 BC
 - fix: 指令面板创建失败时降级复用旧受管面板，QQ 服务异常/配额用满不再导致面板消失（#36 同类事故面）
 - fix: Folia 内测适配（13 处调度统一走 FoliaScheduler + runForEntity 实体调度）
 
 **新功能：**
+- feat: TTS 语音合成工具（预制音色 / 自然语言音色 / 音色克隆，QQ 语音消息发送）
+- feat: 命令映射与切换（原名/新名双可用 或 原名停用），面板同步显示，配置内置教程
+- feat: 聊天 AI 默认前缀 `/ai`（`/agent` 为工作 Agent），聊天 AI 仅只读工具
+- feat: 在线列表图片增强 —— 彩色 MOTD / 服务器图标 / 地址 / 人数 / 品牌 / 核心 / 协议 / Via 范围，超限自动转 Markdown 名单
 - feat: 指令面板全局面板模式 —— 未单独配置的群默认显示完整面板（QQ `target_type=all`）
 - feat: 单 jar 多端 —— 一个 `HuHoBot-Penguin-26.1.jar` 同时支持 Spigot/Paper/Leaf/Purpur/Folia 与 BungeeCord/Velocity
 - feat: Folia 内测调度适配（`plugin.yml` 隐藏开关 `foiladebug`，默认关闭）
+
+**支持范围：** Minecraft 1.18 ～ 1.21.11（`api-version: '1.18'`，编译目标 Paper API 1.21.11）
 
 ### v1.21.1
 
