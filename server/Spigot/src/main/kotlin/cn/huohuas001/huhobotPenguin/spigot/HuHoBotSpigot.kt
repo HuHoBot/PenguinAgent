@@ -102,6 +102,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         cn.huohuas001.bot.state.PermissionGroupsStore.configure(dataFolder)
         // 命令映射/切换（启动与重载时刷新）
         cn.huohuas001.bot.state.CommandMappingStore.refresh()
+        // 在线人数历史（查在线图片的趋势折线图）
+        cn.huohuas001.huhobotPenguin.spigot.onlinelist.OnlineHistoryStore.configure(dataFolder)
         // 性能预警（TPS/内存持续异常与恢复时通报 QQ 群）
         performanceWatcher.start()
         cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)

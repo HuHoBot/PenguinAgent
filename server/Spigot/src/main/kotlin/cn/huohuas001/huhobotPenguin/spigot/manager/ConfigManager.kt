@@ -330,6 +330,10 @@ class ConfigManager(
     fun onlineListRenderColumns(): Int =
         plugin.config.getInt("online-list.render.columns", 3).coerceIn(1, 3)
 
+    /** 在线列表图片的自定义信息行（支持 §/hex/MiniMessage）。 */
+    fun onlineListCustomLines(): List<String> =
+        plugin.config.getStringList("online-list.render.custom-lines").filter(String::isNotBlank)
+
     /** 单张图片最多渲染的玩家数；超出部分用 Markdown 文字列表补全。 */
     fun onlineListMaxRenderPlayers(): Int =
         plugin.config.getInt("online-list.max-render-players", 27).coerceIn(1, 200)
@@ -1028,6 +1032,7 @@ class ConfigManager(
             put("online-list.enabled", true)
             put("online-list.page-size", 27)
             put("online-list.max-render-players", 27)
+            put("online-list.render.custom-lines", emptyList<String>())
             put("message.send-policy", "auto")
             put("server-notify.performance.enabled", true)
             put("server-notify.performance.tps-threshold", 15.0)

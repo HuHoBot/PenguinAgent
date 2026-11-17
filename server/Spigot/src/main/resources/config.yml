@@ -104,6 +104,12 @@ online-list:
   page-size: 27
   # 单张图片最多渲染的玩家数（超过时图片只画前 N 位，完整名单以 Markdown 文字补发）
   max-render-players: 27
+  # 图片中的自定义信息行（显示在地址下方，支持 §颜色 / &#RRGGBB / hex / MiniMessage 标签）
+  # 例：
+  # custom-lines:
+  #   - "&#35E0C0服务器: 星昉雲宇 | 腐竹: SmallLinkBoy"
+  #   - "<gradient:#4FE3C1:#8B7CF6>欢迎加入我们的交流群</gradient>"
+  custom-lines: []
   # 管理员置顶；组内按玩家名排序
   admin-first: true
   # 管理员判定权限节点；留空时只看 OP

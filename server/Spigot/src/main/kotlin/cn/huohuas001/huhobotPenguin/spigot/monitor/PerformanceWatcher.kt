@@ -29,6 +29,8 @@ class PerformanceWatcher(private val plugin: HuHoBotSpigot) {
 
     private fun tick() {
         runCatching {
+            // 在线人数采样（供查在线图片的趋势图）
+            runCatching { cn.huohuas001.huhobotPenguin.spigot.onlinelist.OnlineHistoryStore.record(plugin.server.onlinePlayers.size) }
             if (!plugin.isPerformanceNotifyEnabled()) return
             val tps = readTps()
             val runtime = Runtime.getRuntime()

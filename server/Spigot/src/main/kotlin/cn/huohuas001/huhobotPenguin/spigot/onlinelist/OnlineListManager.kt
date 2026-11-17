@@ -54,7 +54,8 @@ class OnlineListManager(
                 configuredFont = config.onlineListRenderFontFamily(),
                 footerText = config.onlineListRenderFooterText(),
                 protocolSummary = plugin.getProtocolSummary(),
-                maxRenderPlayers = config.onlineListMaxRenderPlayers()
+                maxRenderPlayers = config.onlineListMaxRenderPlayers(),
+                customLines = config.onlineListCustomLines()
             )
         } catch (error: Throwable) {
             // 底图资源缺失/损坏时不中断插件启动，仅关闭本地渲染能力
