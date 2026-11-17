@@ -821,6 +821,7 @@ class ConfigManager(
             "bot.auto-add-groups" to "收到陌生群消息时自动把群 OpenID 写入 bot.groups",
             "online-list.enabled" to "查在线命令是否使用本地渲染的在线列表图片（关闭后回退到 MOTD 外部 API 图片）",
             "online-list.page-size" to "在线列表每页玩家数（三列布局推荐 27 = 3列×9行）",
+            "online-list.max-render-players" to "单张图片最多渲染的玩家数；超出时完整名单以 Markdown 文字补发",
             "online-list.admin-first" to "管理员是否排在在线列表最前面",
             "online-list.admin-permission" to "在线列表管理员判定权限节点；留空时只看 OP",
             "online-list.cooldown-seconds" to "同一 QQ 群两次在线列表请求的最小间隔秒数，防刷屏",
@@ -948,6 +949,23 @@ class ConfigManager(
             put("chat-ai.search.api-url", "")
             put("chat-ai.search.api-key", "")
 
+            put("tts.enabled", false)
+            put("tts.base-url", "https://api.xiaomimimo.com/v1")
+            put("tts.api-key", "")
+            put("tts.public-base-url", "")
+            put("tts.format", "wav")
+            put("tts.preset-model", "mimo-v2.5-tts")
+            put("tts.natural-model", "mimo-v2.5-tts-voicedesign")
+            put("tts.clone-model", "mimo-v2.5-tts-voiceclone")
+            put("tts.preset-default-voice", "mimo_default")
+            put("tts.natural-default-voice", "温柔亲切的中文女声")
+            put("tts.clone-voices-dir", "tts-voices")
+            put("tts.clone-default-voice", "")
+            put("tts.max-per-turn", 2)
+
+            put("command-aliases.map", LinkedHashMap<String, String>())
+            put("command-aliases.rename", LinkedHashMap<String, String>())
+
             put("search.provider", "none")
             put("search.api-url", "")
             put("search.api-key", "")
@@ -996,6 +1014,7 @@ class ConfigManager(
             // 在线列表渲染
             put("online-list.enabled", true)
             put("online-list.page-size", 27)
+            put("online-list.max-render-players", 27)
             put("online-list.admin-first", true)
             put("online-list.admin-permission", "")
             put("online-list.cooldown-seconds", 3L)
