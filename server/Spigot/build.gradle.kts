@@ -18,6 +18,10 @@ repositories {
 dependencies {
     implementation(project(":common-Bot"))
     implementation(project(":server-AdapterCommon"))
+    // 单 jar 多端：把 BungeeCord / Velocity 代理端适配并入主产物（compileOnly 的
+    // velocity-api / bungeecord-api 不会进入 jar），Bukkit / BungeeCord / Velocity
+    // 各自只加载自己的入口类与描述文件，互不干扰。
+    implementation(project(":server-Proxy"))
     implementation("com.alibaba:fastjson:2.0.32")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
@@ -104,7 +108,7 @@ tasks {
         exclude("org/slf4j/**")
         exclude("io/netty/**")
         exclude("net/md_5/**")
-        archiveFileName.set("HuHoBot-Penguin_Spigot-${project.version}.jar")
+        archiveFileName.set("HuHoBot-Penguin-${project.version}.jar")
         finalizedBy(gatherJar)
         relocate("org.bstats", "${project.group}.bstats")
         // 自带一份 Adventure，避免和 Paper / 其他插件的版本冲突。
@@ -123,8 +127,9 @@ tasks {
         exclude("org/sqlite/native/Windows/armv7/**")
         exclude("org/sqlite/native/Windows/aarch64/**")
         exclude("org/sqlite/native/Windows/x86/**")
-        // BouncyCastle 的后量子密码资源(QQ 登录用不到)——体积大头之一
-        exclude("org/bouncycastle/pqc/**")
+        // BouncyCastle 的 JCE Provider 初始化会反射加载全部算法注册（含 PQC 的
+        // SPHINCSPlus），裁剪 org/bouncycastle/pqc/** 会导致 QQ 客户端启动时
+        // NoClassDefFoundError（真机 Leaf + 生产插件环境下已复现），绝不能裁。
         mergeServiceFiles()
         exclude(
             "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA",

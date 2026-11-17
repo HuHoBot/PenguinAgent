@@ -4,6 +4,8 @@
 
 ### 修复
 
+- fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机复现）—— v26.1 瘦身时裁掉 `org/bouncycastle/pqc/**`，但 `BouncyCastleProvider` 初始化会反射加载全部算法注册（含 PQC），生产环境（Leaf 1.21.11 + 29 插件）配置好凭据后即抛 `NoClassDefFoundError: SPHINCSPlusKeyFactorySpi`。已恢复完整 BC；修复后假凭据实测 QQ 客户端完整走通启动链路（HTTP 网关请求正常发出，401 为假凭据预期结果）
+- fix: 代理端描述文件占位入口 —— Spigot jar 内残留指向不存在类的 `bungee.yml` / `velocity-plugin.json`，已删除；代理端描述现在由真实入口类提供且版本号正确展开
 - fix: Folia 内测适配 —— 真机测试抓到 `OfflineInventorySnapshots` 直接使用传统调度器导致 `onEnable` 崩溃；修复 13 处直接调度调用统一走 `FoliaScheduler`（广播/事件同步/踢人/白名单/命令输出回读/在线列表快照/背包快照/ProxyBridge），新增 `runForEntity`（Folia 下操作玩家必须走实体区域线程）；三种路径实测：内测开=完整加载零异常，开关未开=干净自禁用并给出明确日志
 - fix: 指令面板创建失败时降级复用旧受管面板 —— QQ 服务异常/限频/面板配额用满（30013）导致新建失败时，从本轮未认领的受管面板中挑一个原位改写内容与目标群并接管其 remark，下次同步自动收敛；修复创建失败路径下面板被 stale 清理误删、群彻底失去面板的问题（#36 同类事故面）
 - fix: 面板 stale 清理的安全边界 —— 只有本轮至少一个面板成功落地时才清理；`updatePanelWithVersion` 支持 `remarkOverride`
@@ -16,6 +18,7 @@
 
 ### 改进
 
+- change: 单 jar 多端 —— `HuHoBot-Penguin-26.1.jar` 一个包同时支持 Spigot/Paper/Leaf/Purpur/Folia 与 BungeeCord/Velocity（各端只加载自己的入口类与描述文件），不再区分 Spigot/Proxy 两个 jar
 - change: 版本号 1.21.1 → 26.1，Gradle / plugin.yml / `/版本` 全链路同步
 - change: 面板复用按 remark + target_type 双匹配，specific/all 模式切换时旧面板走创建 + stale 清理，不原位改写
 
