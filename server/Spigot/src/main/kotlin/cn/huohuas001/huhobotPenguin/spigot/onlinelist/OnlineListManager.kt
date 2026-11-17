@@ -62,7 +62,7 @@ class OnlineListManager(
             plugin.log_warning("在线列表渲染器初始化失败，查在线将回退到 MOTD 图片: ${error.message}")
             return
         }
-        plugin.log_info("在线列表渲染器已就绪（雾蓝玻璃主题）")
+        plugin.log_info("在线列表渲染器已就绪（深色科技风 · 趋势图 · 彩色 MOTD）")
     }
 
     fun stop() {
