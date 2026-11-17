@@ -36,6 +36,10 @@ interface OnlineListImageReply {
     /** 成功渲染 PNG 图片，bytes 为 PNG 数据。 */
     fun image(png: ByteArray)
 
+    /** 图片之后的补充文字（玩家超出单图上限时，用 Markdown 列表补全）。 */
+    fun text(message: String) {
+    }
+
     /** 请求被冷却或并发限制拒绝。 */
     fun busy()
 

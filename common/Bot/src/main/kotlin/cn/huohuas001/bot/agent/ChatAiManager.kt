@@ -1,5 +1,7 @@
 package cn.huohuas001.bot.agent
 
+import cn.huohuas001.bot.QClient
+
 import cn.huohuas001.bot.HuHoBot
 import cn.huohuas001.bot.provider.BotShared
 import com.alibaba.fastjson.JSONArray
@@ -80,7 +82,7 @@ object ChatAiManager {
                     val function = call.getJSONObject("function") ?: continue
                     val name = function.getString("name") ?: continue
                     val args = AgentTools.parseArguments(function.getString("arguments"))
-                    val output = executeChatTool(plugin, config, name, args)
+                    val output = executeChatTool(plugin, config, name, args, groupOpenId)
                     messages.add(toolMessage(call.getString("id") ?: "call_$i", output))
                 }
             }
@@ -181,17 +183,29 @@ object ChatAiManager {
 
     private fun buildTools(plugin: HuHoBot, config: ChatAiConfig): JSONArray? {
         val allowed = config.allowedTools
-        if (allowed.isEmpty() && config.search == null) return null
+        if (allowed.isEmpty() && config.search == null && !cn.huohuas001.bot.provider.BotShared.getPluginOrNull().let {
+                it != null && it.isTtsEnabled() && TtsManager.anyModelAvailable()
+            }
+        ) return null
         val tools = JSONArray()
         if (config.search != null && (allowed.isEmpty() || "web_search" in allowed)) {
             tools.add(AgentTools.webSearchTool())
         }
-        // 预留：allowedTools 里显式列出的其它只读工具（get_server_status 等）
+        // 只读信息查询：聊天 AI 不具备控制服务器的能力
+        if (allowed.isEmpty() || "get_server_status" in allowed) tools.add(AgentTools.serverStatusTool())
+        if (allowed.isEmpty() || "get_online_players" in allowed) tools.add(AgentTools.onlineListTool())
+        // TTS 工具：启用且有任一模型 ID 时才暴露给 AI
+        val plugin0 = cn.huohuas001.bot.provider.BotShared.getPluginOrNull()
+        if (plugin0 != null && plugin0.isTtsEnabled()) {
+            TtsManager.toolDescription()?.let { desc ->
+                tools.add(TtsManager.speakTool(desc))
+            }
+        }
         return if (tools.isEmpty()) null else tools
     }
 
     /** 聊天 AI 的工具执行（只开放只读能力，绝不执行服务器命令）。 */
-    private fun executeChatTool(plugin: HuHoBot, config: ChatAiConfig, name: String, args: JSONObject): String =
+    private fun executeChatTool(plugin: HuHoBot, config: ChatAiConfig, name: String, args: JSONObject, groupOpenId: String): String =
         when (name) {
             "web_search" -> {
                 val search = config.search
@@ -199,6 +213,24 @@ object ChatAiManager {
                 else SearchProvider.summarize(SearchProvider.search(search, args.getString("query").orEmpty()))
             }
             "get_server_status" -> AgentTools.getServerStatusText(plugin)
+            "get_online_players" -> {
+                val online = plugin.getOnlineList()
+                "当前在线 ${online.size} 人：${online.joinToString("、").ifBlank { "无" }}"
+            }
+            TtsManager.TOOL_SPEAK_TTS -> {
+                val result = TtsManager.speak(
+                    sessionKey = groupOpenId,
+                    mode = args.getString("mode").orEmpty(),
+                    text = args.getString("text").orEmpty(),
+                    voice = args.getString("voice"),
+                    description = args.getString("description"),
+                    voiceFile = args.getString("voice_file"),
+                    style = args.getString("style")
+                )
+                if (!result.ok) result.message
+                else if (QClient.sendGroupVoice(groupOpenId, result.url)) "语音已发送到 QQ 群"
+                else "语音已合成但发送失败：请检查 tts.public-base-url 是否公网可达以及 QQ 富媒体权限"
+            }
             else -> "未知或未启用的工具：$name"
         }
 

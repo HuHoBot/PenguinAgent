@@ -6,6 +6,7 @@ import cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
 import cn.huohuas001.huhobotPenguin.spigot.manager.ConfigManager
 import org.bukkit.Bukkit
 import java.util.concurrent.Callable
+import java.awt.image.BufferedImage
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
@@ -52,7 +53,8 @@ class OnlineListManager(
                 columns = config.onlineListRenderColumns(),
                 configuredFont = config.onlineListRenderFontFamily(),
                 footerText = config.onlineListRenderFooterText(),
-                protocolSummary = plugin.getProtocolSummary()
+                protocolSummary = plugin.getProtocolSummary(),
+                maxRenderPlayers = config.onlineListMaxRenderPlayers()
             )
         } catch (error: Throwable) {
             // 底图资源缺失/损坏时不中断插件启动，仅关闭本地渲染能力
@@ -125,6 +127,15 @@ class OnlineListManager(
                     return@execute
                 }
                 reply.image(png)
+                // 超出单图上限：图片只画前 max-render-players 位，其余用 Markdown 文字补全
+                val maxRender = config.onlineListMaxRenderPlayers()
+                if (snapshot.players.size > maxRender) {
+                    val listed = snapshot.players.joinToString("\n") { "- ${it.name}" }
+                    reply.text(
+                        "**在线玩家 ${snapshot.totalOnlinePlayers} / ${snapshot.maxPlayers}**\n" +
+                            "$listed\n\n（图中仅显示前 $maxRender 位）"
+                    )
+                }
             } catch (error: Throwable) {
                 plugin.log_warning("在线列表渲染失败: ${error.message}")
                 reply.failed("在线列表渲染失败: ${error.message}")
@@ -179,9 +190,32 @@ class OnlineListManager(
             serverName = config.serverName(),
             maxPlayers = plugin.server.maxPlayers,
             totalOnlinePlayers = sorted.size,
-            players = sorted
+            players = sorted,
+            motd = resolveMotd(),
+            icon = loadServerIcon(),
+            serverIp = config.motdServerIp().trim().takeIf { it.isNotBlank() && it != "127.0.0.1" }.orEmpty(),
+            serverPort = config.motdServerPort(),
+            brand = runCatching { plugin.server.name }.getOrDefault(""),
+            coreVersion = runCatching { plugin.server.version }.getOrDefault(""),
+            protocolVersion = runCatching { plugin.server.bukkitVersion }.getOrDefault(""),
+            viaRange = runCatching { plugin.getProtocolSummary() }.getOrNull().orEmpty()
         )
     }
+
+    /** MOTD：优先 config.yml 的 motd.text，否则用服务端 server.properties 的 motd。 */
+    private fun resolveMotd(): String {
+        val configured = config.motdText()
+        if (configured.isNotBlank()) return configured
+        return runCatching { plugin.server.motd }.getOrDefault("")
+    }
+
+    /** 服务器图标：读取服务端根目录的 server-icon.png（64x64 推荐）。 */
+    private fun loadServerIcon(): BufferedImage? = runCatching {
+        val file = plugin.server.worldContainer.parentFile?.resolve("server-icon.png")
+            ?: return null
+        if (!file.isFile) return null
+        javax.imageio.ImageIO.read(file)
+    }.getOrNull()
 
     private fun namedThreads(prefix: String): ThreadFactory {
         val index = AtomicInteger()

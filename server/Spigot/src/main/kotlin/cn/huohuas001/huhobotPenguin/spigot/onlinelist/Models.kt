@@ -1,5 +1,7 @@
 package cn.huohuas001.huhobotPenguin.spigot.onlinelist
 
+import java.awt.image.BufferedImage
+
 /** 在线列表渲染用玩家快照（主线程快照，不可变）。 */
 class OnlineListPlayer(
     val name: String,
@@ -16,5 +18,20 @@ class ServerSnapshot(
     val players: List<OnlineListPlayer>,
     val capturedAt: Long = System.currentTimeMillis(),
     val currentPage: Int = 1,
-    val totalPages: Int = 1
+    val totalPages: Int = 1,
+    /** 服务器 MOTD（保留 § 颜色代码，渲染时解析成彩色）。 */
+    val motd: String = "",
+    /** 服务器图标（server-icon.png，未配置时为 null）。 */
+    val icon: BufferedImage? = null,
+    /** 对外连接地址；为空表示用户尚未在 config.yml 的 motd.server-ip 配置。 */
+    val serverIp: String = "",
+    val serverPort: Int = 25565,
+    /** 服务端品牌（Paper/Leaf/Purpur/Folia 等）。 */
+    val brand: String = "",
+    /** Bukkit/Minecraft 核心版本。 */
+    val coreVersion: String = "",
+    /** 协议版本描述（如 1.21.11 / 774）。 */
+    val protocolVersion: String = "",
+    /** ViaVersion 等插件推算出的支持版本范围；为空表示未检测到 Via。 */
+    val viaRange: String = ""
 )

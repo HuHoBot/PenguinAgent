@@ -327,8 +327,8 @@ interface ConfigProvider {
     fun getChatAiBaseUrl(): String? = null
     fun getChatAiApiKey(): String? = null
     fun getChatAiModel(): String? = null
-    /** 触发前缀（可选）；空 = 任何 @机器人 的非命令消息都会触发。 */
-    fun getChatAiTrigger(): String = ""
+    /** 触发前缀（可选）；默认 /ai。空 = 任何 @机器人 的非命令消息都会触发聊天 AI。 */
+    fun getChatAiTrigger(): String = "/ai"
     fun getChatAiThink(): Boolean = false
     fun getChatAiThinkLevel(): String = ""
     fun getChatAiThinkParam(): String = "reasoning_effort"
@@ -338,6 +338,39 @@ interface ConfigProvider {
     fun getChatAiTools(): List<String> = emptyList()
     /** 同群共享上下文保留条数。 */
     fun getChatAiMaxContext(): Int = 30
+
+    // ------------------------------------------------------ TTS 语音合成（AI 可调用工具）
+
+    fun isTtsEnabled(): Boolean = false
+    /** 统一 API 地址（OpenAI 兼容 chat/completions），默认小米 MiMo。 */
+    fun getTtsBaseUrl(): String = "https://api.xiaomimimo.com/v1"
+    fun getTtsApiKey(): String = ""
+    /** WebUI 对外的公网地址；QQ 服务器经此拉取音频。 */
+    fun getTtsPublicBaseUrl(): String = ""
+    /** 音频格式：wav / mp3 / pcm16（部分环境语音需 silk，可用第三方转码服务配合）。 */
+    fun getTtsFormat(): String = "wav"
+    /** 预制音色模型 ID；留空 = AI 无法使用预制音色。 */
+    fun getTtsPresetModel(): String = "mimo-v2.5-tts"
+    /** 自然语言音色模型 ID；留空 = AI 无法使用。 */
+    fun getTtsNaturalModel(): String = ""
+    /** 音色克隆模型 ID；留空 = AI 无法使用。 */
+    fun getTtsCloneModel(): String = ""
+    fun getTtsPresetDefaultVoice(): String = "mimo_default"
+    fun getTtsNaturalDefaultVoice(): String = "温柔亲切的中文女声"
+    /** 克隆参考音频目录（插件数据目录下的相对路径）。 */
+    fun getTtsCloneVoicesDir(): String = "tts-voices"
+    /** 默认克隆参考音频文件名；留空 = 需 AI 指定 voice_file。 */
+    fun getTtsCloneDefaultVoice(): String = ""
+    /** 每条消息（一轮对话）最多合成语音条数。 */
+    fun getTtsMaxPerTurn(): Int = 2
+
+    // ------------------------------------------------------ 命令映射与切换
+
+    /** 映射：原名 → 新名，原名与新名都可用。 */
+    fun getCommandAliasMap(): Map<String, String> = emptyMap()
+
+    /** 切换：原名 → 新名，只有新名可用。 */
+    fun getCommandAliasRename(): Map<String, String> = emptyMap()
     fun getChatAiCompressTarget(): Int = 4000
     fun getChatAiCompressKeep(): Int = 20
     fun getChatAiSearchProvider(): String = ""

@@ -15,6 +15,7 @@ import cn.huohuas001.bot.state.GroupDirectory
 import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.bot.tools.QqBotConsoleOutputFilter
 import com.alibaba.fastjson.JSON
+import com.alibaba.fastjson.JSONObject
 import io.github.kloping.qqbot.Starter
 import io.github.kloping.qqbot.api.Intents
 import io.github.kloping.qqbot.api.event.ConnectedEvent
@@ -471,6 +472,35 @@ object QClient {
         } catch (error: Exception) {
             plugin.log_error("向QQ群 $groupOpenId 发送 Markdown 失败: ${error.message}")
             null
+        }
+    }
+
+    /**
+     * TTS 语音发送：QQ 富媒体 file_type=3（语音），url 需公网可拉取。
+     * 注意：官方要求语音为 silk 格式；wav/mp3 在部分平台环境可用，若被拒请配置 silk 转码。
+     */
+    fun sendGroupVoice(groupOpenId: String, url: String): Boolean {
+        val plugin = BotShared.getPlugin()
+        if (!::starter.isInitialized || !connectedReady) {
+            plugin.log_warning("QQ 机器人未就绪，语音发送失败")
+            return false
+        }
+        if (url.isBlank()) return false
+        return try {
+            val body = JSONObject().apply {
+                put("file_type", 3)
+                put("url", url)
+                put("srv_send_msg", true)
+            }
+            starter.bot.groupBaseV2.sendFile(
+                groupOpenId,
+                JSON.toJSONString(body),
+                Channel.SEND_MESSAGE_HEADERS
+            )
+            true
+        } catch (error: Exception) {
+            plugin.log_error("发送语音到QQ群 $groupOpenId 失败: ${error.message}")
+            false
         }
     }
 

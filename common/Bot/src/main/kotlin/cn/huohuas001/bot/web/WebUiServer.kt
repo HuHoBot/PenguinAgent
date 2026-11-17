@@ -118,6 +118,8 @@ object WebUiServer {
                 path == "/api/addons/install" && method == "POST" -> handleAddonInstall(exchange)
                 path == "/api/addons/remove" && method == "POST" -> handleAddonRemove(exchange)
                 path == "/api/password" && method == "POST" -> handlePassword(exchange)
+                // TTS 音频缓存：QQ 服务器拉取语音的公网入口（无需鉴权；文件名严格校验）
+                path.startsWith("/tts-cache/") -> serveTtsCache(exchange, path.removePrefix("/tts-cache/"))
                 else -> respond(exchange, 404, """{"error":"Not Found"}""")
             }
         } catch (error: Throwable) {
@@ -131,6 +133,32 @@ object WebUiServer {
     }
 
     // ---------------------------------------------------------------- 静态资源
+
+    /**
+     * TTS 语音缓存文件服务。仅接受 `tts-<时间戳>-<tag>.<格式>` 形式的文件名
+     * （由 TtsManager 生成），防止路径穿越与任意文件读取。
+     */
+    private fun serveTtsCache(exchange: HttpExchange, fileName: String) {
+        if (!fileName.matches(Regex("tts-\\d+-[A-Za-z0-9_]+\\.(wav|mp3|pcm16?)"))) {
+            respond(exchange, 404, "Not Found")
+            return
+        }
+        val plugin = cn.huohuas001.bot.provider.BotShared.getPluginOrNull()
+        val dir = plugin?.getConfigFile()?.parentFile?.resolve("tts-cache")
+        val file = dir?.resolve(fileName)
+        if (file == null || !file.isFile) {
+            respond(exchange, 404, "Not Found")
+            return
+        }
+        val bytes = file.readBytes()
+        exchange.responseHeaders.set(
+            "Content-Type",
+            if (fileName.endsWith(".mp3")) "audio/mpeg" else "audio/wav"
+        )
+        exchange.responseHeaders.set("Cache-Control", "no-store")
+        exchange.sendResponseHeaders(200, bytes.size.toLong())
+        exchange.responseBody.use { it.write(bytes) }
+    }
 
     private fun serveResource(exchange: HttpExchange, resourcePath: String, contentType: String) {
         val stream = WebUiServer::class.java.getResourceAsStream(resourcePath)

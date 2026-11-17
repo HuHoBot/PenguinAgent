@@ -81,7 +81,25 @@ abstract class BaseCommand {
         // 去掉 @提及(支持 <@id> 和 <@!id> 格式),保留前导 / 以便识别自定义命令快捷方式。
         val mentionStripped = Regex("<@!?[^>]+>").replace(content, "").trim()
         val isSlashCommand = mentionStripped.startsWith("/")
-        val cleaned = if (isSlashCommand) mentionStripped.removePrefix("/").trimStart() else mentionStripped
+        var cleaned = if (isSlashCommand) mentionStripped.removePrefix("/").trimStart() else mentionStripped
+        // 命令映射/切换：把映射名/切换名规范为原名；被切换掉的原名直接拒绝
+        if (cleaned.isNotEmpty()) {
+            val firstWord = cleaned.split(Regex("\\s+"), 2)[0]
+            val resolved = cn.huohuas001.bot.state.CommandMappingStore.resolve(firstWord)
+            if (resolved == null) {
+                val groupId = event.groupOpenId ?: event.groupId
+                val alias = cn.huohuas001.bot.state.CommandMappingStore.aliasOf(firstWord)
+                if (!groupId.isNullOrBlank()) {
+                    cn.huohuas001.bot.QClient.sendTextToGroup(
+                        groupId,
+                        "命令 /$firstWord 已切换为 /$alias，请使用新命令"
+                    )
+                }
+                return DispatchResult.HANDLED
+            } else if (resolved != firstWord) {
+                cleaned = resolved + cleaned.removePrefix(firstWord)
+            }
+        }
         // 按指令名长度降序匹配,避免短指令抢先(如 "发" 抢走 "发信息")
         for (command in commandMap.keys.sortedByDescending { it.length }) {
             if (cleaned == command || cleaned.startsWith("$command ")) {

@@ -86,6 +86,8 @@ online-list:
   enabled: true
   # 每页玩家数，三列布局推荐 27（3列×9行）
   page-size: 27
+  # 单张图片最多渲染的玩家数（超过时图片只画前 N 位，完整名单以 Markdown 文字补发）
+  max-render-players: 27
   # 管理员置顶；组内按玩家名排序
   admin-first: true
   # 管理员判定权限节点；留空时只看 OP
@@ -314,6 +316,36 @@ custom-commands:
   #   command: "say {params}"
   #   permission: 1
 
+# ─────────────────── 命令映射与切换（教程） ───────────────────
+#
+# 用途：把内置/自定义命令改名为你喜欢的名字。
+#
+# 1) 映射（map）：原名与新名【都能用】，适合加个好记的别名。
+#    写法：原名: 新名
+#    例：查在线: 在线   →  群员发 /查在线 和 /在线 都可以查询在线列表
+#
+# 2) 切换（rename）：只有新名能用，【原名彻底停用】，适合完全重命名。
+#    写法：原名: 新名
+#    例：执行: cmd      →  群员必须发 /cmd，发 /执行 会被提示"已切换为 /cmd"
+#
+# 注意：
+# - 命令名一律【不带斜杠】，配置里写 "查在线" 而不是 "/查在线"。
+# - 改名只影响聊天里输入的命令与 QQ 指令面板的显示；命令的实际效果不变。
+# - 指令面板会自动显示映射/切换后的名字；被切换掉的原名不再出现在面板。
+# - 被切换掉的原名仍保留在命令开关（commands.<原名>.enable）里，开关按原名配置。
+# - 修改后执行 /hb reload 生效。
+#
+# 示例（把下面的 # 去掉即可启用）：
+# command-aliases:
+#   map:
+#     查在线: 在线
+#     查信息: 信息
+#   rename:
+#     执行: cmd
+command-aliases:
+  map: {}
+  rename: {}
+
 # ─────────────────── 通用 ───────────────────
 
 # 插件消息语言：zh_CN / en_US
@@ -344,7 +376,10 @@ chat-ai:
   base-url: ""
   api-key: ""
   model: "gpt-4o-mini"
-  trigger: ""          # 触发前缀(可选)；留空=任何 @机器人 的非命令消息
+  # 触发前缀（默认 /ai）：群里 @机器人 后以 /ai 开头才会交给聊天 AI，例如「/ai 今天天气怎么样」
+  # 也支持不带斜杠的纯文本（如 "ai"）。留空 = 任何 @机器人 的非命令消息都会触发。
+  # 聊天 AI 只有只读能力（联网搜索 / 服务器状态 / 在线列表 / TTS），不能执行命令。
+  trigger: "/ai"
   think: false
   think-level: ""
   think-param: "reasoning_effort"
@@ -366,6 +401,39 @@ search:
   api-url: ""
   api-key: ""
   result-count: 5
+
+# ─────────────────── TTS 语音合成（AI 工具：speak_tts） ───────────────────
+#
+# 聊天 AI（/ai）与工作 Agent（/agent）都可在对话中调用 speak_tts 生成 QQ 语音。
+# 统一使用 OpenAI 兼容的 chat/completions 接口（默认小米 MiMo-V2.5 TTS 系列）。
+#
+# 三种生成方式，各配一个模型 ID，【不填 = 该方式对 AI 不可见，AI 无法调用】：
+#   preset-model   预制音色（可唱歌风格；音色名填 preset-default-voice）
+#   natural-model  自然语言描述生成音色（AI 可自带描述，或使用 natural-default-voice）
+#   clone-model    音色克隆（参考音频放 tts-voices 目录，mp3/wav，≤10MB）
+#
+# 公网地址说明：QQ 服务器需要能通过 URL 拉取音频，所以必须配置 public-base-url，
+# 指向本插件 WebUI 对外的公网地址（端口映射/反代到 WebUI 的 5678 端口即可），
+# 音频经 <public-base-url>/tts-cache/<文件> 提供给 QQ。
+#
+# 语音格式：官方富媒体语音要求 silk；wav/mp3 在部分环境可直接播放，
+# 若被 QQ 拒收，请在 public-base-url 前加一层 silk 转码/转换服务。
+#
+# 每轮对话（一条用户消息）最多合成 max-per-turn 条语音。
+tts:
+  enabled: false
+  base-url: "https://api.xiaomimimo.com/v1"
+  api-key: ""
+  public-base-url: ""          # 例: "https://bot.example.com:5678"（必须公网可达）
+  format: "wav"                # wav / mp3 / pcm16（按服务商支持填写）
+  preset-model: "mimo-v2.5-tts"        # 留空=禁用预制音色
+  natural-model: "mimo-v2.5-tts-voicedesign"  # 留空=禁用自然语言音色
+  clone-model: "mimo-v2.5-tts-voiceclone"     # 留空=禁用音色克隆
+  preset-default-voice: "mimo_default"
+  natural-default-voice: "温柔亲切的中文女声"
+  clone-voices-dir: "tts-voices"       # 插件数据目录下的子文件夹
+  clone-default-voice: ""              # 默认参考音频文件名；留空=AI 需指定
+  max-per-turn: 2
 
 # ─────────────────── 网络代理 ───────────────────
 

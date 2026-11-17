@@ -355,6 +355,23 @@ object AgentManager {
                         session.messages.add(toolMessage(toolCallId, text))
                     }
 
+                    TtsManager.TOOL_SPEAK_TTS -> {
+                        val result = TtsManager.speak(
+                            sessionKey = session.groupOpenId,
+                            mode = query.getString("mode").orEmpty(),
+                            text = query.getString("text").orEmpty(),
+                            voice = query.getString("voice"),
+                            description = query.getString("description"),
+                            voiceFile = query.getString("voice_file"),
+                            style = query.getString("style")
+                        )
+                        val text = if (!result.ok) result.message
+                        else if (QClient.sendGroupVoice(session.groupOpenId, result.url)) "语音已发送到 QQ 群"
+                        else "语音已合成但发送失败：请检查 tts.public-base-url 是否公网可达以及 QQ 富媒体权限"
+                        session.messages.add(toolMessage(toolCallId, text))
+                        showFetchResult(plugin, session, AgentTools.ToolResult("语音消息", text))
+                    }
+
                     // ── QQ 群管理工具 ──
                     AgentTools.TOOL_GET_GROUP_INFO,
                     AgentTools.TOOL_GET_BOT_STATE,

@@ -289,11 +289,15 @@ object MenuManager {
                 .thenBy { it.command })
             .forEach { command ->
             val name = command.command.trim()
-            if (name.isEmpty() || !seen.add(name.lowercase())) return@forEach
-            if (displayWidth(name) > MAX_NAME_DISPLAY_WIDTH) {
+            if (name.isEmpty()) return@forEach
+            // 命令映射/切换：被切换掉的原名不再出现在面板，其余显示映射/切换后的新名
+            if (cn.huohuas001.bot.state.CommandMappingStore.isHidden(name)) return@forEach
+            val displayName = cn.huohuas001.bot.state.CommandMappingStore.displayName(name)
+            if (!seen.add(displayName.lowercase())) return@forEach
+            if (displayWidth(displayName) > MAX_NAME_DISPLAY_WIDTH) {
                 // 面板中的 name 就是实际插入输入框的命令，截断会生成不可用命令，因此跳过。
                 plugin?.log_warning(
-                    "命令面板跳过 '$name': 名称显示宽度超过 $MAX_NAME_DISPLAY_WIDTH"
+                    "命令面板跳过 '$displayName': 名称显示宽度超过 $MAX_NAME_DISPLAY_WIDTH"
                 )
                 return@forEach
             }

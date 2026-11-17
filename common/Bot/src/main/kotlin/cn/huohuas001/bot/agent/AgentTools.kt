@@ -86,6 +86,10 @@ object AgentTools {
 
     /** 构建 function calling 工具清单。 */
     fun buildTools(): JSONArray = JSONArray().apply {
+        // TTS 工具：启用且有任一模型 ID 时才对 AI 可见
+        BotShared.getPluginOrNull()?.takeIf { it.isTtsEnabled() }?.let { _ ->
+            TtsManager.toolDescription()?.let { desc -> add(TtsManager.speakTool(desc)) }
+        }
         add(JSONObject().apply {
             put("type", "function")
             put("function", JSONObject().apply {
@@ -397,6 +401,26 @@ object AgentTools {
                 })
                 put("required", JSONArray().apply { add("query") })
             })
+        })
+    }
+
+    /** get_server_status 工具定义（聊天 AI 复用，只读）。 */
+    fun serverStatusTool(): JSONObject = JSONObject().apply {
+        put("type", "function")
+        put("function", JSONObject().apply {
+            put("name", TOOL_GET_SERVER_STATUS)
+            put("description", "查询服务器实时状态（性能诊断、在线人数）。只读，不执行任何操作。")
+            put("parameters", JSONObject().apply { put("type", "object"); put("properties", JSONObject()) })
+        })
+    }
+
+    /** get_online_players 工具定义（聊天 AI 复用，只读）。 */
+    fun onlineListTool(): JSONObject = JSONObject().apply {
+        put("type", "function")
+        put("function", JSONObject().apply {
+            put("name", TOOL_GET_ONLINE_LIST)
+            put("description", "查询当前在线玩家列表。只读。")
+            put("parameters", JSONObject().apply { put("type", "object"); put("properties", JSONObject()) })
         })
     }
 

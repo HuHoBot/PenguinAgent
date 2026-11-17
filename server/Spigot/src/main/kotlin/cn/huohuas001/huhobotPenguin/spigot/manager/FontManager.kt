@@ -19,13 +19,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 object FontManager {
 
     /** jar 内的字体资源路径。 */
-    private const val FONT_RESOURCE = "/fonts/HuHoBotSans.otf"
+    private const val FONT_RESOURCE = "/fonts/HuHoBotSans.ttc"
 
     /** 解压后的相对路径（相对插件数据目录）。 */
-    private const val FONT_TARGET = "fonts/HuHoBotSans.otf"
+    private const val FONT_TARGET = "fonts/HuHoBotSans.ttc"
 
     /** 内置字体的 family 名（子集化后保留原名）。 */
-    const val BUNDLED_FAMILY = "Noto Sans CJK SC"
+    const val BUNDLED_FAMILY = "WenQuanYi Micro Hei"
 
     private val registered = AtomicBoolean(false)
 
@@ -42,7 +42,7 @@ object FontManager {
                 logWarning("内置字体资源缺失: $FONT_RESOURCE，图片渲染将回退系统字体")
                 return
             }
-            // 每次启动覆盖写入，保证插件升级时内置字体同步更新；文件约 1.8MB，写入开销可忽略
+            // 每次启动覆盖写入，保证插件升级时内置字体同步更新；文件约 5MB（完整 CJK 字形，避免生僻字显示方块）
             resource.use { input -> target.outputStream().use { input.copyTo(it) } }
             if (registered.compareAndSet(false, true)) {
                 val font = Font.createFont(Font.TRUETYPE_FONT, target)

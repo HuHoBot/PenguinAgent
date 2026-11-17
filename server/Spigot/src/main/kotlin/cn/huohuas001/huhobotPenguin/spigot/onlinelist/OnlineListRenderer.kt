@@ -26,14 +26,26 @@ class OnlineListRenderer(
     private val columns: Int,
     private val configuredFont: String,
     private val footerText: String,
-    private val protocolSummary: String? = null
+    private val protocolSummary: String? = null,
+    /** 单张图片最多渲染的玩家数；超出部分不画卡片，改由文字列表补全。 */
+    private val maxRenderPlayers: Int = 60
 ) {
     companion object {
         const val WIDTH = 1200
         const val HEADER_HEIGHT = 384
         const val BODY_TILE_HEIGHT = 640
         const val FOOTER_HEIGHT = 256
-        private const val GRID_TOP = 520
+        private const val GRID_TOP = 552
+
+        /** Minecraft 颜色代码 → 颜色（MOTD 渲染）。 */
+        private val MC_COLORS = mapOf(
+            '0' to Color(0, 0, 0), '1' to Color(0, 0, 170), '2' to Color(0, 170, 0),
+            '3' to Color(0, 170, 170), '4' to Color(170, 0, 0), '5' to Color(170, 0, 170),
+            '6' to Color(255, 170, 0), '7' to Color(170, 170, 170), '8' to Color(85, 85, 85),
+            '9' to Color(85, 85, 255), 'a' to Color(85, 255, 85), 'b' to Color(85, 255, 255),
+            'c' to Color(255, 85, 85), 'd' to Color(255, 85, 255), 'e' to Color(255, 255, 85),
+            'f' to Color(255, 255, 255)
+        )
 
         /**
          * footer 顶部参与接缝颜色校正的行数。
@@ -103,7 +115,7 @@ class OnlineListRenderer(
         snapshot: ServerSnapshot,
         avatars: Map<String, BufferedImage>
     ): BufferedImage {
-        val displayedPlayers = snapshot.players.size
+        val displayedPlayers = snapshot.players.size.coerceAtMost(maxRenderPlayers)
         val rows = if (displayedPlayers == 0) 0 else (displayedPlayers + safeColumns - 1) / safeColumns
         val gridHeight = if (rows == 0) 0 else rows * cardHeight + (rows - 1) * cardGapY
         val contentBottom = if (rows == 0) GRID_TOP + 210 else GRID_TOP + gridHeight
@@ -215,19 +227,160 @@ class OnlineListRenderer(
         val title = "在线列表"
         graphics.drawString(title, (WIDTH - graphics.fontMetrics.stringWidth(title)) / 2, 280)
 
+        // 服务器图标（server-icon.png）：右上角圆角卡片
+        val iconSize = 96
+        val iconX = WIDTH - sideMargin - iconSize
+        val iconY = 132
+        val iconShape = RoundRectangle2D.Float(iconX.toFloat(), iconY.toFloat(), iconSize.toFloat(), iconSize.toFloat(), 22f, 22f)
+        graphics.color = CARD_SHADOW
+        graphics.fill(RoundRectangle2D.Float((iconX + 3).toFloat(), (iconY + 5).toFloat(), iconSize.toFloat(), iconSize.toFloat(), 22f, 22f))
+        val previousClip = graphics.clip
+        graphics.clip(iconShape)
+        val icon = snapshot.icon
+        if (icon != null) {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            graphics.drawImage(icon, iconX, iconY, iconSize, iconSize, null)
+        } else {
+            graphics.color = Color(200, 236, 248, 200)
+            graphics.fill(iconShape)
+            graphics.font = font(Font.BOLD, 34)
+            graphics.color = TEXT_SECONDARY
+            drawCenteredIn(graphics, "无图标", iconX, iconSize, iconY + iconSize / 2 + 12)
+        }
+        graphics.clip = previousClip
+        graphics.color = CARD_BORDER
+        graphics.stroke = BasicStroke(2f)
+        graphics.draw(iconShape)
+
+        // 彩色 MOTD（两行，§ 颜色代码解析）
+        val motdWidth = iconX - sideMargin - 40
+        val motdLines = snapshot.motd.replace("\\n", "\n").split('\n').filter(String::isNotBlank).take(2)
+        if (motdLines.isEmpty()) {
+            graphics.font = font(Font.PLAIN, 20)
+            graphics.color = TEXT_SECONDARY
+            graphics.drawString("（未配置 MOTD，可在 server.properties 或 config.yml 的 motd.text 设置）", sideMargin, 394)
+        } else {
+            motdLines.forEachIndexed { index, line ->
+                drawMinecraftText(graphics, line, sideMargin, 394 + index * 30, motdWidth)
+            }
+        }
+
+        // 服务器名 + 在线人数
         graphics.font = font(Font.BOLD, 32)
         graphics.color = TEXT_PRIMARY
-        graphics.drawString(snapshot.serverName, sideMargin, 446)
+        graphics.drawString(snapshot.serverName, sideMargin, 462)
 
         val count = "${snapshot.totalOnlinePlayers} / ${snapshot.maxPlayers}"
         graphics.font = font(Font.BOLD, 30)
-        drawRight(graphics, count, WIDTH - sideMargin, 446, TEXT_PRIMARY)
+        drawRight(graphics, count, WIDTH - sideMargin, 462, TEXT_PRIMARY)
 
+        // 连接地址（未配置时给出明确提示）
         graphics.font = font(Font.PLAIN, 22)
         graphics.color = TEXT_SECONDARY
-        graphics.drawString("当前在线玩家", sideMargin, 486)
+        val address = if (snapshot.serverIp.isBlank()) {
+            "未配置服务器地址（请在 config.yml 的 motd.server-ip 填写公网地址）"
+        } else {
+            "地址：${snapshot.serverIp}:${snapshot.serverPort}"
+        }
+        graphics.drawString(truncate(graphics, address, motdWidth), sideMargin, 492)
+
+        // 服务端品牌 / 核心版本 / 协议 / Via 支持范围
+        val techParts = mutableListOf<String>()
+        snapshot.brand.takeIf(String::isNotBlank)?.let { techParts.add(it) }
+        snapshot.coreVersion.takeIf(String::isNotBlank)?.let { techParts.add("核心 $it") }
+        snapshot.protocolVersion.takeIf(String::isNotBlank)?.let { techParts.add("协议 $it") }
+        snapshot.viaRange.takeIf(String::isNotBlank)?.let { techParts.add(it) }
+        if (techParts.isNotEmpty()) {
+            graphics.font = font(Font.PLAIN, 19)
+            drawRight(
+                graphics,
+                truncate(graphics, techParts.joinToString(" · "), WIDTH - sideMargin - (WIDTH - sideMargin - motdWidth)),
+                WIDTH - sideMargin,
+                492,
+                TEXT_SECONDARY
+            )
+        }
+
+        // 玩家区标题 + 更新时间
+        graphics.font = font(Font.PLAIN, 22)
+        graphics.color = TEXT_SECONDARY
+        graphics.drawString("当前在线玩家", sideMargin, 522)
         val timeStr = TIME.format(Instant.ofEpochMilli(snapshot.capturedAt))
-        drawRight(graphics, "更新 $timeStr", WIDTH - sideMargin, 486, TEXT_SECONDARY)
+        drawRight(graphics, "更新 $timeStr", WIDTH - sideMargin, 522, TEXT_SECONDARY)
+    }
+
+    /** 去掉 §/& 颜色与格式代码（用于纯文本单色绘制的字符串）。 */
+    private fun stripMinecraftCodes(text: String): String {
+        val out = StringBuilder(text.length)
+        var index = 0
+        while (index < text.length) {
+            val ch = text[index]
+            if ((ch == '§' || ch == '&') && index + 1 < text.length) {
+                index += 2
+            } else {
+                out.append(ch)
+                index++
+            }
+        }
+        return out.toString().trim()
+    }
+
+    /** 绘制一行 Minecraft 彩色文本（§/& 颜色与格式代码；浅底深描边保证可读）。 */
+    private fun drawMinecraftText(graphics: Graphics2D, text: String, x: Int, baseline: Int, maxWidth: Int) {
+        var cursor = x
+        var color = Color(25, 69, 96)
+        var bold = false
+        val buffer = StringBuilder()
+        var stopped = false
+
+        fun flush() {
+            if (buffer.isEmpty() || stopped) return
+            graphics.font = font(if (bold) Font.BOLD else Font.PLAIN, 21)
+            val segment = buffer.toString()
+            val width = graphics.fontMetrics.stringWidth(segment)
+            if (cursor + width > x + maxWidth) {
+                // 超出可用宽度：画剩余部分直到放不下，其余省略
+                var end = segment.length
+                while (end > 0 && graphics.fontMetrics.stringWidth(segment.substring(0, end) + "…") + (cursor - x) > maxWidth) end--
+                if (end <= 0) { stopped = true; return }
+                val clipped = segment.substring(0, end) + "…"
+                graphics.color = Color(255, 255, 255, 150)
+                graphics.drawString(clipped, cursor + 1, baseline + 1)
+                graphics.color = color
+                graphics.drawString(clipped, cursor, baseline)
+                stopped = true
+                return
+            }
+            graphics.color = Color(255, 255, 255, 150)
+            graphics.drawString(segment, cursor + 1, baseline + 1)
+            graphics.color = color
+            graphics.drawString(segment, cursor, baseline)
+            cursor += width
+            buffer.setLength(0)
+        }
+
+        var index = 0
+        while (index < text.length && !stopped) {
+            val ch = text[index]
+            if ((ch == '§' || ch == '&') && index + 1 < text.length) {
+                flush()
+                val code = text[index + 1].lowercaseChar()
+                when {
+                    MC_COLORS.containsKey(code) -> { color = MC_COLORS[code]!!; bold = false }
+                    code == 'l' -> bold = true
+                    code == 'r' -> { color = Color(25, 69, 96); bold = false }
+                }
+                index += 2
+            } else {
+                buffer.append(ch)
+                index++
+            }
+        }
+        flush()
+    }
+
+    private fun drawCenteredIn(graphics: Graphics2D, text: String, x: Int, width: Int, baseline: Int) {
+        graphics.drawString(text, x + (width - graphics.fontMetrics.stringWidth(text)) / 2, baseline)
     }
 
     private fun drawPlayers(
@@ -238,6 +391,8 @@ class OnlineListRenderer(
         val usableWidth = WIDTH - sideMargin * 2
         val cardWidth = (usableWidth - (safeColumns - 1) * cardGapX) / safeColumns
         for ((index, player) in snapshot.players.withIndex()) {
+            // 超过上限的玩家不画卡片，由命令侧的文字列表（online.md）补全
+            if (index >= maxRenderPlayers) break
             val column = index % safeColumns
             val row = index / safeColumns
             val x = sideMargin + column * (cardWidth + cardGapX)
@@ -334,10 +489,20 @@ class OnlineListRenderer(
             graphics.font = font(Font.PLAIN, 18)
             drawCentered(graphics, safeFooterText, footerTop + 73, Color(226, 249, 255, 180))
         }
-        // 协议/跨版本支持摘要(有 ViaVersion 时显示支持范围)
+        // 协议/跨版本支持摘要(有 ViaVersion 时显示支持范围)；去掉 § 代码避免原样打印
         safeProtocolSummary?.takeIf(String::isNotBlank)?.let { summary ->
             graphics.font = font(Font.PLAIN, 17)
-            drawCentered(graphics, summary, footerTop + 106, Color(226, 249, 255, 150))
+            drawCentered(graphics, stripMinecraftCodes(summary), footerTop + 106, Color(226, 249, 255, 150))
+        }
+        // 玩家数超过单张图片上限时给出明确说明
+        if (snapshot.players.size > maxRenderPlayers) {
+            graphics.font = font(Font.BOLD, 18)
+            drawCentered(
+                graphics,
+                "在线玩家 ${snapshot.players.size} 位，图中仅显示前 $maxRenderPlayers 位；完整名单见下方文字列表",
+                footerTop + 134,
+                Color(255, 235, 175, 210)
+            )
         }
 
         // 用同一玻璃胶囊内的无装饰纹理覆盖原有四个方块，再写入动态页码。

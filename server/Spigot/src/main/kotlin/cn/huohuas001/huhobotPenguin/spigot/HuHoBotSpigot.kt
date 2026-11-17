@@ -100,6 +100,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         )
         cn.huohuas001.bot.messages.Messages.initialize(configManager.language())
         cn.huohuas001.bot.state.PermissionGroupsStore.configure(dataFolder)
+        // 命令映射/切换（启动与重载时刷新）
+        cn.huohuas001.bot.state.CommandMappingStore.refresh()
         cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)
         cn.huohuas001.bot.agent.JoinApproveManager.start()
         cn.huohuas001.huhobotPenguin.spigot.manager.ProxyBridge.initialize(this, configManager.proxyBridgeEnabled())
@@ -985,6 +987,24 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getSearchResultCount(): Int = configManager.searchResultCount()
 
     override fun getProxyEnabled(): Boolean = configManager.proxyEnabled()
+
+    override fun isTtsEnabled(): Boolean = configManager.ttsEnabled()
+    override fun getTtsBaseUrl(): String = configManager.ttsBaseUrl()
+    override fun getTtsApiKey(): String = configManager.ttsApiKey()
+    override fun getTtsPublicBaseUrl(): String = configManager.ttsPublicBaseUrl()
+    override fun getTtsFormat(): String = configManager.ttsFormat()
+    override fun getTtsPresetModel(): String = configManager.ttsPresetModel()
+    override fun getTtsNaturalModel(): String = configManager.ttsNaturalModel()
+    override fun getTtsCloneModel(): String = configManager.ttsCloneModel()
+    override fun getTtsPresetDefaultVoice(): String = configManager.ttsPresetDefaultVoice()
+    override fun getTtsNaturalDefaultVoice(): String = configManager.ttsNaturalDefaultVoice()
+    override fun getTtsCloneVoicesDir(): String = configManager.ttsCloneVoicesDir()
+    override fun getTtsCloneDefaultVoice(): String = configManager.ttsCloneDefaultVoice()
+    override fun getTtsMaxPerTurn(): Int = configManager.ttsMaxPerTurn()
+
+    override fun getCommandAliasMap(): Map<String, String> = configManager.commandAliasMap()
+    override fun getCommandAliasRename(): Map<String, String> = configManager.commandAliasRename()
+
     override fun getProxyType(): String = configManager.proxyType()
     override fun getProxyHost(): String = configManager.proxyHost()
     override fun getProxyPort(): Int = configManager.proxyPort()

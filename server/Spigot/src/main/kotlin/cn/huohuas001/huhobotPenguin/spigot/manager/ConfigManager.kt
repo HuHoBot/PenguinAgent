@@ -330,6 +330,10 @@ class ConfigManager(
     fun onlineListRenderColumns(): Int =
         plugin.config.getInt("online-list.render.columns", 3).coerceIn(1, 3)
 
+    /** 单张图片最多渲染的玩家数；超出部分用 Markdown 文字列表补全。 */
+    fun onlineListMaxRenderPlayers(): Int =
+        plugin.config.getInt("online-list.max-render-players", 27).coerceIn(1, 200)
+
     fun onlineListRenderFontFamily(): String =
         plugin.config.getString("online-list.render.font-family", "").orEmpty()
 
@@ -368,6 +372,12 @@ class ConfigManager(
         postImg = plugin.config.getBoolean("motd.post-img", true),
         useMarkdown = plugin.config.getBoolean("motd.use-markdown", true)
     )
+
+    fun motdText(): String = plugin.config.getString("motd.text", "") ?: ""
+
+    fun motdServerIp(): String = plugin.config.getString("motd.server-ip", "127.0.0.1") ?: "127.0.0.1"
+
+    fun motdServerPort(): Int = plugin.config.getInt("motd.server-port", plugin.server.port)
 
     fun filterRegexList(): List<String> = plugin.config.getStringList("filter-regex")
 
@@ -465,6 +475,20 @@ class ConfigManager(
 
     fun debugEnabled(): Boolean = plugin.config.getBoolean("debug", false)
 
+    /** 读取二级字符串映射表（如 command-aliases.map）。 */
+    private fun readStringMap(path: String): Map<String, String> {
+        val section = plugin.config.getConfigurationSection(path) ?: return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (key in section.getKeys(false)) {
+            section.getString(key)?.trim()?.takeIf(String::isNotEmpty)?.let { out[key.trim()] = it }
+        }
+        return out
+    }
+
+    fun commandAliasMap(): Map<String, String> = readStringMap("command-aliases.map")
+
+    fun commandAliasRename(): Map<String, String> = readStringMap("command-aliases.rename")
+
     // ── Agent 扩展 ──
 
     fun agentSystemPrompt(): String = plugin.config.getString("agent.system-prompt", "") ?: ""
@@ -489,7 +513,22 @@ class ConfigManager(
 
     fun chatAiModel(): String? = plugin.config.getString("chat-ai.model")?.takeIf(String::isNotBlank)
 
-    fun chatAiTrigger(): String = plugin.config.getString("chat-ai.trigger", "") ?: ""
+    fun chatAiTrigger(): String = plugin.config.getString("chat-ai.trigger", "/ai") ?: "/ai"
+
+    // ── TTS ──
+    fun ttsEnabled(): Boolean = plugin.config.getBoolean("tts.enabled", false)
+    fun ttsBaseUrl(): String = plugin.config.getString("tts.base-url", "https://api.xiaomimimo.com/v1") ?: "https://api.xiaomimimo.com/v1"
+    fun ttsApiKey(): String = plugin.config.getString("tts.api-key", "") ?: ""
+    fun ttsPublicBaseUrl(): String = plugin.config.getString("tts.public-base-url", "") ?: ""
+    fun ttsFormat(): String = plugin.config.getString("tts.format", "wav") ?: "wav"
+    fun ttsPresetModel(): String = plugin.config.getString("tts.preset-model", "") ?: ""
+    fun ttsNaturalModel(): String = plugin.config.getString("tts.natural-model", "") ?: ""
+    fun ttsCloneModel(): String = plugin.config.getString("tts.clone-model", "") ?: ""
+    fun ttsPresetDefaultVoice(): String = plugin.config.getString("tts.preset-default-voice", "mimo_default") ?: "mimo_default"
+    fun ttsNaturalDefaultVoice(): String = plugin.config.getString("tts.natural-default-voice", "温柔亲切的中文女声") ?: "温柔亲切的中文女声"
+    fun ttsCloneVoicesDir(): String = plugin.config.getString("tts.clone-voices-dir", "tts-voices") ?: "tts-voices"
+    fun ttsCloneDefaultVoice(): String = plugin.config.getString("tts.clone-default-voice", "") ?: ""
+    fun ttsMaxPerTurn(): Int = plugin.config.getInt("tts.max-per-turn", 2)
 
     fun chatAiThink(): Boolean = plugin.config.getBoolean("chat-ai.think", false)
 

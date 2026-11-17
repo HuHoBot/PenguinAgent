@@ -75,6 +75,10 @@ class PublicCommands : CommandSupport() {
                 replyWithImgBytes(plugin, event, " ", png)
             }
 
+            override fun text(message: String) {
+                reply(plugin, event, message)
+            }
+
             override fun busy() {
                 reply(plugin, event, "在线列表正在生成，请稍候再试。")
             }
