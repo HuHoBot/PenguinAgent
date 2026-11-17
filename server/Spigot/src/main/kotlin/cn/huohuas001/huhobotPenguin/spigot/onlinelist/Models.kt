@@ -33,5 +33,15 @@ class ServerSnapshot(
     /** 协议版本描述（如 1.21.11 / 774）。 */
     val protocolVersion: String = "",
     /** ViaVersion 等插件推算出的支持版本范围；为空表示未检测到 Via。 */
-    val viaRange: String = ""
+    val viaRange: String = "",
+    /** 服务器 TPS（Paper/Leaf/Folia 提供；老服务端为 null）。 */
+    val tps: Double? = null,
+    /** 平均 tick 耗时（毫秒），同样仅新服务端可用。 */
+    val mspt: Double? = null,
+    /** JVM 已用堆内存（MB）。 */
+    val memoryUsedMb: Long = 0,
+    /** JVM 最大堆内存（MB）。 */
+    val memoryMaxMb: Long = 0,
+    /** 地址是否为自动探测获得（渲染时可标注）。 */
+    val ipAutoDetected: Boolean = false
 )

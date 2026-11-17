@@ -35,7 +35,7 @@ class OnlineListRenderer(
         const val HEADER_HEIGHT = 384
         const val BODY_TILE_HEIGHT = 640
         const val FOOTER_HEIGHT = 256
-        private const val GRID_TOP = 552
+        private const val GRID_TOP = 730
 
         /** Minecraft 颜色代码 → 颜色（MOTD 渲染）。 */
         private val MC_COLORS = mapOf(
@@ -64,7 +64,13 @@ class OnlineListRenderer(
         private val CARD_BORDER = Color(220, 252, 255, 188)
         private val CARD_SHADOW = Color(18, 65, 98, 35)
         private val CYAN = Color(57, 218, 236)
-        private val ADMIN_TEXT = Color(15, 139, 166, 220)
+        private val ADMIN_TEXT = Color(176, 116, 8, 235)
+        private val CROWN_GOLD = Color(255, 198, 61)
+        private val ADMIN_BORDER = Color(255, 206, 84, 235)
+        private val ADMIN_FILL = Color(255, 244, 214, 150)
+        private val GOOD = Color(22, 160, 96)
+        private val WARN = Color(214, 138, 22)
+        private val BAD = Color(206, 62, 62)
 
         private val TIME = DateTimeFormatter.ofPattern("HH:mm")
             .withZone(ZoneId.of("Asia/Shanghai"))
@@ -227,13 +233,13 @@ class OnlineListRenderer(
         val title = "在线列表"
         graphics.drawString(title, (WIDTH - graphics.fontMetrics.stringWidth(title)) / 2, 280)
 
-        // 服务器图标（server-icon.png）：右上角圆角卡片
-        val iconSize = 96
-        val iconX = WIDTH - sideMargin - iconSize
-        val iconY = 132
-        val iconShape = RoundRectangle2D.Float(iconX.toFloat(), iconY.toFloat(), iconSize.toFloat(), iconSize.toFloat(), 22f, 22f)
+        // ── 左上信息区：图标 → 名称 → MOTD → 地址 ──
+        val iconSize = 92
+        val iconX = sideMargin
+        val iconY = 392
+        val iconShape = RoundRectangle2D.Float(iconX.toFloat(), iconY.toFloat(), iconSize.toFloat(), iconSize.toFloat(), 20f, 20f)
         graphics.color = CARD_SHADOW
-        graphics.fill(RoundRectangle2D.Float((iconX + 3).toFloat(), (iconY + 5).toFloat(), iconSize.toFloat(), iconSize.toFloat(), 22f, 22f))
+        graphics.fill(RoundRectangle2D.Float((iconX + 3).toFloat(), (iconY + 5).toFloat(), iconSize.toFloat(), iconSize.toFloat(), 20f, 20f))
         val previousClip = graphics.clip
         graphics.clip(iconShape)
         val icon = snapshot.icon
@@ -243,70 +249,140 @@ class OnlineListRenderer(
         } else {
             graphics.color = Color(200, 236, 248, 200)
             graphics.fill(iconShape)
-            graphics.font = font(Font.BOLD, 34)
+            graphics.font = font(Font.BOLD, 30)
             graphics.color = TEXT_SECONDARY
-            drawCenteredIn(graphics, "无图标", iconX, iconSize, iconY + iconSize / 2 + 12)
+            drawCenteredIn(graphics, "无图标", iconX, iconSize, iconY + iconSize / 2 + 10)
         }
         graphics.clip = previousClip
         graphics.color = CARD_BORDER
         graphics.stroke = BasicStroke(2f)
         graphics.draw(iconShape)
 
-        // 彩色 MOTD（两行，§ 颜色代码解析）
-        val motdWidth = iconX - sideMargin - 40
+        val textLeft = iconX + iconSize + 26
+        val textRight = WIDTH - sideMargin
+        val textWidth = textRight - textLeft
+
+        // 服务器名(图标右侧)
+        graphics.font = font(Font.BOLD, 34)
+        graphics.color = TEXT_PRIMARY
+        graphics.drawString(truncate(graphics, snapshot.serverName, textWidth - 230), textLeft, 434)
+
+        // 在线人数(右上, 大号)
+        graphics.font = font(Font.BOLD, 42)
+        drawRight(graphics, "${snapshot.totalOnlinePlayers}", textRight, 434, TEXT_PRIMARY)
+        val countWidth = graphics.fontMetrics.stringWidth("${snapshot.totalOnlinePlayers}")
+        graphics.font = font(Font.BOLD, 22)
+        drawRight(graphics, " / ${snapshot.maxPlayers} 在线", textRight - countWidth - 8, 434, TEXT_SECONDARY)
+
+        // MOTD(名称下方, 彩色两行)
         val motdLines = snapshot.motd.replace("\\n", "\n").split('\n').filter(String::isNotBlank).take(2)
         if (motdLines.isEmpty()) {
-            graphics.font = font(Font.PLAIN, 20)
+            graphics.font = font(Font.PLAIN, 19)
             graphics.color = TEXT_SECONDARY
-            graphics.drawString("（未配置 MOTD，可在 server.properties 或 config.yml 的 motd.text 设置）", sideMargin, 394)
+            graphics.drawString("（未配置 MOTD，可在 server.properties 或 config.yml 的 motd.text 设置）", textLeft, 463)
         } else {
             motdLines.forEachIndexed { index, line ->
-                drawMinecraftText(graphics, line, sideMargin, 394 + index * 30, motdWidth)
+                drawMinecraftText(graphics, line, textLeft, 464 + index * 27, textWidth)
             }
         }
 
-        // 服务器名 + 在线人数
-        graphics.font = font(Font.BOLD, 32)
-        graphics.color = TEXT_PRIMARY
-        graphics.drawString(snapshot.serverName, sideMargin, 462)
-
-        val count = "${snapshot.totalOnlinePlayers} / ${snapshot.maxPlayers}"
-        graphics.font = font(Font.BOLD, 30)
-        drawRight(graphics, count, WIDTH - sideMargin, 462, TEXT_PRIMARY)
-
-        // 连接地址（未配置时给出明确提示）
-        graphics.font = font(Font.PLAIN, 22)
-        graphics.color = TEXT_SECONDARY
-        val address = if (snapshot.serverIp.isBlank()) {
-            "未配置服务器地址（请在 config.yml 的 motd.server-ip 填写公网地址）"
-        } else {
-            "地址：${snapshot.serverIp}:${snapshot.serverPort}"
+        // 连接地址(MOTD 下方): 自动探测标注
+        val address = when {
+            snapshot.serverIp.isBlank() -> "地址：自动探测中…（可在 config.yml 的 motd.server-ip 手动填写）"
+            snapshot.ipAutoDetected -> "地址：${snapshot.serverIp}:${snapshot.serverPort}（自动探测）"
+            else -> "地址：${snapshot.serverIp}:${snapshot.serverPort}"
         }
-        graphics.drawString(truncate(graphics, address, motdWidth), sideMargin, 492)
+        graphics.font = font(Font.PLAIN, 20)
+        graphics.color = TEXT_SECONDARY
+        graphics.drawString(truncate(graphics, address, WIDTH - sideMargin * 2), sideMargin, 532)
 
-        // 服务端品牌 / 核心版本 / 协议 / Via 支持范围
+        // 更新时间(右侧)
+        val timeStr = TIME.format(Instant.ofEpochMilli(snapshot.capturedAt))
+        drawRight(graphics, "更新 $timeStr", WIDTH - sideMargin, 532, TEXT_SECONDARY)
+
+        // 技术行: 品牌 · 核心 · 协议 · Via(名称与人数之间的小字区)
         val techParts = mutableListOf<String>()
         snapshot.brand.takeIf(String::isNotBlank)?.let { techParts.add(it) }
         snapshot.coreVersion.takeIf(String::isNotBlank)?.let { techParts.add("核心 $it") }
         snapshot.protocolVersion.takeIf(String::isNotBlank)?.let { techParts.add("协议 $it") }
         snapshot.viaRange.takeIf(String::isNotBlank)?.let { techParts.add(it) }
         if (techParts.isNotEmpty()) {
-            graphics.font = font(Font.PLAIN, 19)
-            drawRight(
-                graphics,
-                truncate(graphics, techParts.joinToString(" · "), WIDTH - sideMargin - (WIDTH - sideMargin - motdWidth)),
-                WIDTH - sideMargin,
-                492,
-                TEXT_SECONDARY
-            )
+            graphics.font = font(Font.PLAIN, 17)
+            graphics.color = TEXT_SECONDARY
+            graphics.drawString(truncate(graphics, techParts.joinToString(" · "), WIDTH - sideMargin * 2), sideMargin, 560)
         }
 
-        // 玩家区标题 + 更新时间
-        graphics.font = font(Font.PLAIN, 22)
-        graphics.color = TEXT_SECONDARY
-        graphics.drawString("当前在线玩家", sideMargin, 522)
-        val timeStr = TIME.format(Instant.ofEpochMilli(snapshot.capturedAt))
-        drawRight(graphics, "更新 $timeStr", WIDTH - sideMargin, 522, TEXT_SECONDARY)
+        // 性能条(TPS / MSPT / 内存)
+        drawPerformanceBar(graphics, snapshot, 574)
+    }
+
+    /** TPS / MSPT / 内存占用 三块性能胶囊（老服务端无 TPS 时显示 —）。 */
+    private fun drawPerformanceBar(graphics: Graphics2D, snapshot: ServerSnapshot, top: Int) {
+        val width = WIDTH - sideMargin * 2
+        val gap = 24
+        val blockWidth = (width - gap * 2) / 3
+        val blockHeight = 118
+        data class PerfBlock(val label: String, val value: String, val ratio: Double, val accent: Color)
+        val memRatio = if (snapshot.memoryMaxMb > 0) snapshot.memoryUsedMb.toDouble() / snapshot.memoryMaxMb else 0.0
+        val blocks = listOf(
+            PerfBlock("TPS", snapshot.tps?.let { String.format("%.1f", it) } ?: "—",
+                snapshot.tps?.let { (it / 20.0).coerceIn(0.0, 1.0) } ?: 0.0,
+                snapshot.tps?.let { tps -> when { tps >= 18 -> GOOD; tps >= 14 -> WARN; else -> BAD } } ?: TEXT_SECONDARY),
+            PerfBlock("MSPT", snapshot.mspt?.let { String.format("%.1f ms", it) } ?: "—",
+                snapshot.mspt?.let { (it / 50.0).coerceIn(0.0, 1.0) } ?: 0.0,
+                snapshot.mspt?.let { mspt -> when { mspt < 20 -> GOOD; mspt < 40 -> WARN; else -> BAD } } ?: TEXT_SECONDARY),
+            PerfBlock("内存", if (snapshot.memoryMaxMb > 0)
+                    "${snapshot.memoryUsedMb} / ${snapshot.memoryMaxMb} MB" else "—",
+                memRatio.coerceIn(0.0, 1.0),
+                if (snapshot.memoryMaxMb > 0) {
+                    when { memRatio < 0.7 -> GOOD; memRatio < 0.85 -> WARN; else -> BAD }
+                } else TEXT_SECONDARY)
+        )
+        blocks.forEachIndexed { index, (label, value, ratio, accent) ->
+            val x = sideMargin + index * (blockWidth + gap)
+            val card = RoundRectangle2D.Float(x.toFloat(), top.toFloat(), blockWidth.toFloat(), blockHeight.toFloat(), 26f, 26f)
+            graphics.color = Color(230, 248, 255, 110)
+            graphics.fill(card)
+            graphics.color = Color(accent.red, accent.green, accent.blue, 150)
+            graphics.stroke = BasicStroke(1.6f)
+            graphics.draw(card)
+
+            graphics.font = font(Font.PLAIN, 19)
+            graphics.color = TEXT_SECONDARY
+            graphics.drawString(label, x + 22, top + 36)
+            graphics.font = font(Font.BOLD, 26)
+            graphics.color = accent
+            graphics.drawString(value, x + 22, top + 70)
+
+            // 底部进度条
+            val barX = x + 22
+            val barY = top + 88
+            val barWidth = blockWidth - 44
+            val barHeight = 10
+            graphics.color = Color(255, 255, 255, 120)
+            graphics.fill(RoundRectangle2D.Float(barX.toFloat(), barY.toFloat(), barWidth.toFloat(), barHeight.toFloat(), 8f, 8f))
+            graphics.color = accent
+            graphics.fill(RoundRectangle2D.Float(barX.toFloat(), barY.toFloat(), (barWidth * ratio).toFloat().coerceAtLeast(if (ratio > 0) 8f else 0f), barHeight.toFloat(), 8f, 8f))
+        }
+    }
+
+    /** 管理员卡片的小皇冠标志（几何绘制，避免依赖字体字形）。 */
+    private fun drawCrown(graphics: Graphics2D, x: Int, y: Int, width: Int, height: Int) {
+        val path = java.awt.geom.Path2D.Float().apply {
+            moveTo(x.toFloat(), (y + height).toFloat())
+            lineTo(x.toFloat(), (y + height * 0.25f).toFloat())
+            lineTo((x + width * 0.25f), (y + height * 0.6f).toFloat())
+            lineTo((x + width * 0.5f), y.toFloat())
+            lineTo((x + width * 0.75f), (y + height * 0.6f).toFloat())
+            lineTo((x + width).toFloat(), (y + height * 0.25f).toFloat())
+            lineTo((x + width).toFloat(), (y + height).toFloat())
+            closePath()
+        }
+        graphics.color = CROWN_GOLD
+        graphics.fill(path)
+        graphics.color = Color(255, 255, 255, 150)
+        graphics.stroke = BasicStroke(1.1f)
+        graphics.draw(path)
     }
 
     /** 去掉 §/& 颜色与格式代码（用于纯文本单色绘制的字符串）。 */
@@ -414,11 +490,20 @@ class OnlineListRenderer(
         graphics.color = CARD_SHADOW
         val shadowOffset = if (safeColumns == 3) 4 else 6
         graphics.fill(RoundRectangle2D.Float((x + 2).toFloat(), (y + shadowOffset).toFloat(), width.toFloat(), cardHeight.toFloat(), cardArc.toFloat(), cardArc.toFloat()))
-        graphics.color = CARD_FILL
+        // 管理员：金色高亮卡片 + 外发光；普通玩家保持雾蓝玻璃
+        if (player.administrator) {
+            graphics.color = Color(255, 198, 61, 46)
+            graphics.fill(RoundRectangle2D.Float((x - 3).toFloat(), (y - 3).toFloat(), (width + 6).toFloat(), (cardHeight + 6).toFloat(), (cardArc + 3).toFloat(), (cardArc + 3).toFloat()))
+        }
+        graphics.color = if (player.administrator) ADMIN_FILL else CARD_FILL
         graphics.fill(card)
-        graphics.stroke = BasicStroke(1.7f)
-        graphics.color = CARD_BORDER
+        graphics.stroke = BasicStroke(if (player.administrator) 2.4f else 1.7f)
+        graphics.color = if (player.administrator) ADMIN_BORDER else CARD_BORDER
         graphics.draw(card)
+        if (player.administrator) {
+            // 卡片右上角小皇冠标志
+            drawCrown(graphics, (x + width - 34), y + 12, 22, 15)
+        }
 
         val avatarX = x + (if (safeColumns == 3) 16 else 21)
         val avatarY = y + (cardHeight - avatarSize) / 2
@@ -443,7 +528,7 @@ class OnlineListRenderer(
 
         val textX = avatarX + avatarSize + (if (safeColumns == 3) 13 else 19)
         graphics.font = font(Font.BOLD, if (safeColumns == 3) 22 else 28)
-        graphics.color = TEXT_PRIMARY
+        graphics.color = if (player.administrator) ADMIN_TEXT else TEXT_PRIMARY
         val name = truncate(graphics, player.name, x + width - textX - 18)
         graphics.drawString(name, textX, y + (if (safeColumns == 3) 50 else 69))
 

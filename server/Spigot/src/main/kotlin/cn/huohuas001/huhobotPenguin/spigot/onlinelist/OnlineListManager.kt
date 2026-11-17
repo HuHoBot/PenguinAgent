@@ -167,6 +167,48 @@ class OnlineListManager(
         }
     }
 
+    @Volatile
+    private var autoDetectedIp: String = ""
+
+    /** 后台探测公网 IP（仅当 config 未填 motd.server-ip 时使用）。 */
+    private fun ensureAutoIp() {
+        if (autoDetectedIp.isNotEmpty()) return
+        Thread({
+            val endpoints = listOf("https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com")
+            for (url in endpoints) {
+                val ip = runCatching {
+                    val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 4000
+                    connection.readTimeout = 4000
+                    connection.setRequestProperty("User-Agent", "HuHoBotPenguin")
+                    val text = (if (connection.responseCode in 200..299) connection.inputStream else null)
+                        ?.bufferedReader()?.use { it.readText() }?.trim().orEmpty()
+                    connection.disconnect()
+                    text.takeIf { it.matches(Regex("[0-9a-fA-F:.]+")) && it.length in 7..45 }
+                }.getOrNull()
+                if (!ip.isNullOrBlank()) {
+                    autoDetectedIp = ip
+                    plugin.log_info("已自动探测服务器公网地址：$ip（可在 config.yml 的 motd.server-ip 覆盖）")
+                    return@Thread
+                }
+            }
+        }, "HuHoBotPublicIp").apply { isDaemon = true }.start()
+    }
+
+    private fun readTps(): Double? = runCatching {
+        val method = plugin.server.javaClass.methods.firstOrNull { it.name == "getTPS" } ?: return null
+        val values = method.invoke(plugin.server) as? DoubleArray ?: return null
+        values.firstOrNull()
+    }.getOrNull()
+
+    private fun readMspt(): Double? = runCatching {
+        val method = plugin.server.javaClass.methods.firstOrNull {
+            it.name == "getAverageTickTime" || it.name == "getAverageTickTimeNanos"
+        } ?: return null
+        val value = (method.invoke(plugin.server) as? Number)?.toDouble() ?: return null
+        if (method.name.endsWith("Nanos")) value / 1_000_000.0 else value
+    }.getOrNull()
+
     /** 在主线程捕获在线玩家快照。 */
     fun captureSnapshot(): ServerSnapshot {
         val adminFirst = config.onlineListAdminFirst()
@@ -186,6 +228,10 @@ class OnlineListManager(
             )
         }
         val sorted = OnlineListPages.sorted(players, adminFirst)
+        val runtime = Runtime.getRuntime()
+        val configuredIp = config.motdServerIp().trim()
+        val useConfiguredIp = configuredIp.isNotBlank() && configuredIp != "127.0.0.1"
+        if (!useConfiguredIp) ensureAutoIp()
         return ServerSnapshot(
             serverName = config.serverName(),
             maxPlayers = plugin.server.maxPlayers,
@@ -193,12 +239,17 @@ class OnlineListManager(
             players = sorted,
             motd = resolveMotd(),
             icon = loadServerIcon(),
-            serverIp = config.motdServerIp().trim().takeIf { it.isNotBlank() && it != "127.0.0.1" }.orEmpty(),
+            serverIp = if (useConfiguredIp) configuredIp else autoDetectedIp,
             serverPort = config.motdServerPort(),
             brand = runCatching { plugin.server.name }.getOrDefault(""),
             coreVersion = runCatching { plugin.server.version }.getOrDefault(""),
             protocolVersion = runCatching { plugin.server.bukkitVersion }.getOrDefault(""),
-            viaRange = runCatching { plugin.getProtocolSummary() }.getOrNull().orEmpty()
+            viaRange = runCatching { plugin.getProtocolSummary() }.getOrNull().orEmpty(),
+            tps = readTps(),
+            mspt = readMspt(),
+            memoryUsedMb = (runtime.totalMemory() - runtime.freeMemory()) / 1_048_576L,
+            memoryMaxMb = runtime.maxMemory() / 1_048_576L,
+            ipAutoDetected = !useConfiguredIp && autoDetectedIp.isNotEmpty()
         )
     }
 
