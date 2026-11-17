@@ -7,7 +7,11 @@ class OnlineListPlayer(
     val name: String,
     val uuid: String,
     val skinUrl: String?,
-    val administrator: Boolean
+    val administrator: Boolean,
+    /** LuckPerms 前缀（可能含颜色代码）；空 = 无。 */
+    val prefix: String = "",
+    /** LuckPerms 后缀（可能含颜色代码）；空 = 无。 */
+    val suffix: String = ""
 )
 
 /** 在线列表渲染用服务器快照。 */

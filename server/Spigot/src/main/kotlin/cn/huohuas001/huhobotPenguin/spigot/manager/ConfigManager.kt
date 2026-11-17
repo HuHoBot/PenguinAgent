@@ -330,6 +330,22 @@ class ConfigManager(
     fun onlineListRenderColumns(): Int =
         plugin.config.getInt("online-list.render.columns", 3).coerceIn(1, 3)
 
+    /** 是否显示 LuckPerms 前缀（称号）。 */
+    fun onlineListShowPrefix(): Boolean =
+        plugin.config.getBoolean("online-list.display.prefix", true)
+
+    /** 是否显示 LuckPerms 后缀。 */
+    fun onlineListShowSuffix(): Boolean =
+        plugin.config.getBoolean("online-list.display.suffix", true)
+
+    /** 玩家名颜色（hex 或颜色名）；留空 = 默认。 */
+    fun onlineListNameColor(): String =
+        (plugin.config.getString("online-list.display.name-color", "") ?: "").trim()
+
+    /** 这些 LuckPerms 组的成员在列表中按管理员高亮。 */
+    fun onlineListAdminGroups(): List<String> =
+        plugin.config.getStringList("online-list.display.admin-groups").map(String::trim).filter(String::isNotEmpty)
+
     /** 在线列表图片的自定义信息行（支持 §/hex/MiniMessage）。 */
     fun onlineListCustomLines(): List<String> =
         plugin.config.getStringList("online-list.render.custom-lines").filter(String::isNotBlank)
@@ -1033,6 +1049,10 @@ class ConfigManager(
             put("online-list.page-size", 27)
             put("online-list.max-render-players", 27)
             put("online-list.render.custom-lines", emptyList<String>())
+            put("online-list.display.prefix", true)
+            put("online-list.display.suffix", true)
+            put("online-list.display.name-color", "")
+            put("online-list.display.admin-groups", emptyList<String>())
             put("message.send-policy", "auto")
             put("server-notify.performance.enabled", true)
             put("server-notify.performance.tps-threshold", 15.0)

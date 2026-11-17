@@ -55,7 +55,8 @@ class OnlineListManager(
                 footerText = config.onlineListRenderFooterText(),
                 protocolSummary = plugin.getProtocolSummary(),
                 maxRenderPlayers = config.onlineListMaxRenderPlayers(),
-                customLines = config.onlineListCustomLines()
+                customLines = config.onlineListCustomLines(),
+                nameColor = config.onlineListNameColor()
             )
         } catch (error: Throwable) {
             // 底图资源缺失/损坏时不中断插件启动，仅关闭本地渲染能力
@@ -168,34 +169,6 @@ class OnlineListManager(
         }
     }
 
-    @Volatile
-    private var autoDetectedIp: String = ""
-
-    /** 后台探测公网 IP（仅当 config 未填 motd.server-ip 时使用）。 */
-    private fun ensureAutoIp() {
-        if (autoDetectedIp.isNotEmpty()) return
-        Thread({
-            val endpoints = listOf("https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com")
-            for (url in endpoints) {
-                val ip = runCatching {
-                    val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                    connection.connectTimeout = 4000
-                    connection.readTimeout = 4000
-                    connection.setRequestProperty("User-Agent", "HuHoBotPenguin")
-                    val text = (if (connection.responseCode in 200..299) connection.inputStream else null)
-                        ?.bufferedReader()?.use { it.readText() }?.trim().orEmpty()
-                    connection.disconnect()
-                    text.takeIf { it.matches(Regex("[0-9a-fA-F:.]+")) && it.length in 7..45 }
-                }.getOrNull()
-                if (!ip.isNullOrBlank()) {
-                    autoDetectedIp = ip
-                    plugin.log_info("已自动探测服务器公网地址：$ip（可在 config.yml 的 motd.server-ip 覆盖）")
-                    return@Thread
-                }
-            }
-        }, "HuHoBotPublicIp").apply { isDaemon = true }.start()
-    }
-
     private fun readTps(): Double? = runCatching {
         val method = plugin.server.javaClass.methods.firstOrNull { it.name == "getTPS" } ?: return null
         val values = method.invoke(plugin.server) as? DoubleArray ?: return null
@@ -214,9 +187,18 @@ class OnlineListManager(
     fun captureSnapshot(): ServerSnapshot {
         val adminFirst = config.onlineListAdminFirst()
         val adminPermission = config.onlineListAdminPermission()
+        val adminGroups = config.onlineListAdminGroups()
+        val showPrefix = config.onlineListShowPrefix()
+        val showSuffix = config.onlineListShowSuffix()
         val players = plugin.server.onlinePlayers.map { player ->
             val administrator = player.isOp ||
-                (adminPermission.isNotEmpty() && player.hasPermission(adminPermission))
+                (adminPermission.isNotEmpty() && player.hasPermission(adminPermission)) ||
+                (adminGroups.isNotEmpty() && LuckPermsBridge.inGroups(player.uniqueId, adminGroups))
+            val (prefix, suffix) = if (showPrefix || showSuffix) {
+                LuckPermsBridge.prefixSuffix(player.uniqueId)
+            } else {
+                "" to ""
+            }
             OnlineListPlayer(
                 name = player.name,
                 uuid = player.uniqueId.toString(),
@@ -225,14 +207,16 @@ class OnlineListManager(
                 } catch (_: Exception) {
                     null
                 },
-                administrator = administrator
+                administrator = administrator,
+                prefix = if (showPrefix) prefix else "",
+                suffix = if (showSuffix) suffix else ""
             )
         }
         val sorted = OnlineListPages.sorted(players, adminFirst)
         val runtime = Runtime.getRuntime()
+        // 未配置时不显示地址（不自动探测，避免暴露服务器公网 IP）
         val configuredIp = config.motdServerIp().trim()
         val useConfiguredIp = configuredIp.isNotBlank() && configuredIp != "127.0.0.1"
-        if (!useConfiguredIp) ensureAutoIp()
         return ServerSnapshot(
             serverName = config.serverName(),
             maxPlayers = plugin.server.maxPlayers,
@@ -240,7 +224,7 @@ class OnlineListManager(
             players = sorted,
             motd = resolveMotd(),
             icon = loadServerIcon(),
-            serverIp = if (useConfiguredIp) configuredIp else autoDetectedIp,
+            serverIp = if (useConfiguredIp) configuredIp else "",
             serverPort = config.motdServerPort(),
             brand = runCatching { plugin.server.name }.getOrDefault(""),
             coreVersion = runCatching { plugin.server.version }.getOrDefault(""),
@@ -250,7 +234,7 @@ class OnlineListManager(
             mspt = readMspt(),
             memoryUsedMb = (runtime.totalMemory() - runtime.freeMemory()) / 1_048_576L,
             memoryMaxMb = runtime.maxMemory() / 1_048_576L,
-            ipAutoDetected = !useConfiguredIp && autoDetectedIp.isNotEmpty()
+            ipAutoDetected = false
         )
     }
 

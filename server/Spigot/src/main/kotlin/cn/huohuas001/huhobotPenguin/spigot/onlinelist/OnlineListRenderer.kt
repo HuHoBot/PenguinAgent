@@ -35,16 +35,18 @@ class OnlineListRenderer(
     private val protocolSummary: String? = null,
     private val maxRenderPlayers: Int = 60,
     /** 自定义信息行（config online-list.render.custom-lines），支持 §/hex/MiniMessage。 */
-    private val customLines: List<String> = emptyList()
+    private val customLines: List<String> = emptyList(),
+    /** 玩家名颜色（config online-list.display.name-color），空 = 默认白。 */
+    private val nameColor: String = ""
 ) {
     companion object {
         const val WIDTH = 1200
         const val HEADER_HEIGHT = 384
         const val BODY_TILE_HEIGHT = 640
         const val FOOTER_HEIGHT = 256
-        private const val GRID_TOP = 600
-        private const val FOOTER_BOTTOM_HEIGHT = 176
-        private const val MASCOT_WIDTH = 340
+        private const val GRID_TOP = 618
+        private const val FOOTER_BOTTOM_HEIGHT = 196
+        private const val MASCOT_HEIGHT = 150
 
         private val TEXT_PRIMARY = Color(234, 244, 255)
         private val TEXT_SECONDARY = Color(143, 166, 192)
@@ -65,9 +67,8 @@ class OnlineListRenderer(
         private val HOUR = DateTimeFormatter.ofPattern("HH时").withZone(ZoneId.of("Asia/Shanghai"))
     }
 
-    /** 旧底图只用于裁剪左下角 HuHo 娘（保留角色形象）。 */
-    private val footerArtifact: BufferedImage = readResource("/online/huhobot-glass-footer-1200x256.png")
-    private val mascot: BufferedImage by lazy { cropMascot() }
+    /** HuHo 娘立绘（repo 提供的 HuHo.png），放在右下角作为装饰。 */
+    private val mascot: BufferedImage = readResource("/online/HuHo.png")
 
     private val safeColumns = columns.coerceIn(1, 3)
     private val compact = safeColumns == 3
@@ -191,12 +192,20 @@ class OnlineListRenderer(
         graphics.color = ACCENT
         graphics.fillOval(textLeft + nameWidth + 14, 88, 14, 14)
 
-        // 人数（右上）
+        // 人数（右上，格式 "3 / 20"）
+        val onlineText = "${snapshot.totalOnlinePlayers}"
+        val maxText = " / ${snapshot.maxPlayers}"
         graphics.font = font(Font.BOLD, 46)
-        drawRight(graphics, "${snapshot.totalOnlinePlayers}", right, 118, TEXT_PRIMARY)
-        val countWidth = graphics.fontMetrics.stringWidth("${snapshot.totalOnlinePlayers}")
+        val onlineWidth = graphics.fontMetrics.stringWidth(onlineText)
         graphics.font = font(Font.PLAIN, 26)
-        drawRight(graphics, " / ${snapshot.maxPlayers}", right - countWidth - 6, 118, TEXT_SECONDARY)
+        val maxWidth = graphics.fontMetrics.stringWidth(maxText)
+        val startX = right - onlineWidth - maxWidth
+        graphics.font = font(Font.BOLD, 46)
+        graphics.color = TEXT_PRIMARY
+        graphics.drawString(onlineText, startX, 118)
+        graphics.font = font(Font.PLAIN, 26)
+        graphics.color = TEXT_SECONDARY
+        graphics.drawString(maxText, startX + onlineWidth, 118)
 
         // 彩色 MOTD（两行，支持 §/hex/MiniMessage）
         val motdLines = snapshot.motd.replace("\\n", "\n").split('\n').filter(String::isNotBlank).take(2)
@@ -210,42 +219,39 @@ class OnlineListRenderer(
             }
         }
 
-        // 第三行：版本/协议/Via/延迟（仿参考图"版本: ... 延迟: ..."）
+        // 第三行：服务端品牌 / 核心 / 协议 / Via 支持范围 / TPS（全部保留，不省略）
         val infoParts = mutableListOf<String>()
-        val viaText = snapshot.viaRange.takeIf(String::isNotBlank)
-        val coreText = snapshot.coreVersion.takeIf(String::isNotBlank)
-        val versionText = when {
-            viaText != null -> "版本: $viaText"
-            coreText != null -> "版本: $coreText"
-            else -> "版本: 未知"
-        }
-        infoParts.add(versionText)
-        if (snapshot.tps != null) infoParts.add("TPS: ${String.format("%.1f", snapshot.tps)}")
-        graphics.font = font(Font.PLAIN, 23)
+        snapshot.brand.takeIf(String::isNotBlank)?.let { infoParts.add(it) }
+        snapshot.coreVersion.takeIf(String::isNotBlank)?.let { infoParts.add("核心 $it") }
+        snapshot.protocolVersion.takeIf(String::isNotBlank)?.let { infoParts.add("协议 $it") }
+        snapshot.viaRange.takeIf(String::isNotBlank)?.let { infoParts.add("支持 $it") }
+        snapshot.tps?.let { infoParts.add("TPS ${String.format("%.1f", it)}") }
+        graphics.font = font(Font.PLAIN, 22)
         graphics.color = Color(176, 196, 220)
-        graphics.drawString(truncate(graphics, infoParts.joinToString("   "), WIDTH - textLeft - sideMargin), textLeft, 232)
+        graphics.drawString(
+            truncate(graphics, infoParts.joinToString(" · "), WIDTH - textLeft - sideMargin),
+            textLeft, 230
+        )
 
-        // 地址
-        graphics.font = font(Font.PLAIN, 21)
-        graphics.color = TEXT_SECONDARY
-        val address = when {
-            snapshot.serverIp.isBlank() -> "地址：自动探测中…（可在 config.yml 的 motd.server-ip 手动填写）"
-            snapshot.ipAutoDetected -> "地址：${snapshot.serverIp}:${snapshot.serverPort}（自动探测）"
-            else -> "地址：${snapshot.serverIp}:${snapshot.serverPort}"
+        // 地址（未配置则不显示，避免暴露自动探测到的公网 IP）
+        if (snapshot.serverIp.isNotBlank()) {
+            graphics.font = font(Font.PLAIN, 21)
+            graphics.color = TEXT_SECONDARY
+            val address = "地址：${snapshot.serverIp}:${snapshot.serverPort}"
+            graphics.drawString(truncate(graphics, address, WIDTH - sideMargin * 2), sideMargin, 262)
         }
-        graphics.drawString(truncate(graphics, address, WIDTH - sideMargin * 2), sideMargin, 280)
 
         // 自定义信息行（管理/腐竹等），支持彩色
         customLines.take(3).forEachIndexed { index, line ->
-            drawRichText(graphics, line, sideMargin, 316 + index * 28, WIDTH - sideMargin * 2, 21)
+            drawRichText(graphics, line, sideMargin, 294 + index * 26, WIDTH - sideMargin * 2, 21)
         }
     }
 
     // ───────────────────────── 趋势 + 性能 ─────────────────────────
 
     private fun drawTrendAndMetrics(graphics: Graphics2D, snapshot: ServerSnapshot) {
-        val top = 348
-        val height = 210
+        val top = 374
+        val height = 236
         val trendWidth = 760
         val metricsX = sideMargin + trendWidth + 24
         val metricsWidth = WIDTH - sideMargin - metricsX
@@ -312,6 +318,25 @@ class OnlineListRenderer(
                 )
             )
         }
+
+        // 问题提示（性能卡内，不覆盖 MOTD）：只列出确实存在的异常
+        val issues = mutableListOf<String>()
+        snapshot.tps?.let { if (it < 15.0) issues.add("TPS 偏低 ${String.format("%.1f", it)}") }
+        snapshot.mspt?.let { if (it > 45.0) issues.add("单 tick 耗时偏高 ${String.format("%.0f", it)}ms") }
+        if (snapshot.memoryMaxMb > 0 && memRatio > 0.88) {
+            issues.add("内存占用 ${(memRatio * 100).toInt()}%，接近上限")
+        }
+        if (issues.isNotEmpty()) {
+            val issueY = top + 204
+            graphics.font = font(Font.BOLD, 16)
+            graphics.color = BAD
+            graphics.drawString("检测到 ${issues.size} 项异常", metricsX + 24, issueY)
+            graphics.font = font(Font.PLAIN, 15)
+            graphics.color = Color(255, 178, 178, 220)
+            issues.take(1).forEach { issue ->
+                graphics.drawString(truncate(graphics, "· $issue", metricsWidth - 48), metricsX + 24, issueY + 20)
+            }
+        }
     }
 
     /** 折线图：渐变填充 + 曲线 + 峰值 + 网格刻度。 */
@@ -377,17 +402,41 @@ class OnlineListRenderer(
         graphics.stroke = BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         graphics.draw(curve)
 
-        // 峰值标注
+        // 峰值标注：垂直虚线 + 光晕双圈 + 胶囊标签
         if (peak != null) {
             val px = chartX + (chartW * (peak.first - first).toDouble() / span).toFloat()
             val py = chartY + chartH - (chartH * peak.second.toDouble() / maxValue).toFloat()
-            graphics.color = ACCENT2
-            graphics.fillOval((px - 5).toInt(), (py - 5).toInt(), 10, 10)
-            graphics.font = font(Font.BOLD, 16)
-            graphics.color = Color(196, 188, 255)
+
+            // 垂直虚线（峰值时间对齐到 X 轴）
+            graphics.color = Color(139, 124, 246, 90)
+            graphics.stroke = BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, floatArrayOf(4f, 5f), 0f)
+            graphics.drawLine(px.toInt(), py.toInt() + 8, px.toInt(), chartY + chartH)
+            graphics.stroke = BasicStroke(1.2f)
+
+            // 外层光晕 + 内层亮点
+            graphics.color = Color(139, 124, 246, 60)
+            graphics.fillOval((px - 11).toInt(), (py - 11).toInt(), 22, 22)
+            graphics.color = Color(139, 124, 246, 130)
+            graphics.fillOval((px - 7).toInt(), (py - 7).toInt(), 14, 14)
+            graphics.color = Color(235, 230, 255)
+            graphics.fillOval((px - 4).toInt(), (py - 4).toInt(), 8, 8)
+
+            // 胶囊标签
+            graphics.font = font(Font.BOLD, 15)
             val label = "峰值 ${peak.second}"
-            val lx = (px + 10).toInt().coerceAtMost(chartX + chartW - graphics.fontMetrics.stringWidth(label))
-            graphics.drawString(label, lx, (py - 8).toInt().coerceAtLeast(chartY + 16))
+            val labelWidth = graphics.fontMetrics.stringWidth(label)
+            val boxWidth = labelWidth + 20
+            val boxHeight = 24
+            val boxX = (px + 12).coerceAtMost((chartX + chartW - boxWidth).toFloat()).toInt()
+            val boxY = (py - boxHeight - 10).toInt().coerceAtLeast(chartY + 2)
+            val box = RoundRectangle2D.Float(boxX.toFloat(), boxY.toFloat(), boxWidth.toFloat(), boxHeight.toFloat(), 12f, 12f)
+            graphics.color = Color(48, 40, 88, 220)
+            graphics.fill(box)
+            graphics.color = Color(139, 124, 246, 200)
+            graphics.stroke = BasicStroke(1.2f)
+            graphics.draw(box)
+            graphics.color = Color(226, 220, 255)
+            graphics.drawString(label, boxX + 10, boxY + 17)
         }
     }
 
@@ -450,9 +499,20 @@ class OnlineListRenderer(
         graphics.fillOval(avatarX + avatarSize - dot, avatarY + avatarSize - dot, dot, dot)
 
         val textX = avatarX + avatarSize + (if (compact) 13 else 19)
-        graphics.font = font(Font.BOLD, if (compact) 22 else 28)
-        graphics.color = if (player.administrator) ADMIN_TEXT else TEXT_PRIMARY
-        graphics.drawString(truncate(graphics, player.name, x + width - textX - 18), textX, y + (if (compact) 50 else 69))
+        val nameSize = if (compact) 22 else 28
+        // 称号（LuckPerms 前缀/后缀）与名字一起解析颜色；名字颜色可由配置覆盖
+        val richName = buildString {
+            if (player.prefix.isNotBlank()) append(player.prefix)
+            if (nameColor.isNotBlank()) append("<color:").append(nameColor).append(">")
+            append(player.name)
+            if (nameColor.isNotBlank()) append("</color>")
+            if (player.suffix.isNotBlank()) append(player.suffix)
+        }
+        drawRichText(
+            graphics, richName, textX, y + (if (compact) 50 else 69),
+            x + width - textX - 18, nameSize,
+            if (player.administrator) ADMIN_TEXT else TEXT_PRIMARY
+        )
 
         graphics.font = font(Font.PLAIN, if (compact) 14 else 17)
         graphics.color = if (player.administrator) Color(255, 206, 84, 200) else TEXT_SECONDARY
@@ -496,55 +556,74 @@ class OnlineListRenderer(
 
     private fun drawBottomBar(graphics: Graphics2D, imageHeight: Int, snapshot: ServerSnapshot) {
         val top = imageHeight - FOOTER_BOTTOM_HEIGHT
-        // 分隔线
         graphics.color = Color(120, 200, 255, 26)
         graphics.stroke = BasicStroke(1f)
         graphics.drawLine(sideMargin, top, WIDTH - sideMargin, top)
 
-        // HuHo 娘（左下）
-        if (mascot.width > 0 && mascot.height > 0) {
-            val targetHeight = FOOTER_BOTTOM_HEIGHT - 6
-            val targetWidth = (mascot.width.toDouble() / mascot.height * targetHeight).toInt()
-            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-            graphics.drawImage(mascot, 0, imageHeight - targetHeight, targetWidth, targetHeight, null)
-        }
+        // HuHo 娘（左下角大图，左侧出血一点更自然；右侧区域留给文字）
+        val mascotHeight = FOOTER_BOTTOM_HEIGHT - 6
+        val mascotWidth = (mascot.width.toDouble() / mascot.height * mascotHeight).toInt().coerceAtMost(260)
+        val mascotX = -8
+        val mascotY = imageHeight - mascotHeight
+        graphics.paint = RadialGradientPaint(
+            (mascotX + mascotWidth / 2f), (mascotY + mascotHeight / 2f), (mascotWidth * 0.95f),
+            floatArrayOf(0f, 1f),
+            arrayOf(Color(79, 227, 193, 58), Color(79, 227, 193, 0))
+        )
+        graphics.fillOval(
+            mascotX - mascotWidth / 3, mascotY - mascotHeight / 4,
+            mascotWidth + mascotWidth * 2 / 3, mascotHeight + mascotHeight / 2
+        )
+        graphics.paint = null
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        graphics.drawImage(mascot, mascotX, mascotY, mascotWidth, mascotHeight, null)
 
-        // 文字区：从分隔线往下依次排布，行距 26
-        var baseline = top + 38
+        // 文字区：HuHo 娘右侧剩余区域居中
+        val textLeft = mascotWidth + 16
+        val textRight = WIDTH - sideMargin
+        val textWidth = textRight - textLeft
+        var baseline = top + 40
         if (safeFooterText.isNotEmpty()) {
             graphics.font = font(Font.PLAIN, 18)
-            drawCentered(graphics, safeFooterText, baseline, TEXT_SECONDARY)
+            drawCenteredIn(graphics, safeFooterText, textLeft, textWidth, baseline, TEXT_SECONDARY)
             baseline += 28
         }
         safeProtocolSummary?.takeIf(String::isNotBlank)?.let { summary ->
             graphics.font = font(Font.PLAIN, 16)
-            drawCentered(graphics, stripMinecraftCodes(summary), baseline, Color(143, 166, 192, 170))
+            drawCenteredIn(graphics, stripMinecraftCodes(summary), textLeft, textWidth, baseline, Color(143, 166, 192, 170))
             baseline += 26
         }
         if (snapshot.players.size > maxRenderPlayers) {
             graphics.font = font(Font.BOLD, 17)
-            drawCentered(
+            drawCenteredIn(
                 graphics,
                 "在线玩家 ${snapshot.players.size} 位，图中仅显示前 $maxRenderPlayers 位；完整名单见下方文字列表",
-                baseline,
-                Color(255, 214, 120, 220)
+                textLeft, textWidth, baseline, Color(255, 214, 120, 220)
             )
             baseline += 26
         }
-        // 底部一行：页码居中，更新时间右对齐
         graphics.font = font(Font.BOLD, 20)
-        drawCentered(graphics, "第 ${snapshot.currentPage} / ${snapshot.totalPages} 页", imageHeight - 30, TEXT_PRIMARY)
+        drawCenteredIn(graphics, "第 ${snapshot.currentPage} / ${snapshot.totalPages} 页", textLeft, textWidth, imageHeight - 32, TEXT_PRIMARY)
         graphics.font = font(Font.PLAIN, 16)
-        drawRight(graphics, "更新 ${TIME.format(Instant.ofEpochMilli(snapshot.capturedAt))}", WIDTH - sideMargin, imageHeight - 32, TEXT_SECONDARY)
+        graphics.color = TEXT_SECONDARY
+        graphics.drawString("更新 ${TIME.format(Instant.ofEpochMilli(snapshot.capturedAt))}", textLeft, imageHeight - 34)
     }
 
     // ───────────────────────── 富文本 ─────────────────────────
 
     /** 用 McTextParser 绘制富文本（§/hex/MiniMessage 全部支持）。 */
-    private fun drawRichText(graphics: Graphics2D, text: String, x: Int, baseline: Int, maxWidth: Int, size: Int) {
+    private fun drawRichText(
+        graphics: Graphics2D,
+        text: String,
+        x: Int,
+        baseline: Int,
+        maxWidth: Int,
+        size: Int,
+        defaultColor: Color = Color(234, 244, 255)
+    ) {
         var cursor = x
         var stopped = false
-        for (segment in McTextParser.parse(text, Color(234, 244, 255))) {
+        for (segment in McTextParser.parse(text, defaultColor)) {
             if (stopped || segment.text.isEmpty()) continue
             graphics.font = font(if (segment.bold) Font.BOLD else Font.PLAIN, size)
             graphics.color = segment.color
@@ -589,6 +668,11 @@ class OnlineListRenderer(
         graphics.drawString(text, x + (width - graphics.fontMetrics.stringWidth(text)) / 2, baseline)
     }
 
+    private fun drawCenteredIn(graphics: Graphics2D, text: String, x: Int, width: Int, baseline: Int, color: Color) {
+        graphics.color = color
+        drawCenteredIn(graphics, text, x, width, baseline)
+    }
+
     private fun configure(graphics: Graphics2D) {
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
         graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
@@ -604,15 +688,5 @@ class OnlineListRenderer(
         return input.use { ImageIO.read(it) } ?: throw IOException("Unreadable image resource: $path")
     }
 
-    /** 从旧底图左下角裁出 HuHo 娘（保留角色形象，去掉旧配色）。 */
-    private fun cropMascot(): BufferedImage {
-        val source = footerArtifact
-        val width = minOf(MASCOT_WIDTH, source.width)
-        val height = minOf(FOOTER_BOTTOM_HEIGHT + 60, source.height)
-        val cropped = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-        val graphics = cropped.createGraphics()
-        graphics.drawImage(source, 0, 0, width, height, 0, 0, width, height, null)
-        graphics.dispose()
-        return cropped
-    }
+
 }

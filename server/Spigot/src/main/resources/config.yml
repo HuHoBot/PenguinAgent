@@ -104,6 +104,12 @@ online-list:
   page-size: 27
   # 单张图片最多渲染的玩家数（超过时图片只画前 N 位，完整名单以 Markdown 文字补发）
   max-render-players: 27
+  # 玩家显示：LuckPerms 前缀(称号)/后缀、名字颜色、管理员组
+  display:
+    prefix: true            # 显示 LuckPerms 前缀（称号，含其颜色）
+    suffix: true            # 显示 LuckPerms 后缀
+    name-color: ""          # 玩家名颜色，如 "gold" / "#FFD700"；留空用默认
+    admin-groups: []        # 这些 LuckPerms 组按管理员高亮，如 [admin, 管理]
   # 图片中的自定义信息行（显示在地址下方，支持 §颜色 / &#RRGGBB / hex / MiniMessage 标签）
   # 例：
   # custom-lines:

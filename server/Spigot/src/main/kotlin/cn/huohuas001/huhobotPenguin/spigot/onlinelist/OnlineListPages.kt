@@ -38,6 +38,8 @@ object OnlineListPages {
         require(requestedPage in 1..pages) { "page $requestedPage is outside 1..$pages" }
         val from = minOf((requestedPage - 1) * safePageSize, totalOnline)
         val to = minOf(from + safePageSize, totalOnline)
+        // 分页必须完整复制快照字段：早期版本只传了基础字段，
+        // 导致分页查询时 MOTD/图标/性能/TPS 等全部丢失（真机"信息不显示"的根因）。
         return ServerSnapshot(
             serverName = complete.serverName,
             maxPlayers = complete.maxPlayers,
@@ -45,7 +47,20 @@ object OnlineListPages {
             players = complete.players.subList(from, to),
             capturedAt = complete.capturedAt,
             currentPage = requestedPage,
-            totalPages = pages
+            totalPages = pages,
+            motd = complete.motd,
+            icon = complete.icon,
+            serverIp = complete.serverIp,
+            serverPort = complete.serverPort,
+            brand = complete.brand,
+            coreVersion = complete.coreVersion,
+            protocolVersion = complete.protocolVersion,
+            viaRange = complete.viaRange,
+            tps = complete.tps,
+            mspt = complete.mspt,
+            memoryUsedMb = complete.memoryUsedMb,
+            memoryMaxMb = complete.memoryMaxMb,
+            ipAutoDetected = complete.ipAutoDetected
         )
     }
 
