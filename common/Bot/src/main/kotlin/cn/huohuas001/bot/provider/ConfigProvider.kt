@@ -364,6 +364,9 @@ interface ConfigProvider {
     /** 每条消息（一轮对话）最多合成语音条数。 */
     fun getTtsMaxPerTurn(): Int = 2
 
+    /** 发送策略：auto=被动优先(默认)，active=总是主动发送。 */
+    fun getSendPolicy(): String = "auto"
+
     // ------------------------------------------------------ 命令映射与切换
 
     /** 映射：原名 → 新名，原名与新名都可用。 */

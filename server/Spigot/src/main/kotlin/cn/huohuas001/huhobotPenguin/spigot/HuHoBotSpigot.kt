@@ -102,6 +102,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         cn.huohuas001.bot.state.PermissionGroupsStore.configure(dataFolder)
         // 命令映射/切换（启动与重载时刷新）
         cn.huohuas001.bot.state.CommandMappingStore.refresh()
+        // 性能预警（TPS/内存持续异常与恢复时通报 QQ 群）
+        performanceWatcher.start()
         cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)
         cn.huohuas001.bot.agent.JoinApproveManager.start()
         cn.huohuas001.huhobotPenguin.spigot.manager.ProxyBridge.initialize(this, configManager.proxyBridgeEnabled())
@@ -161,6 +163,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     }
 
     override fun onDisable() {
+        runCatching { performanceWatcher.stop() }
         // 必须赶在 shutdownRuntime() 关掉 QQ 连接之前发送，否则关机通知发不出去。
         if (::serverNotifyManager.isInitialized) serverNotifyManager.onServerStopping()
         val loader = scriptAddonLoader
@@ -264,6 +267,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
         // 3. 重新注册 MC 命令
         registerBukkitCommands()
+        setupCommandConflictFallback()
 
         // 4. 重启 QQ 客户端（异步，直接创建新实例，不 shutdown 旧的）
         FoliaScheduler.runAsync(this, Runnable {
@@ -418,6 +422,64 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         callSyncEvent(botEvent)
         return botEvent.isCancelled
     }
+
+    /** 被其他插件占用的原命令名（由 /huhobot <子命令> 接手）。 */
+    private val handoverSubcommands = mutableListOf<String>()
+
+    private val performanceWatcher = cn.huohuas001.huhobotPenguin.spigot.monitor.PerformanceWatcher(this)
+
+    fun isPerformanceNotifyEnabled(): Boolean = configManager.performanceNotifyEnabled()
+    fun getPerformanceTpsThreshold(): Double = configManager.performanceTpsThreshold()
+    fun getPerformanceMemoryThreshold(): Double = configManager.performanceMemoryThreshold()
+
+    fun getHandoverSubcommands(): List<String> = handoverSubcommands.toList()
+
+    /**
+     * 指令冲突自动回退：
+     * - at/send/qqbind 被其他插件占用 → 收归 /huhobot <子命令>
+     * - /huhobot 本身被占用 → 动态注册 /huhobotagent（别名 /hba）
+     * - 回退命令也注册失败 → 明确错误日志，不中断插件其余功能
+     */
+    private fun setupCommandConflictFallback() {
+        val conflicted = mutableListOf<String>()
+        for (name in listOf("at", "send", "qqbind")) {
+            val command = server.getPluginCommand(name)
+            if (command == null || command.plugin !== this) conflicted.add(name)
+        }
+        if (conflicted.isNotEmpty()) {
+            handoverSubcommands += conflicted
+            log_warning(
+                "指令冲突: ${conflicted.joinToString("/")} 已被其他插件注册，已自动改为 /huhobot <子命令> 使用"
+            )
+        }
+        val main = server.getPluginCommand("huhobot")
+        val mainConflict = main == null || main.plugin !== this
+        if (!mainConflict) return
+        val ok = registerDynamicCommand("huhobotagent", listOf("hba"), HuHoBotCommand(this))
+        if (ok) {
+            log_warning("指令冲突: /huhobot 已被其他插件占用，已改用 /huhobotagent 或 /hba")
+        } else {
+            log_error("指令冲突: /huhobot 被占用且回退命令注册失败，请调整冲突插件的命令名后重启")
+        }
+    }
+
+    /** 通过 CommandMap 动态注册回退命令（Bukkit 无公开 API，反射 getCommandMap）。 */
+    private fun registerDynamicCommand(
+        name: String,
+        aliases: List<String>,
+        executor: org.bukkit.command.TabExecutor
+    ): Boolean = runCatching {
+        val commandMap = server.javaClass.getMethod("getCommandMap").invoke(server) as org.bukkit.command.CommandMap
+        val dynamic = object : org.bukkit.command.Command(name, "HuHoBot fallback command", "/$name <子命令>", aliases) {
+            override fun execute(sender: org.bukkit.command.CommandSender, commandLabel: String, args: Array<out String>): Boolean =
+                executor.onCommand(sender, this, commandLabel, args)
+
+            override fun tabComplete(sender: org.bukkit.command.CommandSender, alias: String, args: Array<out String>): MutableList<String> =
+                (executor.onTabComplete(sender, this, alias, args) ?: emptyList()).toMutableList()
+        }
+        commandMap.register(name.lowercase(), dynamic)
+        true
+    }.getOrDefault(false)
 
     private fun <T : org.bukkit.event.Event> callSyncEvent(event: T): T {
         if (server.isPrimaryThread) {
@@ -1001,6 +1063,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getTtsCloneVoicesDir(): String = configManager.ttsCloneVoicesDir()
     override fun getTtsCloneDefaultVoice(): String = configManager.ttsCloneDefaultVoice()
     override fun getTtsMaxPerTurn(): Int = configManager.ttsMaxPerTurn()
+
+    override fun getSendPolicy(): String = configManager.sendPolicy()
 
     override fun getCommandAliasMap(): Map<String, String> = configManager.commandAliasMap()
     override fun getCommandAliasRename(): Map<String, String> = configManager.commandAliasRename()

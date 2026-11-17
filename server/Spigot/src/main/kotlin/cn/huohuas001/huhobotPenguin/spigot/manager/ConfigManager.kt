@@ -375,6 +375,19 @@ class ConfigManager(
 
     fun motdText(): String = plugin.config.getString("motd.text", "") ?: ""
 
+    fun performanceNotifyEnabled(): Boolean =
+        plugin.config.getBoolean("server-notify.performance.enabled", true)
+
+    fun performanceTpsThreshold(): Double =
+        plugin.config.getDouble("server-notify.performance.tps-threshold", 15.0)
+
+    fun performanceMemoryThreshold(): Double =
+        plugin.config.getDouble("server-notify.performance.memory-threshold", 0.9)
+
+    /** 发送策略：auto=被动优先(默认)，active=总是主动。 */
+    fun sendPolicy(): String =
+        (plugin.config.getString("message.send-policy", "auto") ?: "auto").trim().lowercase().takeIf { it == "active" } ?: "auto"
+
     fun motdServerIp(): String = plugin.config.getString("motd.server-ip", "127.0.0.1") ?: "127.0.0.1"
 
     fun motdServerPort(): Int = plugin.config.getInt("motd.server-port", plugin.server.port)
@@ -1015,6 +1028,10 @@ class ConfigManager(
             put("online-list.enabled", true)
             put("online-list.page-size", 27)
             put("online-list.max-render-players", 27)
+            put("message.send-policy", "auto")
+            put("server-notify.performance.enabled", true)
+            put("server-notify.performance.tps-threshold", 15.0)
+            put("server-notify.performance.memory-threshold", 0.9)
             put("online-list.admin-first", true)
             put("online-list.admin-permission", "")
             put("online-list.cooldown-seconds", 3L)

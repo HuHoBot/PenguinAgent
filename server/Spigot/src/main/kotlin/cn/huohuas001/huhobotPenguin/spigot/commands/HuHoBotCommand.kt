@@ -35,6 +35,11 @@ class HuHoBotCommand(private val plugin: HuHoBotSpigot) : TabExecutor {
                 )
             }
 
+            // 指令冲突回退：原命令被其他插件占用时，改用 /huhobot <子命令>
+            "qqbind" -> QqBindCommand().onCommand(sender, _command, "qqbind", args.drop(1).toTypedArray())
+            "at" -> AtCommand().onCommand(sender, _command, "at", args.drop(1).toTypedArray())
+            "send" -> SendCommand(plugin).onCommand(sender, _command, "send", args.drop(1).toTypedArray())
+
             else -> sendHelp(sender, label)
         }
         return true
@@ -140,10 +145,19 @@ class HuHoBotCommand(private val plugin: HuHoBotSpigot) : TabExecutor {
         sender.sendMessage("/$label password <新密码> - 修改 WebUI 登录密码")
         sender.sendMessage("/$label webui - 查看 WebUI 地址")
         sender.sendMessage("/$label scripts reload [插件名] - 重载 addons/ 下的目录插件")
-        sender.sendMessage("/send <消息> - 向 QQ 群发送消息")
+        sender.sendMessage("/$label qqbind <验证码> - QQ 绑定（兼容指令冲突时的回退写法）")
+        sender.sendMessage("/$label at <昵称> <消息> - 向 QQ 群发送 @ 消息（同上）")
+        sender.sendMessage("/$label send <消息> - 向 QQ 群发送消息（同上）")
+        val conflicted = plugin.getHandoverSubcommands()
+        if (conflicted.isNotEmpty()) {
+            sender.sendMessage(
+                org.bukkit.ChatColor.YELLOW.toString() +
+                    "注意: ${conflicted.joinToString("/")} 被其他插件占用，请使用 /$label <同名子命令>"
+            )
+        }
     }
 
     private companion object {
-        val SUBCOMMANDS = listOf("reload", "info", "password", "webui", "scripts", "help")
+        val SUBCOMMANDS = listOf("reload", "info", "password", "webui", "scripts", "qqbind", "at", "send", "help")
     }
 }

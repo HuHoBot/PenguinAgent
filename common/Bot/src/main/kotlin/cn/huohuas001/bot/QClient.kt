@@ -386,22 +386,67 @@ object QClient {
     }
 
     /** 向指定 QQ 群发送文本消息（始终使用 markdown 模式）。 */
+    /** 被动回复窗口：同一群最近一条入站消息的 msg_id 与已用次数（官方限制 5 分钟 5 条）。 */
+    private class PassiveWindow(var msgId: String, var usedSeq: Int, var lastAt: Long)
+
+    private val passiveWindows = ConcurrentHashMap<String, PassiveWindow>()
+
+    private const val PASSIVE_TTL_MS = 5 * 60_000L
+    private const val PASSIVE_MAX_SEQ = 5
+
+    /** 记录入站消息，开启被动回复窗口（新消息重置窗口，优先复用被动额度）。 */
+    fun noteInbound(groupOpenId: String, msgId: String) {
+        if (groupOpenId.isBlank() || msgId.isBlank()) return
+        passiveWindows[groupOpenId] = PassiveWindow(msgId, 0, System.currentTimeMillis())
+        if (passiveWindows.size > 512) {
+            val cutoff = System.currentTimeMillis() - PASSIVE_TTL_MS
+            passiveWindows.entries.removeIf { it.value.lastAt < cutoff }
+        }
+    }
+
+    /** 取出可用的被动回复槽位 (msg_id, msg_seq)；不可用时返回 null（转主动发送）。 */
+    private fun takePassiveSlot(groupOpenId: String): Pair<String, Int>? {
+        val window = passiveWindows[groupOpenId] ?: return null
+        val now = System.currentTimeMillis()
+        if (now - window.lastAt > PASSIVE_TTL_MS || window.usedSeq >= PASSIVE_MAX_SEQ) {
+            passiveWindows.remove(groupOpenId)
+            return null
+        }
+        window.usedSeq += 1
+        window.lastAt = now
+        return window.msgId to window.usedSeq
+    }
+
     fun sendTextToGroup(groupOpenId: String, content: String) {
         if (!::starter.isInitialized) return
         if (content.isBlank()) return
         val plugin = BotShared.getPlugin()
         val markdown = Markdown().setContent(content)
         val payload = V2MsgData().setMsg_type(2).setMarkdown(markdown)
+        // 被动优先：节省每天 1000 条主动消息额度；超时/超量自动转主动
+        val passive = if (plugin.getSendPolicy() != "active") takePassiveSlot(groupOpenId) else null
+        if (passive != null) {
+            payload.setMsg_id(passive.first).setMsg_seq(passive.second)
+        }
         Thread {
             try {
                 starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
             } catch (e: Exception) {
-                plugin.log_error("向QQ群 $groupOpenId 发送消息失败: ${e.message}")
+                if (passive != null) {
+                    // 被动通道失败（窗口过期/seq 冲突）→ 回退一次主动发送
+                    runCatching {
+                        val activePayload = V2MsgData().setMsg_type(2).setMarkdown(markdown)
+                        starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(activePayload), Channel.SEND_MESSAGE_HEADERS)
+                        plugin.log_warning("被动回复失败已回退主动发送: ${e.message}")
+                    }.onFailure { plugin.log_error("向QQ群 $groupOpenId 发送消息失败: ${it.message}") }
+                } else {
+                    plugin.log_error("向QQ群 $groupOpenId 发送消息失败: ${e.message}")
+                }
             }
         }.start()
     }
 
-    internal fun sendTextToGroups(content: String, action: String) {
+    fun sendTextToGroups(content: String, action: String) {
         if (content.isBlank()) return
         val plugin = BotShared.getPlugin()
         val markdown = Markdown().setContent(content)

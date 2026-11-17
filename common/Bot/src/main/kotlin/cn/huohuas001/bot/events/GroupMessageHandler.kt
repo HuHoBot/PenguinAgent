@@ -112,6 +112,8 @@ class GroupMessageHandler(
             }
         }
         if (!isAllowedGroup(groupId)) return
+        // 记录被动回复窗口：5 分钟内优先被动回复，节省每天 1000 条主动消息额度
+        cn.huohuas001.bot.QClient.noteInbound(groupId, event.rawMessage.id.orEmpty())
         when (dispatchCommand(event)) {
             BaseCommand.DispatchResult.CUSTOM_COMMAND -> Unit
 
