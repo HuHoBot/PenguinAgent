@@ -18,8 +18,8 @@ class PerformanceWatcher(private val plugin: HuHoBotSpigot) {
 
     fun start() {
         stop()
-        // 每 60 秒检查一次（20 TPS × 60）
-        timer = runCatching { plugin.submitTimer(1_200L, 1_200L) { tick() } }.getOrNull()
+        // 每 20 秒检查一次（性能告警仍按连续 3 次判定；在线人数采样更实时）
+        timer = runCatching { plugin.submitTimer(400L, 400L) { tick() } }.getOrNull()
     }
 
     fun stop() {

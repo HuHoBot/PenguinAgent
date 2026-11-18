@@ -374,9 +374,21 @@ class ConfigManager(
     fun onlineListAdminGroups(): List<String> =
         plugin.config.getStringList("online-list.display.admin-groups").map(String::trim).filter(String::isNotEmpty)
 
-    /** 在线列表图片的自定义信息行（支持 §/hex/MiniMessage）。 */
-    fun onlineListCustomLines(): List<String> =
-        plugin.config.getStringList("online-list.render.custom-lines").filter(String::isNotBlank)
+    /**
+     * 在线列表图片的自定义信息行（支持 §/hex/MiniMessage）。
+     * 同时兼容写在 online-list.display.custom-lines 的旧/错位配置（并给出提示）。
+     */
+    fun onlineListCustomLines(): List<String> {
+        val fromRender = plugin.config.getStringList("online-list.render.custom-lines").filter(String::isNotBlank)
+        val fromDisplay = plugin.config.getStringList("online-list.display.custom-lines").filter(String::isNotBlank)
+        if (fromDisplay.isNotEmpty() && fromRender.isEmpty()) {
+            plugin.logger.warning(
+                "检测到 online-list.display.custom-lines 有配置，但代码读取的是 " +
+                    "online-list.render.custom-lines；已临时兼容读取，建议把这几行挪到 render 下"
+            )
+        }
+        return (fromRender + fromDisplay).distinct().take(3)
+    }
 
     /** 单张图片最多渲染的玩家数；超出部分用 Markdown 文字列表补全。 */
     fun onlineListMaxRenderPlayers(): Int =

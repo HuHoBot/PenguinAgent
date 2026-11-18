@@ -133,40 +133,31 @@ class OnlineListRenderer(
     private fun renderImage(snapshot: ServerSnapshot, avatars: Map<String, BufferedImage>): BufferedImage {
         val displayed = snapshot.players.size.coerceAtMost(maxRenderPlayers)
         val rows = if (displayed == 0) 0 else (displayed + safeColumns - 1) / safeColumns
-        val gridHeight = if (rows == 0) 0 else rows * cardHeight + (rows - 1) * cardGapY
-        val contentBottom = if (rows == 0) GRID_TOP + 190 else GRID_TOP + gridHeight
-        val height = contentBottom + FOOTER_BOTTOM_HEIGHT
+        val gridHeight = if (rows == 0) 190 else rows * cardHeight + (rows - 1) * cardGapY
+
+        // 先算信息区底部，再排玩家列表（玩家列表优先展示），趋势/性能卡放在列表下方
+        val probe = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+        val probeGraphics = probe.createGraphics()
+        configure(probeGraphics)
+        val heroBottom = try {
+            drawHero(probeGraphics, snapshot)
+        } finally {
+            probeGraphics.dispose()
+        }
+
+        gridTop = heroBottom + 18
+        val trendTop = gridTop + gridHeight + 22
+        val trendHeight = 236
+        val height = trendTop + trendHeight + FOOTER_BOTTOM_HEIGHT
 
         val result = BufferedImage(WIDTH, height, BufferedImage.TYPE_INT_ARGB)
         val graphics = result.createGraphics()
         try {
             configure(graphics)
             drawBackground(graphics, height)
-            // 信息区实际高度 → 趋势卡与玩家区紧接其后，不留空行
-            val heroBottom = drawHero(graphics, snapshot)
-            val trendTop = heroBottom + 26
-            val trendHeight = drawTrendAndMetrics(graphics, snapshot, trendTop)
-            gridTop = trendTop + trendHeight + 24
-            val newContentBottom = if (rows == 0) gridTop + 190 else gridTop + gridHeight
-            val newHeight = newContentBottom + FOOTER_BOTTOM_HEIGHT
-            // 高度按实际排版重新生成（先画到临时图，再裁剪/重绘）
-            if (newHeight != height) {
-                val resized = BufferedImage(WIDTH, newHeight, BufferedImage.TYPE_INT_ARGB)
-                val resizedGraphics = resized.createGraphics()
-                try {
-                    configure(resizedGraphics)
-                    drawBackground(resizedGraphics, newHeight)
-                    drawHero(resizedGraphics, snapshot)
-                    drawTrendAndMetrics(resizedGraphics, snapshot, trendTop)
-                    if (rows == 0) drawEmptyState(resizedGraphics) else drawPlayers(resizedGraphics, snapshot, avatars)
-                    drawBottomBar(resizedGraphics, newHeight, snapshot)
-                } finally {
-                    resizedGraphics.dispose()
-                }
-                return resized
-            }
-            drawTrendAndMetrics(graphics, snapshot, trendTop)
+            drawHero(graphics, snapshot)
             if (rows == 0) drawEmptyState(graphics) else drawPlayers(graphics, snapshot, avatars)
+            drawTrendAndMetrics(graphics, snapshot, trendTop)
             drawBottomBar(graphics, height, snapshot)
         } finally {
             graphics.dispose()
@@ -273,8 +264,17 @@ class OnlineListRenderer(
             graphics.color = theme.textSecondary
             graphics.drawString("（未配置 MOTD）", textLeft, 108)
         } else {
-            motdLines.forEachIndexed { index, line ->
-                drawRichText(graphics, line, textLeft, 108 + index * 26, WIDTH - textLeft - sideMargin, 21)
+            var motdY = 108
+            var usedLines = 0
+            for (line in motdLines) {
+                if (usedLines >= 2) break
+                // 按可用宽度自动折行：单行过长的 MOTD 也能完整显示成两行
+                val chunks = wrapRichText(graphics, line, WIDTH - textLeft - sideMargin, 21, 2 - usedLines)
+                for (chunk in chunks) {
+                    drawRichText(graphics, chunk, textLeft, motdY, WIDTH - textLeft - sideMargin, 21)
+                    motdY += 26
+                    usedLines++
+                }
             }
         }
 
@@ -742,6 +742,40 @@ class OnlineListRenderer(
     }
 
     private fun stripMinecraftCodes(text: String): String = McTextParser.plainText(text)
+
+    /**
+     * 按可用宽度把一行富文本切成多行（保留颜色/格式标签）。
+     * maxLines 为允许的总行数，最后一行超出时加省略号。
+     */
+    private fun wrapRichText(graphics: Graphics2D, text: String, maxWidth: Int, size: Int, maxLines: Int): List<String> {
+        if (maxLines <= 0) return emptyList()
+        val segments = McTextParser.parse(text, theme.textPrimary)
+        val lines = mutableListOf<String>()
+        val current = StringBuilder()
+        var currentWidth = 0
+        var activeTags = StringBuilder()
+        for (segment in segments) {
+            graphics.font = font(if (segment.bold) Font.BOLD else Font.PLAIN, size)
+            for (ch in segment.text) {
+                val charWidth = graphics.fontMetrics.charWidth(ch)
+                if (currentWidth + charWidth > maxWidth) {
+                    lines.add(current.toString())
+                    if (lines.size >= maxLines) {
+                        val last = lines.last()
+                        lines[lines.lastIndex] = last + "…"
+                        return lines
+                    }
+                    current.setLength(0)
+                    currentWidth = 0
+                    current.append(activeTags)
+                }
+                current.append(ch)
+                currentWidth += charWidth
+            }
+        }
+        if (current.isNotEmpty()) lines.add(current.toString())
+        return lines
+    }
 
     /** 亮色主题下把过亮的文字色压暗，保证白底可读（青色/黄色等 LP 前缀）。 */
     private fun readableOnLight(color: Color): Color {

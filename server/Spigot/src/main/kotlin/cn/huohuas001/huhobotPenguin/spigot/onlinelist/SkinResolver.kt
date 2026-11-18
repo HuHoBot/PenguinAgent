@@ -11,11 +11,40 @@ object SkinResolver {
 
     fun resolve(player: Player): String? {
         modernProfile(player)?.let { return normalize(it) }
+        // SkinsRestorer 官方 API（离线服装 SR 后，玩家皮肤在 SR 存储里）
+        skinsRestorerApiTexture(player)?.let { return it }
         legacyProfile(player)?.let { return normalize(it) }
-        // SkinsRestorer（经 PlaceholderAPI）：离线模式装 SR 的服务器也能拿到皮肤纹理
+        // SkinsRestorer（经 PlaceholderAPI，兼容未装 API 直连的环境）
         skinsRestorerTexture(player)?.let { return it }
         return null
     }
+
+    /**
+     * 通过 SkinsRestorer 官方 API 反射取皮肤纹理：
+     * SkinsRestorerProvider.get() → getPlayerStorage().getSkinIdOfPlayer(uuid)
+     *   → getSkinStorage().findSkinData(skinId) → getSkinTextureUrl()
+     * 兼容 14.x/15.x 的多种方法名；任何一步失败都返回 null。
+     */
+    private fun skinsRestorerApiTexture(player: Player): String? = runCatching {
+        val providerClass = Class.forName("net.skinsrestorer.api.SkinsRestorerProvider")
+        val api = providerClass.getMethod("get").invoke(null) ?: return null
+        val playerStorage = api.javaClass.methods.firstOrNull { it.name == "getPlayerStorage" }?.invoke(api)
+            ?: return null
+        val skinId = playerStorage.javaClass.methods
+            .firstOrNull { it.name == "getSkinIdOfPlayer" }
+            ?.invoke(playerStorage, player.uniqueId) as? String
+        if (skinId.isNullOrBlank()) return null
+        val skinStorage = api.javaClass.methods.firstOrNull { it.name == "getSkinStorage" }?.invoke(api)
+            ?: return null
+        val finder = skinStorage.javaClass.methods.firstOrNull {
+            it.name == "findSkinData" || it.name == "getSkinData"
+        } ?: return null
+        val raw = finder.invoke(skinStorage, skinId)
+        val skinData = (raw as? java.util.Optional<*>)?.orElse(null) ?: raw ?: return null
+        listOf("getSkinTextureUrl", "getSkin", "getTextureUrl").firstNotNullOfOrNull { name ->
+            runCatching { skinData.javaClass.getMethod(name).invoke(skinData) as? String }.getOrNull()
+        }?.takeIf { it.startsWith("http") }
+    }.getOrNull()
 
     /**
      * 通过 PlaceholderAPI 读取 SkinsRestorer 的皮肤纹理地址。
@@ -34,8 +63,12 @@ object SkinResolver {
         return try {
             val profile = player.javaClass.getMethod("getPlayerProfile").invoke(player)
             val textures = profile!!.javaClass.getMethod("getTextures").invoke(profile)
-            val skin = textures!!.javaClass.getMethod("getSkin").invoke(textures)
-            skin?.toString()
+            val skin = textures!!.javaClass.getMethod("getSkin").invoke(textures) ?: return null
+            // Paper 的 PlayerSkin 不是 String：必须调用 getURL()/getTextureUrl() 之类取真实地址，
+            // 早期版本用 toString() 得到的是对象描述，导致皮肤永远下载失败（头像全变默认头像）。
+            listOf("getURL", "getUrl", "getTextureUrl", "getTextureURL").firstNotNullOfOrNull { name ->
+                runCatching { skin.javaClass.getMethod(name).invoke(skin) as? String }.getOrNull()
+            }?.takeIf { it.startsWith("http") }
         } catch (_: Throwable) {
             null
         }
