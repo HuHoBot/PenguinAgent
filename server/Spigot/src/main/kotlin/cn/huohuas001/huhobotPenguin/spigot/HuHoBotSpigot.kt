@@ -110,6 +110,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         performanceWatcher.start()
         // 强制 OTA（应急漏洞修补；未配置清单地址时完全静默）
         otaUpdater.start()
+        // 退群自动解绑（轮询群成员列表，需 QQ 白名单能力）
+        cn.huohuas001.bot.agent.GroupMemberVerifier.start()
         cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)
         cn.huohuas001.bot.agent.JoinApproveManager.start()
         cn.huohuas001.huhobotPenguin.spigot.manager.ProxyBridge.initialize(this, configManager.proxyBridgeEnabled())
@@ -1077,6 +1079,12 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getTtsMaxPerTurn(): Int = configManager.ttsMaxPerTurn()
 
     override fun getSendPolicy(): String = configManager.sendPolicy()
+
+    override fun isMemberCheckEnabled(): Boolean = configManager.memberCheckEnabled()
+    override fun getMemberCheckIntervalMinutes(): Int = configManager.memberCheckIntervalMinutes()
+    override fun isMemberCheckNotifyGroup(): Boolean = configManager.memberCheckNotifyGroup()
+    override fun getBlacklistOpenIds(): List<String> = configManager.blacklistOpenIds()
+    override fun isBlacklistBlockMessages(): Boolean = configManager.blacklistBlockMessages()
 
     override fun getCommandAliasMap(): Map<String, String> = configManager.commandAliasMap()
     override fun getCommandAliasRename(): Map<String, String> = configManager.commandAliasRename()

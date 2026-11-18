@@ -373,6 +373,22 @@ interface ConfigProvider {
     /** 发送策略：auto=被动优先(默认)，active=总是主动发送。 */
     fun getSendPolicy(): String = "auto"
 
+    // ------------------------------------------------------ 退群解绑与黑名单
+
+    /** 是否启用群成员校验（退群自动解绑）。需要 QQ 白名单能力 11253 的成员列表接口。 */
+    fun isMemberCheckEnabled(): Boolean = false
+
+    fun getMemberCheckIntervalMinutes(): Int = 30
+
+    /** 解绑时是否发 QQ 群通知。 */
+    fun isMemberCheckNotifyGroup(): Boolean = true
+
+    /** 机器人黑名单（QQ openid）：其消息不会被处理，入群申请也会被拒绝。 */
+    fun getBlacklistOpenIds(): List<String> = emptyList()
+
+    /** 是否直接忽略黑名单用户的消息（false = 只拒绝入群，消息照常进入 AI/转发）。 */
+    fun isBlacklistBlockMessages(): Boolean = true
+
     // ------------------------------------------------------ 命令映射与切换
 
     /** 映射：原名 → 新名，原名与新名都可用。 */

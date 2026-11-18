@@ -104,6 +104,13 @@ class GroupMessageHandler(
             CommandRepositories.memberRoles.put(groupId, senderOpenId, senderRole)
         }
 
+        // 黑名单：直接忽略该用户的消息（可配置只拒绝入群而不拦消息）
+        if (plugin.isBlacklistBlockMessages() && !senderOpenId.isNullOrBlank() &&
+            senderOpenId in plugin.getBlacklistOpenIds()
+        ) {
+            return
+        }
+
         val configured = plugin.getGroupOpenIdList()
         // 群列表为空或未收录该群时，收到任意消息即自动写入 bot.groups
         if (configured.isEmpty() || groupId !in configured) {

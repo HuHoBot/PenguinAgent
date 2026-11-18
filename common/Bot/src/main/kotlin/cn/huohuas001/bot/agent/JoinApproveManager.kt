@@ -116,4 +116,57 @@ object JoinApproveManager {
             return // 第一条命中的策略生效
         }
     }
+
+    /**
+     * AI 审批：交给工作 Agent 的模型判断是否放行。
+     * 返回 (是否通过, 理由)；AI 未配置/输出无法解析时返回 null（该申请留给人工处理）。
+     */
+    private fun aiReview(
+        plugin: cn.huohuas001.bot.HuHoBot,
+        request: JSONObject,
+        strategy: JSONObject
+    ): Pair<Boolean, String>? {
+        val baseUrl = plugin.getAgentBaseUrl()?.trim()
+        val apiKey = plugin.getAgentApiKey()?.trim()
+        val model = plugin.getAgentModel()?.trim()
+        if (baseUrl.isNullOrBlank() || apiKey.isNullOrBlank() || model.isNullOrBlank()) {
+            plugin.log_warning("AI 入群审批已跳过：工作 Agent 的 API 未配置")
+            return null
+        }
+        val rules = strategy.getString("prompt")?.takeIf(String::isNotBlank)
+            ?: "放行正常玩家；拒绝广告引流、营销号、可疑批量小号、明显恶意或与服务器无关的申请。"
+        val prompt = """
+            你是 QQ 群入群审批助手。请根据申请信息判断是否放行。
+            申请信息：${request.toJSONString()}
+            审批规则：$rules
+            只输出一行 JSON，格式：{"approve": true, "reason": "不超过 30 字的理由"}
+            不要输出任何其他内容。
+        """.trimIndent()
+        return runCatching {
+            val client = AgentApiClient(baseUrl, apiKey, model)
+            val messages = mutableListOf(JSONObject().apply {
+                put("role", "user")
+                put("content", prompt)
+            })
+            val result = client.chat(messages, null)
+            val content = result.content ?: return null
+            val json = extractJsonObject(content) ?: return null
+            val approve = json.getBooleanValue("approve")
+            val reason = json.getString("reason")?.take(60) ?: if (approve) "AI 审核通过" else "AI 审核拒绝"
+            approve to reason
+        }.getOrElse {
+            plugin.log_warning("AI 入群审批调用失败: ${it.message}")
+            null
+        }
+    }
+
+    /** 从模型输出里抠出第一个 JSON 对象（模型常带 ```json 包裹）。 */
+    private fun extractJsonObject(text: String): JSONObject? {
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        val end = text.lastIndexOf('}')
+        if (end <= start) return null
+        return runCatching { com.alibaba.fastjson.JSON.parseObject(text.substring(start, end + 1)) }.getOrNull()
+    }
+
 }

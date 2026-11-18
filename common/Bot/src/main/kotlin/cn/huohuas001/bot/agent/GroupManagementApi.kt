@@ -27,7 +27,7 @@ object GroupManagementApi {
         return start0.headers["X-Union-Appid"] ?: ""
     }
 
-    private fun request(starter: Starter, method: String, path: String, body: JSONObject? = null): JSONObject {
+    fun request(starter: Starter, method: String, path: String, body: JSONObject? = null): JSONObject {
         val url = URL("$API_BASE$path")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = method

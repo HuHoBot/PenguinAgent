@@ -423,6 +423,17 @@ class ConfigManager(
 
     fun motdText(): String = plugin.config.getString("motd.text", "") ?: ""
 
+    fun memberCheckEnabled(): Boolean = plugin.config.getBoolean("binding.member-check.enabled", false)
+
+    fun memberCheckIntervalMinutes(): Int = plugin.config.getInt("binding.member-check.interval-minutes", 30)
+
+    fun memberCheckNotifyGroup(): Boolean = plugin.config.getBoolean("binding.member-check.notify-group", true)
+
+    fun blacklistOpenIds(): List<String> =
+        plugin.config.getStringList("moderation.blacklist").map(String::trim).filter(String::isNotEmpty)
+
+    fun blacklistBlockMessages(): Boolean = plugin.config.getBoolean("moderation.block-messages", true)
+
     /** 强制 OTA 清单地址（空 = 不启用）。 */
     fun otaManifestUrl(): String =
         (plugin.config.getString("update.manifest-url", "") ?: "").trim()
@@ -1093,6 +1104,11 @@ class ConfigManager(
             put("online-list.render.events", true)
             put("online-list.skin.avatar-api", "https://mc-heads.net/avatar/{name}/64")
             put("message.send-policy", "auto")
+            put("binding.member-check.enabled", false)
+            put("binding.member-check.interval-minutes", 30)
+            put("binding.member-check.notify-group", true)
+            put("moderation.blacklist", emptyList<String>())
+            put("moderation.block-messages", true)
             put("update.manifest-url", "")
             put("update.check-hours", 6)
             put("server-notify.performance.enabled", true)

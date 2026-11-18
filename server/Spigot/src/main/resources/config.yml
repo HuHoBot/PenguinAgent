@@ -82,6 +82,21 @@ motd:
 
 # 查在线命令的本地图片渲染（雾蓝玻璃主题，带玩家皮肤头像）。
 # 关闭 enabled 后，查在线会回退到 MOTD 外部 API 图片。
+# ─────────────────── 退群自动解绑与黑名单 ───────────────────
+# 注意：QQ 官方 Bot API 不推送普通成员退群事件，只能用白名单能力「群成员列表」轮询校验。
+# 未获得该能力（调用返回 11253）时，插件会自动停用本功能并提示，不影响其他功能。
+binding:
+  member-check:
+    enabled: false              # 开启后定期校验绑定者是否仍在群内，不在则自动解绑
+    interval-minutes: 30        # 校验间隔（分钟）
+    notify-group: true          # 解绑时是否发 QQ 群通知
+
+moderation:
+  # 机器人黑名单（QQ openid）：消息不处理、入群申请直接拒绝
+  blacklist: []
+  # true = 黑名单用户的消息直接忽略；false = 只拒绝入群，消息照常处理
+  block-messages: true
+
 # ─────────────────── 强制 OTA（应急更新，可选） ───────────────────
 # 在仓库里放一个 JSON 清单（例如 versions.json）：
 #   { "minimumVersion": "1.23", "downloadUrl": "https://.../HuHoBot-Penguin-1.23.jar", "notes": "修复 XX" }
@@ -501,8 +516,21 @@ network:
 proxy-bridge:
   enabled: false      # 代理互通桥(huhobot:bridge 通道)，把游戏聊天转发给代理端广播其它子服
 
+# 入群自动审批（需要 QQ 群管理白名单能力；不可用时自动停用并提示）
+# 策略按顺序匹配，第一条命中生效：
+#   mode: allow = 直接通过；deny = 直接拒绝；ai = 交给工作 Agent 的模型判断
+#   openids: 只对这些申请人生效（留空 = 全部）
+#   prompt: ai 模式的审批规则（可自定义）
+#   reject-reason: deny / ai 拒绝时的理由
 join-approve:
   enabled: false
+  # strategies:
+  #   - name: AI 审核
+  #     mode: ai
+  #     prompt: "放行正常玩家；拒绝广告、营销号、明显小号"
+  #   - name: 同学直通
+  #     mode: allow
+  #     openids: []
   interval-seconds: 30
   strategies: []
   #  - name: "自动通过"

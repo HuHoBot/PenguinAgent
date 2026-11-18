@@ -170,6 +170,39 @@ update:
 当前版本 ≥ minimumVersion 时什么都不做；需要更新时下载到 `update/` 目录，**同一版本只下载一次**，
 重启服务器后用它替换 plugins 里的旧 jar。
 
+## 9.5 退群自动解绑与黑名单
+
+```yaml
+binding:
+  member-check:
+    enabled: false            # 开启后定期校验绑定者是否还在群里，不在就自动解绑
+    interval-minutes: 30
+    notify-group: true
+moderation:
+  blacklist: []               # 机器人黑名单（QQ openid）
+  block-messages: true        # 黑名单用户消息直接忽略
+```
+
+**重要限制**：QQ 官方 Bot API 不推送普通成员退群事件，也没有踢人接口。
+退群解绑只能靠白名单能力「群成员列表」轮询；未获得该能力（返回 11253）时插件会自动停用本功能并提示。
+黑名单用户：消息被忽略、入群申请自动拒绝。
+
+## 9.6 入群审批（可接 AI）
+
+```yaml
+join-approve:
+  enabled: true
+  strategies:
+    - name: AI 审核
+      mode: ai            # allow / deny / ai
+      prompt: "放行正常玩家；拒绝广告、营销号、明显小号"
+    - name: 熟人直通
+      mode: allow
+      openids: []
+```
+`mode: ai` 复用工作 Agent 的 API 配置判断申请（申请信息发给模型，输出 JSON 结论），
+AI 未配置或输出无法解析时该申请留给人工处理。
+
 ## 10. 消息发送策略
 
 ```yaml
