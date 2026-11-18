@@ -216,4 +216,39 @@ object GroupManagementApi {
         }
         return request(starter, "POST", "/v2/groups/join_approval_strategy/$strategyId/whitelist_users", body)
     }
+
+    // ── 群管理（需要平台白名单权限：移除群成员 / 撤回消息）──
+
+    /**
+     * 移除群成员（踢人）。需要机器人被授予「移除群成员」白名单权限，
+     * 且操作者应是群管理员/群主（由调用方校验）。
+     *
+     * @return null 表示成功；否则返回错误描述（含 QQ 错误码）
+     */
+    fun removeMember(starter: Starter, groupOpenId: String, memberOpenId: String, rejectAddRequest: Boolean = false): String? {
+        return try {
+            val resp = request(
+                starter,
+                "DELETE",
+                "/v2/groups/$groupOpenId/members/$memberOpenId",
+                JSONObject().apply { put("reject_add_request", rejectAddRequest) }
+            )
+            val code = resp.getInteger("code") ?: resp.getInteger("err_code")
+            if (code == null || code == 0) null else "错误码 $code：${resp.getString("message").orEmpty()}"
+        } catch (error: Throwable) {
+            error.message ?: "未知错误"
+        }
+    }
+
+    /** 撤回群消息（需要「撤回消息」权限）。返回 null 表示成功。 */
+    fun recallMessage(starter: Starter, groupOpenId: String, messageId: String): String? {
+        return try {
+            val resp = request(starter, "DELETE", "/v2/groups/$groupOpenId/messages/$messageId")
+            val code = resp.getInteger("code") ?: resp.getInteger("err_code")
+            if (code == null || code == 0) null else "错误码 $code：${resp.getString("message").orEmpty()}"
+        } catch (error: Throwable) {
+            error.message ?: "未知错误"
+        }
+    }
+
 }

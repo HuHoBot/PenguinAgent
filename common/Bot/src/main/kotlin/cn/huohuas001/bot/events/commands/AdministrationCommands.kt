@@ -165,4 +165,59 @@ class AdministrationCommands : CommandSupport() {
         val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
         return CommandRepositories.groupSettings.administratorMode(groupId(event), defaultMode)
     }
+
+    // ── 群管理（踢人 / 撤回消息）──
+    // 需要 QQ 开放平台授予的群管理白名单权限（移除群成员 / 撤回消息），
+    // 且操作者需是本群管理员或群主。
+
+    @Commands(command = "踢人", describe = "移除群成员（需群管理权限）", onlyAdmin = true)
+    fun kickMember(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+        val target = targetOpenId(event, params)
+        if (target.isNullOrBlank()) {
+            reply(plugin, event, "用法：@某人 踢人（或 踢人 <openid>）")
+            return
+        }
+        val starter = cn.huohuas001.bot.QClient.getStarter()
+        if (starter == null) {
+            reply(plugin, event, "QQ 机器人尚未就绪，稍后再试")
+            return
+        }
+        val error = cn.huohuas001.bot.agent.GroupManagementApi.removeMember(
+            starter, groupId(event), target, rejectAddRequest = true
+        )
+        if (error == null) {
+            reply(plugin, event, "已移除该成员，并拒绝其后续加群申请")
+        } else {
+            reply(plugin, event, "踢出失败：$error\n（请确认机器人已被授予「移除群成员」白名单权限，且你/机器人有群管理权限）")
+        }
+    }
+
+    @Commands(command = "撤回", describe = "撤回群消息（需消息ID）", onlyAdmin = true)
+    fun recallMessage(plugin: HuHoBot, event: GroupMessageEvent, params: String) {
+        if (!requireAdmin(plugin, event)) return
+        val messageId = params.trim()
+        if (messageId.isBlank()) {
+            reply(plugin, event, "用法：撤回 <消息ID>（消息 ID 可在机器人日志或消息事件中查到）")
+            return
+        }
+        val starter = cn.huohuas001.bot.QClient.getStarter()
+        if (starter == null) {
+            reply(plugin, event, "QQ 机器人尚未就绪，稍后再试")
+            return
+        }
+        val error = cn.huohuas001.bot.agent.GroupManagementApi.recallMessage(
+            starter, groupId(event), messageId
+        )
+        reply(plugin, event, if (error == null) "已撤回该消息" else "撤回失败：$error")
+    }
+
+    /** 取 @ 的成员 openid，没有 @ 时用参数文本（openid）。 */
+    private fun targetOpenId(event: GroupMessageEvent, params: String): String? {
+        val mention = runCatching {
+            event.rawMessage.mentions?.firstOrNull()?.id
+        }.getOrNull()
+        return mention?.takeIf(String::isNotBlank) ?: params.trim().takeIf(String::isNotBlank)
+    }
+
 }
