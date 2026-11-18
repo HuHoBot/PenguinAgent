@@ -57,7 +57,8 @@ class OnlineListManager(
                 maxRenderPlayers = config.onlineListMaxRenderPlayers(),
                 customLines = config.onlineListCustomLines(),
                 nameColor = config.onlineListNameColor(),
-                themeName = config.onlineListTheme()
+                themeName = config.onlineListTheme(),
+                eventsEnabled = config.onlineListEventsEnabled()
             )
         } catch (error: Throwable) {
             // 底图资源缺失/损坏时不中断插件启动，仅关闭本地渲染能力

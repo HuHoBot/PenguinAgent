@@ -338,6 +338,10 @@ class ConfigManager(
         (plugin.config.getString("online-list.skin.avatar-api", "https://mc-heads.net/avatar/{name}/64") ?: "")
             .trim()
 
+    /** 是否显示节日 / 事件横幅（内置事件表）。 */
+    fun onlineListEventsEnabled(): Boolean =
+        plugin.config.getBoolean("online-list.render.events", true)
+
     /** 在线列表图片主题：dark / light。 */
     fun onlineListTheme(): String =
         (plugin.config.getString("online-list.render.theme", "dark") ?: "dark").trim().lowercase()
@@ -1086,6 +1090,7 @@ class ConfigManager(
             put("online-list.display.admin-groups", emptyList<String>())
             put("online-list.display.address", "")
             put("online-list.render.theme", "dark")
+            put("online-list.render.events", true)
             put("online-list.skin.avatar-api", "https://mc-heads.net/avatar/{name}/64")
             put("message.send-policy", "auto")
             put("update.manifest-url", "")

@@ -39,7 +39,9 @@ class OnlineListRenderer(
     /** 玩家名颜色（config online-list.display.name-color），空 = 默认白。 */
     private val nameColor: String = "",
     /** 主题：dark（默认）/ light。 */
-    private val themeName: String = "dark"
+    private val themeName: String = "dark",
+    /** 是否显示节日横幅。 */
+    private val eventsEnabled: Boolean = true
 ) {
     companion object {
         const val WIDTH = 1200
@@ -213,6 +215,23 @@ class OnlineListRenderer(
         graphics.color = theme.textSecondary
         val subtitle = "在线列表"
         graphics.drawString(subtitle, (WIDTH - graphics.fontMetrics.stringWidth(subtitle)) / 2, 48)
+
+        // 节日 / 事件横幅（内置事件表；命中的日期自动显示）
+        if (eventsEnabled) {
+            EventTheme.current()?.let { event ->
+                graphics.font = font(Font.BOLD, 19)
+                val bannerWidth = graphics.fontMetrics.stringWidth(event.banner) + 34
+                val bannerX = (WIDTH - bannerWidth) / 2
+                val banner = RoundRectangle2D.Float(bannerX.toFloat(), 62f, bannerWidth.toFloat(), 30f, 15f, 15f)
+                graphics.color = if (themeName.equals("light", true)) Color(226, 168, 40, 46) else Color(255, 198, 61, 38)
+                graphics.fill(banner)
+                graphics.color = theme.adminBorder
+                graphics.stroke = BasicStroke(1.2f)
+                graphics.draw(banner)
+                graphics.color = theme.adminText
+                graphics.drawString(event.banner, bannerX + 17, 84)
+            }
+        }
 
         val iconSize = 112
         val iconX = sideMargin

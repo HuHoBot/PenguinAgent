@@ -115,6 +115,8 @@ online-list:
   page-size: 27
   # 图片主题：dark（深色科技风，默认）/ light（亮色清爽风）
   theme: "dark"
+  # 是否显示节日/事件横幅（春节、中秋、国庆、圣诞、APEC 等，内置日期表）
+  events: true
   # 单张图片最多渲染的玩家数（超过时图片只画前 N 位，完整名单以 Markdown 文字补发）
   max-render-players: 27
   # 玩家显示：地址、LuckPerms 前缀(称号)/后缀、名字颜色、管理员组

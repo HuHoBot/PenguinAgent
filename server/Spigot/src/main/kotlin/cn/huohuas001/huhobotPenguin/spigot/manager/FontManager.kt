@@ -35,20 +35,23 @@ object FontManager {
     /** 启动/重载时调用：解压内置字体并注册到 JVM。 */
     fun initialize(dataFolder: File, logInfo: (String) -> Unit = {}, logWarning: (String) -> Unit = {}) {
         try {
-            val target = File(dataFolder, FONT_TARGET)
-            target.parentFile?.mkdirs()
+            // 字体内嵌在 jar 中直接注册，不再复制到插件文件夹（减少数据目录文件）
             val resource = FontManager::class.java.getResourceAsStream(FONT_RESOURCE)
             if (resource == null) {
                 logWarning("内置字体资源缺失: $FONT_RESOURCE，图片渲染将回退系统字体")
                 return
             }
-            // 每次启动覆盖写入，保证插件升级时内置字体同步更新；文件约 5MB（完整 CJK 字形，避免生僻字显示方块）
-            resource.use { input -> target.outputStream().use { input.copyTo(it) } }
             if (registered.compareAndSet(false, true)) {
-                val font = Font.createFont(Font.TRUETYPE_FONT, target)
+                val font = resource.use { Font.createFont(Font.TRUETYPE_FONT, it) }
                 GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(font)
             }
             bundledReady = true
+            // 清理旧版本复制到插件目录的字体缓存
+            runCatching {
+                val legacy = File(dataFolder, FONT_TARGET)
+                if (legacy.isFile) legacy.delete()
+                legacy.parentFile?.takeIf { it.listFiles()?.isEmpty() == true }?.delete()
+            }
             logInfo("内置中文字体已就绪（$BUNDLED_FAMILY），图片渲染不再依赖系统字体")
         } catch (error: Throwable) {
             logWarning("内置字体加载失败，图片渲染将回退系统字体: ${error.message}")

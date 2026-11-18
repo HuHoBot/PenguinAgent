@@ -195,10 +195,32 @@ class ServerNotifyManager(
         return true
     }
 
-    private fun formatMessage(raw: String): String = raw
-        .replace("{server}", plugin.getServerName())
-        .replace("{platform}", plugin.getPlatform())
-        .trim()
+    /** 把配置里的单行文本包装成便于阅读的富文本卡片（标题加粗 + 元信息块）。 */
+    private fun formatMessage(raw: String): String {
+        val text = raw
+            .replace("{server}", plugin.getServerName())
+            .replace("{platform}", plugin.getPlatform())
+            .trim()
+        if (text.isEmpty()) return text
+        val lines = text.lines().filter(String::isNotBlank)
+        val title = lines.firstOrNull()?.take(60) ?: text.take(60)
+        val icon = when {
+            title.contains("关闭") -> "🛑"
+            title.contains("重启") -> "🔄"
+            title.contains("意外") || title.contains("崩溃") -> "⚠️"
+            else -> "📢"
+        }
+        val time = java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")
+            .format(java.time.LocalDateTime.now())
+        return buildString {
+            appendLine("$icon **$title**")
+            lines.drop(1).forEach { appendLine(it) }
+            appendLine("")
+            appendLine("> **服务器**：${plugin.getServerName()}")
+            appendLine("> **平台**：${plugin.getPlatform()}")
+            appendLine("> **时间**：$time")
+        }.trim()
+    }
 
     private fun readState(): Properties? {
         val file = stateFile
