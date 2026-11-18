@@ -141,6 +141,9 @@ online-list:
   skin:
     # 是否下载并显示玩家皮肤头像；关闭则显示占位头像
     enabled: true
+    # 离线模式没有官方皮肤时使用的头像 API（{name} / {uuid} 占位符，留空禁用）
+    # 默认 mc-heads：离线名也会返回 Steve/Alex 头像；装了 SkinsRestorer 时优先用其皮肤
+    avatar-api: "https://mc-heads.net/avatar/{name}/64"
     connect-timeout-ms: 3000
     read-timeout-ms: 5000
     # 皮肤头像 LRU 缓存容量

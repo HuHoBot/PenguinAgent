@@ -330,6 +330,14 @@ class ConfigManager(
     fun onlineListRenderColumns(): Int =
         plugin.config.getInt("online-list.render.columns", 3).coerceIn(1, 3)
 
+    /**
+     * 头像 API 模板（离线模式兜底）。{name} / {uuid} 占位符；留空禁用。
+     * 默认使用 mc-heads（离线名也能返回 Steve/Alex 头像）。
+     */
+    fun onlineListAvatarApi(): String =
+        (plugin.config.getString("online-list.skin.avatar-api", "https://mc-heads.net/avatar/{name}/64") ?: "")
+            .trim()
+
     /** 在线列表图片主题：dark / light。 */
     fun onlineListTheme(): String =
         (plugin.config.getString("online-list.render.theme", "dark") ?: "dark").trim().lowercase()
@@ -1078,6 +1086,7 @@ class ConfigManager(
             put("online-list.display.admin-groups", emptyList<String>())
             put("online-list.display.address", "")
             put("online-list.render.theme", "dark")
+            put("online-list.skin.avatar-api", "https://mc-heads.net/avatar/{name}/64")
             put("message.send-policy", "auto")
             put("update.manifest-url", "")
             put("update.check-hours", 6)

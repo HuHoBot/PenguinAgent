@@ -11,7 +11,9 @@ class OnlineListPlayer(
     /** LuckPerms 前缀（可能含颜色代码）；空 = 无。 */
     val prefix: String = "",
     /** LuckPerms 后缀（可能含颜色代码）；空 = 无。 */
-    val suffix: String = ""
+    val suffix: String = "",
+    /** 头像直链（如 mc-heads 头像 API）；下载后直接使用，不做皮肤裁剪。 */
+    val headUrl: String = ""
 )
 
 /** 在线列表渲染用服务器快照。 */

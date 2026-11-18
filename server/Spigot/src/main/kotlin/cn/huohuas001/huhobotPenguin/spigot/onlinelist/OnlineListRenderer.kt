@@ -89,8 +89,14 @@ class OnlineListRenderer(
         private val HOUR = DateTimeFormatter.ofPattern("HH时").withZone(ZoneId.of("Asia/Shanghai"))
     }
 
-    /** HuHo 娘立绘（repo 提供的 HuHo.png），放在右下角作为装饰。 */
+    /** HuHo 娘立绘（repo 提供的 HuHo.png），放在左下角作为装饰。 */
     private val mascot: BufferedImage = readResource("/online/HuHo.png")
+
+    /** 内置默认头像（Steve / Alex）：离线模式或网络不可用时的兜底，永不留空。 */
+    private val defaultHeads: List<BufferedImage> = listOfNotNull(
+        runCatching { readResource("/online/head-steve.png") }.getOrNull(),
+        runCatching { readResource("/online/head-alex.png") }.getOrNull()
+    )
 
     private val safeColumns = columns.coerceIn(1, 3)
     private val compact = safeColumns == 3
@@ -384,8 +390,8 @@ class OnlineListRenderer(
         if (snapshot.memoryMaxMb > 0 && memRatio > 0.88) {
             issues.add("内存占用 ${(memRatio * 100).toInt()}%，接近上限")
         }
+        val issueY = top + 204
         if (issues.isNotEmpty()) {
-            val issueY = top + 204
             graphics.font = font(Font.BOLD, 16)
             graphics.color = theme.bad
             graphics.drawString("检测到 ${issues.size} 项异常", metricsX + 24, issueY)
@@ -394,6 +400,11 @@ class OnlineListRenderer(
             issues.take(1).forEach { issue ->
                 graphics.drawString(truncate(graphics, "· $issue", metricsWidth - 48), metricsX + 24, issueY + 20)
             }
+        } else {
+            // 无异常也给出状态行，避免性能卡底部留空
+            graphics.font = font(Font.BOLD, 15)
+            graphics.color = theme.good
+            graphics.drawString("运行正常", metricsX + 24, issueY)
         }
         return height
     }
@@ -538,14 +549,15 @@ class OnlineListRenderer(
         val previousClip = graphics.clip
         graphics.clip(avatarShape)
         graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR)
-        if (avatar == null) {
-            graphics.color = Color(46, 64, 92)
+        val shownAvatar = avatar ?: defaultHeadFor(player)
+        if (shownAvatar != null) {
+            graphics.drawImage(shownAvatar, avatarX, avatarY, avatarSize, avatarSize, null)
+        } else {
+            graphics.color = if (themeName.equals("light", true)) Color(222, 232, 244) else Color(46, 64, 92)
             graphics.fill(avatarShape)
             graphics.font = font(Font.BOLD, if (compact) 24 else 30)
             graphics.color = theme.textSecondary
             drawCenteredIn(graphics, player.name.take(1).uppercase(), avatarX, avatarSize, avatarY + avatarSize / 2 + (if (compact) 8 else 10))
-        } else {
-            graphics.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize, null)
         }
         graphics.clip = previousClip
         graphics.color = Color(120, 200, 255, 90)
@@ -576,6 +588,13 @@ class OnlineListRenderer(
         graphics.font = font(Font.PLAIN, if (compact) 14 else 17)
         graphics.color = if (player.administrator) Color(255, 206, 84, 200) else theme.textSecondary
         graphics.drawString(if (player.administrator) "ADMIN" else "ONLINE", textX, y + (if (compact) 72 else 93))
+    }
+
+    /** 按 uuid 哈希选择内置默认头像（Steve/Alex），保证每个玩家都有头像。 */
+    private fun defaultHeadFor(player: OnlineListPlayer): BufferedImage? {
+        if (defaultHeads.isEmpty()) return null
+        val index = (player.uuid.hashCode().toLong() and 0x7fffffff).mod(defaultHeads.size.toLong()).toInt()
+        return defaultHeads[index]
     }
 
     private fun drawCrown(graphics: Graphics2D, x: Int, y: Int, width: Int, height: Int) {

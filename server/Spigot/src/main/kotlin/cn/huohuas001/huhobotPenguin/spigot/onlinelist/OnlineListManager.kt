@@ -211,17 +211,24 @@ class OnlineListManager(
             } else {
                 "" to ""
             }
+            val skinUrl = try {
+                SkinResolver.resolve(player)
+            } catch (_: Exception) {
+                null
+            }
+            // 拿不到皮肤纹理时（离线模式常见），改用头像 API 直链；
+            // 完全失败时渲染器使用内置默认头像，永不留空。
+            val headUrl = if (skinUrl.isNullOrBlank()) {
+                config.onlineListAvatarApi().replace("{name}", player.name).replace("{uuid}", player.uniqueId.toString())
+            } else ""
             OnlineListPlayer(
                 name = player.name,
                 uuid = player.uniqueId.toString(),
-                skinUrl = try {
-                    SkinResolver.resolve(player)
-                } catch (_: Exception) {
-                    null
-                },
+                skinUrl = skinUrl,
                 administrator = administrator,
                 prefix = if (showPrefix) prefix else "",
-                suffix = if (showSuffix) suffix else ""
+                suffix = if (showSuffix) suffix else "",
+                headUrl = headUrl
             )
         }
         val sorted = OnlineListPages.sorted(players, adminFirst)
