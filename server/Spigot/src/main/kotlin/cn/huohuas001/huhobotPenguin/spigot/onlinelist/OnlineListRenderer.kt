@@ -108,7 +108,13 @@ class OnlineListRenderer(
     private val cardHeight = if (compact) 96 else 118
     private val avatarSize = if (compact) 60 else 76
     private val fontFamily = chooseFont(configuredFont)
-    private val theme: Theme = if (themeName.equals("light", true)) LIGHT else DARK
+    private val event: EventTheme.Event? = if (eventsEnabled) EventTheme.current() else null
+
+    private val theme: Theme = run {
+        val base = if (themeName.equals("light", true)) LIGHT else DARK
+        val palette = event?.palette ?: return@run base
+        base.copy(bg1 = palette.bg1, bg2 = palette.bg2, bg3 = palette.bg3, accent = palette.accent, accent2 = palette.accent2)
+    }
     /** 玩家区起始 Y（随信息区实际高度动态计算，避免空行）。 */
     private var gridTop = GRID_TOP
     private val safeFooterText = footerText.trim()
@@ -210,35 +216,12 @@ class OnlineListRenderer(
     // ───────────────────────── 顶部信息 ─────────────────────────
 
     private fun drawHero(graphics: Graphics2D, snapshot: ServerSnapshot): Int {
-        // 顶部标题（用户要求保留"在线列表"字样）
-        graphics.font = font(Font.BOLD, 30)
-        graphics.color = theme.textSecondary
-        val subtitle = "在线列表"
-        graphics.drawString(subtitle, (WIDTH - graphics.fontMetrics.stringWidth(subtitle)) / 2, 48)
-
-        // 节日 / 事件横幅（内置事件表；命中的日期自动显示）
-        if (eventsEnabled) {
-            EventTheme.current()?.let { event ->
-                graphics.font = font(Font.BOLD, 19)
-                val bannerWidth = graphics.fontMetrics.stringWidth(event.banner) + 34
-                val bannerX = (WIDTH - bannerWidth) / 2
-                val banner = RoundRectangle2D.Float(bannerX.toFloat(), 62f, bannerWidth.toFloat(), 30f, 15f, 15f)
-                graphics.color = if (themeName.equals("light", true)) Color(226, 168, 40, 46) else Color(255, 198, 61, 38)
-                graphics.fill(banner)
-                graphics.color = theme.adminBorder
-                graphics.stroke = BasicStroke(1.2f)
-                graphics.draw(banner)
-                graphics.color = theme.adminText
-                graphics.drawString(event.banner, bannerX + 17, 84)
-            }
-        }
-
-        val iconSize = 112
+        val iconSize = 96
         val iconX = sideMargin
-        val iconY = 78
-        val iconShape = RoundRectangle2D.Float(iconX.toFloat(), iconY.toFloat(), iconSize.toFloat(), iconSize.toFloat(), 24f, 24f)
+        val iconY = 22
+        val iconShape = RoundRectangle2D.Float(iconX.toFloat(), iconY.toFloat(), iconSize.toFloat(), iconSize.toFloat(), 22f, 22f)
         graphics.color = theme.cardShadow
-        graphics.fill(RoundRectangle2D.Float((iconX + 3).toFloat(), (iconY + 5).toFloat(), iconSize.toFloat(), iconSize.toFloat(), 24f, 24f))
+        graphics.fill(RoundRectangle2D.Float((iconX + 3).toFloat(), (iconY + 4).toFloat(), iconSize.toFloat(), iconSize.toFloat(), 22f, 22f))
         val clip = graphics.clip
         graphics.clip(iconShape)
         val icon = snapshot.icon
@@ -248,86 +231,82 @@ class OnlineListRenderer(
         } else {
             graphics.color = if (themeName.equals("light", true)) Color(210, 224, 240) else Color(30, 44, 68)
             graphics.fill(iconShape)
-            graphics.font = font(Font.BOLD, 26)
+            graphics.font = font(Font.BOLD, 22)
             graphics.color = theme.textSecondary
-            drawCenteredIn(graphics, "无图标", iconX, iconSize, iconY + 62)
+            drawCenteredIn(graphics, "无图标", iconX, iconSize, iconY + 54)
         }
         graphics.clip = clip
         graphics.color = theme.accent
         graphics.stroke = BasicStroke(2f)
         graphics.draw(iconShape)
 
-        val textLeft = iconX + iconSize + 26
+        val textLeft = iconX + iconSize + 24
         val right = WIDTH - sideMargin
 
-        // 名称（大号）+ 状态点
-        graphics.font = font(Font.BOLD, 48)
+        // 名称 + 状态点
+        graphics.font = font(Font.BOLD, 42)
         graphics.color = theme.textPrimary
         val name = truncate(graphics, snapshot.serverName, WIDTH - textLeft - 320)
-        graphics.drawString(name, textLeft, 134)
+        graphics.drawString(name, textLeft, 76)
         graphics.color = theme.accent
-        graphics.fillOval(textLeft + graphics.fontMetrics.stringWidth(name) + 12, 108, 12, 12)
+        graphics.fillOval(textLeft + graphics.fontMetrics.stringWidth(name) + 12, 52, 12, 12)
 
-        // 人数（右上，格式 "3 / 20"）
+        // 人数 "3 / 20"
         val onlineText = "${snapshot.totalOnlinePlayers}"
         val maxText = " / ${snapshot.maxPlayers}"
-        graphics.font = font(Font.BOLD, 42)
+        graphics.font = font(Font.BOLD, 38)
         val onlineWidth = graphics.fontMetrics.stringWidth(onlineText)
-        graphics.font = font(Font.PLAIN, 24)
+        graphics.font = font(Font.PLAIN, 22)
         val maxWidth = graphics.fontMetrics.stringWidth(maxText)
         val startX = right - onlineWidth - maxWidth
-        graphics.font = font(Font.BOLD, 42)
+        graphics.font = font(Font.BOLD, 38)
         graphics.color = theme.textPrimary
-        graphics.drawString(onlineText, startX, 134)
-        graphics.font = font(Font.PLAIN, 24)
+        graphics.drawString(onlineText, startX, 76)
+        graphics.font = font(Font.PLAIN, 22)
         graphics.color = theme.textSecondary
-        graphics.drawString(maxText, startX + onlineWidth, 134)
+        graphics.drawString(maxText, startX + onlineWidth, 76)
 
-        // 彩色 MOTD（两行，支持 §/hex/MiniMessage）
+        // MOTD（两行，彩色）
         val motdLines = snapshot.motd.replace("\\n", "\n").split('\n').filter(String::isNotBlank).take(2)
         if (motdLines.isEmpty()) {
-            graphics.font = font(Font.PLAIN, 21)
+            graphics.font = font(Font.PLAIN, 19)
             graphics.color = theme.textSecondary
-            graphics.drawString("（未配置 MOTD）", textLeft, 172)
+            graphics.drawString("（未配置 MOTD）", textLeft, 108)
         } else {
             motdLines.forEachIndexed { index, line ->
-                drawRichText(graphics, line, textLeft, 174 + index * 30, WIDTH - textLeft - sideMargin, 24)
+                drawRichText(graphics, line, textLeft, 108 + index * 26, WIDTH - textLeft - sideMargin, 21)
             }
         }
 
-        // 技术行：只保留必要信息（版本 / 品牌 / Via 支持），不显示构建号
+        // 技术行（版本 / 品牌 / Via 支持），紧跟图标底部，不留空
         val coreShort = snapshot.coreVersion.substringBefore("-").substringBefore(" ").trim()
         val infoParts = mutableListOf<String>()
         coreShort.takeIf(String::isNotBlank)?.let { infoParts.add(it) }
         snapshot.brand.takeIf(String::isNotBlank)?.let { infoParts.add(it) }
         snapshot.viaRange.takeIf(String::isNotBlank)?.let { infoParts.add("支持 $it") }
-        graphics.font = font(Font.PLAIN, 20)
+        graphics.font = font(Font.PLAIN, 18)
         graphics.color = theme.textSecondary
         graphics.drawString(
             truncate(graphics, infoParts.joinToString(" · "), WIDTH - sideMargin * 2),
-            sideMargin, 280
+            sideMargin, 160
         )
 
-        // 地址（重要信息加粗；域名默认不带端口，非 25565 才显示端口）
-        var cursorY = 308
+        // 地址（重要信息加粗；纯域名；非 25565 才带端口）
+        var cursorY = 188
         if (snapshot.serverIp.isNotBlank()) {
-            val address = if (snapshot.serverPort == 25565 || snapshot.serverPort <= 0) {
-                snapshot.serverIp
-            } else {
-                "${snapshot.serverIp}:${snapshot.serverPort}"
-            }
-            graphics.font = font(Font.BOLD, 22)
+            val address = if (snapshot.serverPort == 25565 || snapshot.serverPort <= 0) snapshot.serverIp
+            else "${snapshot.serverIp}:${snapshot.serverPort}"
+            graphics.font = font(Font.BOLD, 20)
             graphics.color = theme.accent
             graphics.drawString(truncate(graphics, address, WIDTH - sideMargin * 2), sideMargin, cursorY)
-            cursorY += 30
-        }
-
-        // 自定义信息行（可随意增删，无配置时不留空行）
-        customLines.take(3).forEach { line ->
-            drawRichText(graphics, line, sideMargin, cursorY, WIDTH - sideMargin * 2, 21)
             cursorY += 26
         }
-        return cursorY + 6
+        // 自定义信息行
+        customLines.take(3).forEach { line ->
+            drawRichText(graphics, line, sideMargin, cursorY, WIDTH - sideMargin * 2, 19)
+            cursorY += 24
+        }
+        return cursorY + 4
     }
 
     // ───────────────────────── 趋势 + 性能 ─────────────────────────
@@ -346,9 +325,26 @@ class OnlineListRenderer(
         graphics.stroke = BasicStroke(1.6f)
         graphics.draw(trendCard)
 
-        graphics.font = font(Font.BOLD, 22)
+        graphics.font = font(Font.BOLD, 24)
         graphics.color = theme.textPrimary
-        graphics.drawString("在线趋势 · 最近 48 小时", sideMargin + 26, top + 38)
+        graphics.drawString("在线列表", sideMargin + 26, top + 34)
+        graphics.font = font(Font.PLAIN, 16)
+        graphics.color = theme.textSecondary
+        graphics.drawString("在线趋势 · 最近 48 小时", sideMargin + 26, top + 58)
+        // 节日徽章（右上角）
+        event?.let { ev ->
+            graphics.font = font(Font.BOLD, 15)
+            val badgeWidth = graphics.fontMetrics.stringWidth(ev.banner) + 24
+            val badgeX = sideMargin + trendWidth - 26 - badgeWidth
+            val badge = RoundRectangle2D.Float(badgeX.toFloat(), (top + 20).toFloat(), badgeWidth.toFloat(), 26f, 13f, 13f)
+            graphics.color = Color(theme.adminBorder.red, theme.adminBorder.green, theme.adminBorder.blue, 40)
+            graphics.fill(badge)
+            graphics.color = theme.adminBorder
+            graphics.stroke = BasicStroke(1.1f)
+            graphics.draw(badge)
+            graphics.color = theme.adminText
+            graphics.drawString(ev.banner, badgeX + 12, top + 38)
+        }
 
         val points = OnlineHistoryStore.recent(48)
         if (points.size < 2) {
@@ -606,7 +602,9 @@ class OnlineListRenderer(
 
         graphics.font = font(Font.PLAIN, if (compact) 14 else 17)
         graphics.color = if (player.administrator) Color(255, 206, 84, 200) else theme.textSecondary
-        graphics.drawString(if (player.administrator) "ADMIN" else "ONLINE", textX, y + (if (compact) 72 else 93))
+        val role = if (player.administrator) "ADMIN" else "ONLINE"
+        val status = if (player.pingMs >= 0) "$role · ${player.pingMs}ms" else role
+        graphics.drawString(status, textX, y + (if (compact) 72 else 93))
     }
 
     /** 按 uuid 哈希选择内置默认头像（Steve/Alex），保证每个玩家都有头像。 */

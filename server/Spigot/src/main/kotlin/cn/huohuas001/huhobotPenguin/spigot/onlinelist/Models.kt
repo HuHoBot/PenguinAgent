@@ -13,7 +13,9 @@ class OnlineListPlayer(
     /** LuckPerms 后缀（可能含颜色代码）；空 = 无。 */
     val suffix: String = "",
     /** 头像直链（如 mc-heads 头像 API）；下载后直接使用，不做皮肤裁剪。 */
-    val headUrl: String = ""
+    val headUrl: String = "",
+    /** 玩家延迟（毫秒）；-1 表示未知。 */
+    val pingMs: Int = -1
 )
 
 /** 在线列表渲染用服务器快照。 */

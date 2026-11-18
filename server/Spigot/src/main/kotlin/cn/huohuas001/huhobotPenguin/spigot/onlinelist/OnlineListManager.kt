@@ -229,7 +229,8 @@ class OnlineListManager(
                 administrator = administrator,
                 prefix = if (showPrefix) prefix else "",
                 suffix = if (showSuffix) suffix else "",
-                headUrl = headUrl
+                headUrl = headUrl,
+                pingMs = runCatching { player.ping }.getOrDefault(-1)
             )
         }
         val sorted = OnlineListPages.sorted(players, adminFirst)
