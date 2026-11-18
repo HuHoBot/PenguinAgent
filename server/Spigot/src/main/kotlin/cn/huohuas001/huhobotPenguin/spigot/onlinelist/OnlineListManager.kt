@@ -56,7 +56,8 @@ class OnlineListManager(
                 protocolSummary = plugin.getProtocolSummary(),
                 maxRenderPlayers = config.onlineListMaxRenderPlayers(),
                 customLines = config.onlineListCustomLines(),
-                nameColor = config.onlineListNameColor()
+                nameColor = config.onlineListNameColor(),
+                themeName = config.onlineListTheme()
             )
         } catch (error: Throwable) {
             // 底图资源缺失/损坏时不中断插件启动，仅关闭本地渲染能力
@@ -64,6 +65,17 @@ class OnlineListManager(
             return
         }
         plugin.log_info("在线列表渲染器已就绪（深色科技风 · 趋势图 · 彩色 MOTD）")
+        // 后台刷新本服状态（Server List Ping → 真实 MOTD / 图标），30 秒一次
+        Thread({
+            while (!Thread.currentThread().isInterrupted) {
+                runCatching { SelfStatusPing.refresh(plugin.server.port) }
+                try {
+                    Thread.sleep(30_000L)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }, "HuHoBot-StatusPing").apply { isDaemon = true }.start()
     }
 
     fun stop() {
@@ -214,9 +226,9 @@ class OnlineListManager(
         }
         val sorted = OnlineListPages.sorted(players, adminFirst)
         val runtime = Runtime.getRuntime()
-        // 未配置时不显示地址（不自动探测，避免暴露服务器公网 IP）
-        val configuredIp = config.motdServerIp().trim()
-        val useConfiguredIp = configuredIp.isNotBlank() && configuredIp != "127.0.0.1"
+        // 地址：优先 online-list.display.address（纯域名不带端口），其次 motd.server-ip；
+        // 两者都未配置时不显示（不做自动探测，避免暴露公网 IP）。
+        val address = config.onlineListAddress()
         return ServerSnapshot(
             serverName = config.serverName(),
             maxPlayers = plugin.server.maxPlayers,
@@ -224,8 +236,8 @@ class OnlineListManager(
             players = sorted,
             motd = resolveMotd(),
             icon = loadServerIcon(),
-            serverIp = if (useConfiguredIp) configuredIp else "",
-            serverPort = config.motdServerPort(),
+            serverIp = address,
+            serverPort = 0,
             brand = runCatching { plugin.server.name }.getOrDefault(""),
             coreVersion = runCatching { plugin.server.version }.getOrDefault(""),
             protocolVersion = runCatching { plugin.server.bukkitVersion }.getOrDefault(""),
@@ -238,15 +250,24 @@ class OnlineListManager(
         )
     }
 
-    /** MOTD：优先 config.yml 的 motd.text，否则用服务端 server.properties 的 motd。 */
+    /**
+     * MOTD：优先 config.yml 的 motd.text；
+     * 否则用 Server List Ping 拿到的真实 MOTD（能反映 MiniMOTD 等插件改写、
+     * 彩色 hex 代码，与玩家在多人列表里看到的一致）；最后回退 server.properties。
+     */
     private fun resolveMotd(): String {
         val configured = config.motdText()
         if (configured.isNotBlank()) return configured
+        SelfStatusPing.cached()?.motd?.takeIf(String::isNotBlank)?.let { return it }
         return runCatching { plugin.server.motd }.getOrDefault("")
     }
 
-    /** 服务器图标：读取服务端根目录的 server-icon.png（64x64 推荐）。 */
+    /**
+     * 服务器图标：优先 Server List Ping 下发的 favicon（与多人列表一致，
+     * 支持服务端插件/自定义图标），其次读服务端根目录 server-icon.png。
+     */
     private fun loadServerIcon(): BufferedImage? = runCatching {
+        SelfStatusPing.cached()?.icon?.let { return it }
         val file = plugin.server.worldContainer.parentFile?.resolve("server-icon.png")
             ?: return null
         if (!file.isFile) return null

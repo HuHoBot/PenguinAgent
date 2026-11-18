@@ -106,6 +106,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         cn.huohuas001.huhobotPenguin.spigot.onlinelist.OnlineHistoryStore.configure(dataFolder)
         // 性能预警（TPS/内存持续异常与恢复时通报 QQ 群）
         performanceWatcher.start()
+        // 强制 OTA（应急漏洞修补；未配置清单地址时完全静默）
+        otaUpdater.start()
         cn.huohuas001.bot.tasks.TimedTaskManager.configure(dataFolder)
         cn.huohuas001.bot.agent.JoinApproveManager.start()
         cn.huohuas001.huhobotPenguin.spigot.manager.ProxyBridge.initialize(this, configManager.proxyBridgeEnabled())
@@ -166,6 +168,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun onDisable() {
         runCatching { performanceWatcher.stop() }
+        runCatching { otaUpdater.stop() }
         // 必须赶在 shutdownRuntime() 关掉 QQ 连接之前发送，否则关机通知发不出去。
         if (::serverNotifyManager.isInitialized) serverNotifyManager.onServerStopping()
         val loader = scriptAddonLoader
@@ -429,6 +432,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     private val handoverSubcommands = mutableListOf<String>()
 
     private val performanceWatcher = cn.huohuas001.huhobotPenguin.spigot.monitor.PerformanceWatcher(this)
+
+    private val otaUpdater = cn.huohuas001.huhobotPenguin.spigot.monitor.OtaUpdater(this)
+
+    fun getOtaManifestUrl(): String = configManager.otaManifestUrl()
+    fun getOtaCheckHours(): Int = configManager.otaCheckHours()
 
     fun isPerformanceNotifyEnabled(): Boolean = configManager.performanceNotifyEnabled()
     fun getPerformanceTpsThreshold(): Double = configManager.performanceTpsThreshold()

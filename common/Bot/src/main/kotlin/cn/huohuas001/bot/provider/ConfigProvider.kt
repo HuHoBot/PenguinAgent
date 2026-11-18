@@ -327,8 +327,14 @@ interface ConfigProvider {
     fun getChatAiBaseUrl(): String? = null
     fun getChatAiApiKey(): String? = null
     fun getChatAiModel(): String? = null
-    /** 触发前缀（可选）；默认 /ai。空 = 任何 @机器人 的非命令消息都会触发聊天 AI。 */
-    fun getChatAiTrigger(): String = "/ai"
+    /**
+     * 触发前缀（可选）；默认 "ai"。
+     *
+     * 注意：QQ 客户端会把 "/xxx" 当成未知指令拦截（提示"未找到该命令"），
+     * 因此默认不带斜杠；若仍想用 "/ai"，可配置 trigger: "/ai"（部分环境可用）。
+     * 空 = 任何 @机器人 的非命令消息都会触发聊天 AI。
+     */
+    fun getChatAiTrigger(): String = "ai"
     fun getChatAiThink(): Boolean = false
     fun getChatAiThinkLevel(): String = ""
     fun getChatAiThinkParam(): String = "reasoning_effort"

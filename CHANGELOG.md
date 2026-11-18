@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.23（2026-11-18）
+
+### 新功能
+
+- feat: **强制 OTA**（`update.manifest-url`）—— 定时读取仓库中的 versions.json（`minimumVersion` / `downloadUrl` / `notes`），当前版本低于最低要求时下载 jar 到 `plugins/HuHoBotPenguin/update/`；同一版本只下载一次（update-state.json 记录），**绝不反复更新**；清单读不到自动重试一次、再失败等下次；未配置则完全静默
+- feat: **查在线主题切换** —— `online-list.render.theme: dark|light`，深色科技风 / 亮色清爽风，亮色下自动压暗过亮文字保证可读
+- feat: **真实 MOTD 与图标** —— 通过 Server List Ping 向本服查询状态，拿到 MiniMOTD 等插件改写后的彩色 MOTD 与 ping 下发的图标（与玩家在多人列表看到的一致），后台 30 秒刷新
+- feat: **LuckPerms 集成** —— 玩家卡片显示 LP 前缀（称号）/后缀（颜色全部解析），`online-list.display.{prefix,suffix,name-color,admin-groups}` 可配置，支持按 LP 组高亮管理员
+- feat: **地址专用配置** —— `online-list.display.address` 写纯域名即可（SRV 解析端口，图上不再拼接端口）
+
+### 修复
+
+- fix: **/ai 无法使用** —— QQ 客户端会拦截 "/" 开头的未知命令，聊天 AI 默认触发词改为不带斜杠的 `ai`（仍可配置）
+- fix: **分页快照丢失全部字段** —— 分页时 MOTD/图标/TPS/内存/协议等全部丢失（真机信息不显示的根因）
+- fix: 人数格式错乱（"/ 20 3" → "3 / 20"）
+- fix: 移除公网 IP 自动探测（避免泄露）；未配置地址时整行不显示
+- fix: 底部文字因 HuHo 娘而右偏 → 全图居中；Powered by HuHoBot 移至右下避开角色
+- fix: 性能卡数值与标签重叠（大内存时数字压住"内存"字样）→ 标签与数值分行
+- fix: 技术行信息过长溢出 → 只保留核心版本（去掉构建号）/品牌/Via 支持范围
+- fix: 折线图峰值样式（虚线对齐 + 三层光晕 + 胶囊标签）
+
+### 改进
+
+- change: 版本号改用 **1.23**（语义化版本管理）
+- change: 信息区高度动态计算，地址/自定义行为空时不再留下空行
+- change: HuHo 娘改为左下角半身出血（保留脸部与上身），配青色柔光
+- change: 标题"在线列表"恢复并居中
+
+---
+
 ## v26.1（2026-11-17）
 
 ### 新功能

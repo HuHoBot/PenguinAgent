@@ -82,6 +82,17 @@ motd:
 
 # 查在线命令的本地图片渲染（雾蓝玻璃主题，带玩家皮肤头像）。
 # 关闭 enabled 后，查在线会回退到 MOTD 外部 API 图片。
+# ─────────────────── 强制 OTA（应急更新，可选） ───────────────────
+# 在仓库里放一个 JSON 清单（例如 versions.json）：
+#   { "minimumVersion": "1.23", "downloadUrl": "https://.../HuHoBot-Penguin-1.23.jar", "notes": "修复 XX" }
+# 插件定期读取：当前版本 >= minimumVersion 时什么都不做（绝不反复更新）；
+# 需要更新时下载 jar 到 plugins/HuHoBotPenguin/update/，同一版本只下载一次，
+# 由管理员重启服务器后替换（Minecraft 服务端无法热替换自身 jar）。
+# 留空 = 完全关闭 OTA。
+update:
+  manifest-url: ""
+  check-hours: 6
+
 # ─────────────────── 消息发送策略 ───────────────────
 # auto（默认）：收到群消息后的 5 分钟内优先用"被动回复"（同一 msg_id 最多 5 条），
 #              用完或超时自动转为"主动消息"，以节省每个群每天 1000 条主动额度。
@@ -102,10 +113,15 @@ online-list:
   enabled: true
   # 每页玩家数，三列布局推荐 27（3列×9行）
   page-size: 27
+  # 图片主题：dark（深色科技风，默认）/ light（亮色清爽风）
+  theme: "dark"
   # 单张图片最多渲染的玩家数（超过时图片只画前 N 位，完整名单以 Markdown 文字补发）
   max-render-players: 27
-  # 玩家显示：LuckPerms 前缀(称号)/后缀、名字颜色、管理员组
+  # 玩家显示：地址、LuckPerms 前缀(称号)/后缀、名字颜色、管理员组
   display:
+    # 查在线图片中显示的服务器地址：写纯域名即可（如 play.example.com），
+    # 不要带端口（SRV 解析会处理端口）。留空则回退 motd.server-ip；都为空就不显示。
+    address: ""
     prefix: true            # 显示 LuckPerms 前缀（称号，含其颜色）
     suffix: true            # 显示 LuckPerms 后缀
     name-color: ""          # 玩家名颜色，如 "gold" / "#FFD700"；留空用默认
@@ -404,10 +420,11 @@ chat-ai:
   base-url: ""
   api-key: ""
   model: "gpt-4o-mini"
-  # 触发前缀（默认 /ai）：群里 @机器人 后以 /ai 开头才会交给聊天 AI，例如「/ai 今天天气怎么样」
-  # 也支持不带斜杠的纯文本（如 "ai"）。留空 = 任何 @机器人 的非命令消息都会触发。
+  # 触发词（默认 "ai"）：群里 @机器人 后以 ai 开头才会交给聊天 AI，例如「@机器人 ai 今天天气怎么样」
+  # 注意：QQ 客户端会把 "/xxx" 当成未知指令拦截（提示"未找到该命令"），所以默认为不带斜杠的 ai；
+  # 如确认你的环境不拦截，也可以写 "/ai"。留空 = 任何 @机器人 的非命令消息都会触发。
   # 聊天 AI 只有只读能力（联网搜索 / 服务器状态 / 在线列表 / TTS），不能执行命令。
-  trigger: "/ai"
+  trigger: "ai"
   think: false
   think-level: ""
   think-param: "reasoning_effort"

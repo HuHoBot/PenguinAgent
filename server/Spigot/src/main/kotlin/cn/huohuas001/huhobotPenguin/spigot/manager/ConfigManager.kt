@@ -330,6 +330,22 @@ class ConfigManager(
     fun onlineListRenderColumns(): Int =
         plugin.config.getInt("online-list.render.columns", 3).coerceIn(1, 3)
 
+    /** 在线列表图片主题：dark / light。 */
+    fun onlineListTheme(): String =
+        (plugin.config.getString("online-list.render.theme", "dark") ?: "dark").trim().lowercase()
+            .takeIf { it == "light" } ?: "dark"
+
+    /**
+     * 查在线图片中显示的服务器地址（纯域名，不带端口）。
+     * 未配置时回退 motd.server-ip；两者都为默认值则不显示。
+     */
+    fun onlineListAddress(): String {
+        val own = (plugin.config.getString("online-list.display.address", "") ?: "").trim()
+        if (own.isNotEmpty()) return own
+        val motdIp = (plugin.config.getString("motd.server-ip", "") ?: "").trim()
+        return if (motdIp.isNotEmpty() && motdIp != "127.0.0.1") motdIp else ""
+    }
+
     /** 是否显示 LuckPerms 前缀（称号）。 */
     fun onlineListShowPrefix(): Boolean =
         plugin.config.getBoolean("online-list.display.prefix", true)
@@ -394,6 +410,13 @@ class ConfigManager(
     )
 
     fun motdText(): String = plugin.config.getString("motd.text", "") ?: ""
+
+    /** 强制 OTA 清单地址（空 = 不启用）。 */
+    fun otaManifestUrl(): String =
+        (plugin.config.getString("update.manifest-url", "") ?: "").trim()
+
+    fun otaCheckHours(): Int =
+        plugin.config.getInt("update.check-hours", 6)
 
     fun performanceNotifyEnabled(): Boolean =
         plugin.config.getBoolean("server-notify.performance.enabled", true)
@@ -546,7 +569,7 @@ class ConfigManager(
 
     fun chatAiModel(): String? = plugin.config.getString("chat-ai.model")?.takeIf(String::isNotBlank)
 
-    fun chatAiTrigger(): String = plugin.config.getString("chat-ai.trigger", "/ai") ?: "/ai"
+    fun chatAiTrigger(): String = plugin.config.getString("chat-ai.trigger", "ai") ?: "ai"
 
     // ── TTS ──
     fun ttsEnabled(): Boolean = plugin.config.getBoolean("tts.enabled", false)
@@ -1053,7 +1076,11 @@ class ConfigManager(
             put("online-list.display.suffix", true)
             put("online-list.display.name-color", "")
             put("online-list.display.admin-groups", emptyList<String>())
+            put("online-list.display.address", "")
+            put("online-list.render.theme", "dark")
             put("message.send-policy", "auto")
+            put("update.manifest-url", "")
+            put("update.check-hours", 6)
             put("server-notify.performance.enabled", true)
             put("server-notify.performance.tps-threshold", 15.0)
             put("server-notify.performance.memory-threshold", 0.9)
