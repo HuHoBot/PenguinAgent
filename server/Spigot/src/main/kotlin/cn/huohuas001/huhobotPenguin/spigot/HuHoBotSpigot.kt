@@ -32,6 +32,7 @@ import cn.huohuas001.huhobotPenguin.spigot.inventory.InventoryRenderer
 import cn.huohuas001.huhobotPenguin.spigot.inventory.InventorySnapshot
 import cn.huohuas001.huhobotPenguin.spigot.inventory.OfflineInventorySnapshots
 import cn.huohuas001.huhobotPenguin.spigot.onlinelist.OnlineListManager
+import cn.huohuas001.huhobotPenguin.spigot.skin.SkinFileCache
 import cn.huohuas001.huhobotPenguin.spigot.scripting.ScriptAddonLoader
 import cn.huohuas001.huhobotPenguin.adapter.api.MsgPack
 import cn.huohuas001.huhobotPenguin.adapter.api.toMsgPack
@@ -74,6 +75,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         GroupCommandConfigStore.configureDataDir(dataFolder)
         GroupCommandConfigStore.syncFolders(configManager.groupOpenIds())
         PlaceholderApiSupport.setup(this)
+        // 查在线 / 背包查看共用磁盘皮肤缓存：同一皮肤一天只下载一次
+        SkinFileCache.configure(dataFolder)
         initializeInventoryRenderer()
         initializeOnlineListRenderer()
         offlineInventorySnapshots = OfflineInventorySnapshots(this).also { it.start() }

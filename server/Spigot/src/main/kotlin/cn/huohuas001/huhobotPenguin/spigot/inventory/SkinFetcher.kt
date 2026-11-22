@@ -1,6 +1,6 @@
 package cn.huohuas001.huhobotPenguin.spigot.inventory
 
-import org.bukkit.Bukkit
+import cn.huohuas001.huhobotPenguin.spigot.skin.SkinFileCache
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -61,7 +61,10 @@ object SkinFetcher {
     }
 
     private fun fetchFromServerProfile(profile: ServerSkinProfile): PlayerSkin? {
-        val image = downloadImage(URL(profile.textureUrl)) ?: return null
+        // 贴图 URL 变一次就是一张新皮肤，用它做 key：当天只下载一次，隔天刷新。
+        val image = SkinFileCache.get(sha256(profile.textureUrl), profile.textureUrl) {
+            downloadImage(URL(profile.textureUrl))
+        } ?: return null
         return PlayerSkin(image, PlayerSkin.safeKey(sha256(profile.textureUrl)), "SERVER_PROFILE", profile.slim)
     }
 
@@ -97,9 +100,11 @@ object SkinFetcher {
             val getTextureUrlMethod = propertyUtilsClass.getMethod("getSkinTextureUrl", (skinProperty as Any).javaClass)
             val textureUrl = getTextureUrlMethod.invoke(null, skinProperty) as? String ?: return null
 
-            // 下载皮肤
-            val url = URL(textureUrl)
-            val image = downloadImage(url) ?: return null
+            // 下载皮肤：同一玩家/SkinsRestorer 贴图当天只请求一次
+            val cacheSource = uuid?.toString() ?: "name:$playerName"
+            val image = SkinFileCache.get("SR:$cacheSource", textureUrl) {
+                downloadImage(URL(textureUrl))
+            } ?: return null
 
             val isSlim = try {
                 val getValueMethod = (skinProperty as Any).javaClass.getMethod("getValue")

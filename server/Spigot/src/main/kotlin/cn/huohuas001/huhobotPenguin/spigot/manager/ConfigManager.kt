@@ -35,6 +35,7 @@ class ConfigManager(
         changed = removeLegacyMotdOptions() || changed
         changed = removeLegacyInventoryCommandOptions() || changed
         changed = removeLegacyAgentSettingCommandOptions() || changed
+        changed = migrateLegacyDeathFormat() || changed
 
         val previousVersion = plugin.config.getInt(CONFIG_VERSION_PATH, 0)
 
@@ -228,6 +229,19 @@ class ConfigManager(
         return changed
     }
 
+    /**
+     * 旧版默认死亡播报格式 `[游戏] {message}` 里没有 {name}，
+     * 群里只会显示死因（如「被苦力怕杀死了」）而看不到死者是谁。
+     *
+     * 只替换恰好等于旧默认值的情况；用户自己改过的格式一律保留。
+     */
+    private fun migrateLegacyDeathFormat(): Boolean {
+        val current = plugin.config.getString(DEATH_FORMAT_PATH)?.trim() ?: return false
+        if (current != LEGACY_DEATH_FORMAT) return false
+        plugin.config.set(DEATH_FORMAT_PATH, DEFAULT_DEATH_FORMAT)
+        return true
+    }
+
     fun botAppId(): String = plugin.config.getString("bot.app-id").orEmpty()
     fun botSecret(): String = plugin.config.getString("bot.secret").orEmpty()
     fun botName(): String = plugin.config.getString("bot.name", "HuHoBot")!!
@@ -260,7 +274,7 @@ class ConfigManager(
         deathEnabled = plugin.config.getBoolean("player-events.death.enabled", true),
         deathFormat = plugin.config.getString(
             "player-events.death.format",
-            "[游戏] {message}"
+            DEFAULT_DEATH_FORMAT
         )!!
     )
 
@@ -526,6 +540,10 @@ class ConfigManager(
         private const val CURRENT_CONFIG_VERSION = 13
         private const val CONFIG_VERSION_PATH = "config-version"
 
+        private const val DEATH_FORMAT_PATH = "player-events.death.format"
+        private const val LEGACY_DEATH_FORMAT = "[游戏] {message}"
+        private const val DEFAULT_DEATH_FORMAT = "[游戏] {name} {message}"
+
         /**
          * 不进 QQ 面板菜单的命令。
          *
@@ -719,7 +737,7 @@ class ConfigManager(
             put("player-events.quit.format", "[游戏] {name} 离开了服务器")
             put("player-events.always-forward", false)
             put("player-events.death.enabled", true)
-            put("player-events.death.format", "[游戏] {message}")
+            put("player-events.death.format", DEFAULT_DEATH_FORMAT)
 
             put("server-notify.enabled", true)
             put("server-notify.shutdown.enabled", true)

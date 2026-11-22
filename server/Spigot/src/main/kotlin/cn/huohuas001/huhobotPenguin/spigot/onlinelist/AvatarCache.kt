@@ -1,5 +1,6 @@
 package cn.huohuas001.huhobotPenguin.spigot.onlinelist
 
+import cn.huohuas001.huhobotPenguin.spigot.skin.SkinFileCache
 import java.awt.AlphaComposite
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -69,7 +70,8 @@ class AvatarCache(
         val url = player.skinUrl ?: return null
         cache[url]?.let { return it }
         return try {
-            val skin = download(url) ?: return null
+            // 贴图 URL 即皮肤稳定标识：同一张皮肤当天只下载一次，隔天才刷新
+            val skin = SkinFileCache.get(url, url) { download(url) } ?: return null
             if (skin.width < 48 || skin.height < 16) return null
             val icon = cropHead(skin)
             cache[url] = icon

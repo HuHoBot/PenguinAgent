@@ -241,6 +241,17 @@ object MenuManager {
         groups.drop(MAX_TARGETS_PER_REQUEST)
             .chunked(MAX_TARGETS_PER_REQUEST)
             .forEach { updateTargets(authHeader, panelId, "add", it) }
+        // 创建接口可能返回 2xx/panel_id 但实际未完成群绑定；主动校验，避免“面板存在但客户端不可见”
+        val detail = getPanel(authHeader, panelId)
+        if (detail != null) {
+            val bound = detail.groupOpenIds.toSet()
+            val missing = groups.filterNot(bound::contains)
+            if (missing.isNotEmpty()) {
+                throw IllegalStateException(
+                    "创建指令面板 $panelId 后目标群未完全绑定: missing=${missing.joinToString(",")} bound=${bound.joinToString(",")}"
+                )
+            }
+        }
         return panelId
     }
 
@@ -500,8 +511,9 @@ object MenuManager {
             } else {
                 ""
             }
+            val detail = if (!response.httpSuccess) "HTTP ${response.status}" else (response.businessError ?: "业务错误")
             throw IllegalStateException(
-                "创建指令面板失败，HTTP ${response.status}: ${response.body}$hint"
+                "创建指令面板失败，$detail: ${response.body}$hint"
             )
         }
         val result = JSON.parseObject(response.body) ?: return null
@@ -547,7 +559,19 @@ object MenuManager {
     )
 
     private data class ApiResponse(val status: Int, val body: String) {
-        val success: Boolean get() = status in 200..299
+        /** 仅表示 HTTP 层成功；QQ 接口可能返回 200 + 业务错误码，需结合 [businessError] 判断。 */
+        val httpSuccess: Boolean get() = status in 200..299
+
+        /**
+         * 从响应体提取业务错误信息。
+         *
+         * QQ 开放平台接口在 HTTP 200 时也可能返回 `{"code":...,"message":"..."}` 表示失败；
+         * 这类错误若被当作成功，会导致“日志成功/能查到面板但客户端不可见”等问题。
+         */
+        val businessError: String? by lazy { detectBusinessError() }
+
+        /** HTTP 与业务均成功。 */
+        val success: Boolean get() = httpSuccess && businessError == null
 
         /**
          * 这两种都值得原样重试：
@@ -558,18 +582,55 @@ object MenuManager {
             get() = body.contains("30019") || body.contains("30009")
 
         fun requireSuccess(action: String) {
-            if (!success) {
-                val hint = when {
-                    body.contains("30013") ->
-                        "；请同时检查面板总数、单面板条目数、命令名（显示宽度 14）和描述（显示宽度 30）"
-                    body.contains("30019") ->
-                        "；面板版本冲突，请稍后重试"
-                    body.contains("30009") ->
-                        "；面板操作进行中，官方写操作限频 10 QPM，请稍后重试"
-                    else -> ""
-                }
-                throw IllegalStateException("$action 失败，HTTP $status: $body$hint")
+            if (success) return
+            val detail = when {
+                !httpSuccess -> "HTTP $status"
+                else -> businessError ?: "业务错误"
             }
+            val hint = when {
+                body.contains("30013") ->
+                    "；请同时检查面板总数、单面板条目数、命令名（显示宽度 14）和描述（显示宽度 30）"
+                body.contains("30019") ->
+                    "；面板版本冲突，请稍后重试"
+                body.contains("30009") ->
+                    "；面板操作进行中，官方写操作限频 10 QPM，请稍后重试"
+                else -> ""
+            }
+            throw IllegalStateException("$action 失败，$detail: $body$hint")
+        }
+
+        private fun detectBusinessError(): String? {
+            if (!httpSuccess) return null
+            val text = body.trim()
+            if (text.isEmpty()) return null
+            val obj = runCatching { JSON.parseObject(text) }.getOrNull() ?: return null
+            // 常见错误格式：{"code":50001,"message":"..."} / {"err_code":...,"errmsg":"..."}
+            val code = obj.getInteger("code")
+                ?: obj.getInteger("err_code")
+                ?: obj.getInteger("retcode")
+                ?: obj.getInteger("error_code")
+                ?: obj.getString("code")?.toIntOrNull()
+                ?: obj.getString("err_code")?.toIntOrNull()
+            if (code != null && code != 0) {
+                val msg = obj.getString("message")
+                    ?: obj.getString("msg")
+                    ?: obj.getString("errmsg")
+                    ?: obj.getString("error")
+                    ?: "未知错误"
+                return "code=$code $msg"
+            }
+            val errMsg = obj.getString("message") ?: obj.getString("msg") ?: obj.getString("errmsg")
+            val hasSuccessPayload = obj.containsKey("panel_id") ||
+                obj.containsKey("records") ||
+                obj.containsKey("panel") ||
+                obj.containsKey("data") ||
+                obj.containsKey("next_cursor") ||
+                obj.containsKey("is_end")
+            if (!errMsg.isNullOrBlank() && !hasSuccessPayload) {
+                // 无明确成功字段且带错误描述，保守判定为失败
+                return errMsg
+            }
+            return null
         }
     }
 }

@@ -39,7 +39,7 @@ player-events:
   death:
     enabled: true
     # 可用占位符：{name}、{player}、{server}、{platform}、{killer}（击杀者）、{message}（中文死亡描述）
-    format: "[游戏] {message}"
+    format: "[游戏] {name} {message}"
 
 # 服务器状态通知：关机、重启、意外关闭时提醒 QQ 群。
 # 关机通知在服务器停止的瞬间发送；重启与意外关闭只能在下次启动时判断，
