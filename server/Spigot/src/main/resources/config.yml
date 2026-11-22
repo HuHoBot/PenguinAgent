@@ -8,7 +8,7 @@ serverName: 'HuHoBot'
 bot:
   # QQ 开放平台机器人 AppID。
   app-id: ''
-  # QQ 机器人 Secret。只填在本机配置中，切勿提交到仓库或公开日志。
+  # QQ 机器人 Secret，与 AppID 配套使用。
   secret: ''
   # 机器人显示名称。
   name: HuHoBot
@@ -363,7 +363,7 @@ commands:
 audit:
   # 接口基础地址，通常填写到 /v1。
   base-url: ''
-  # 复核接口密钥。仅保存在本地配置文件，不要发到公开聊天。
+  # 复核接口密钥（可选）。
   api-key: ''
   # 模型名称，需与服务提供方一致。
   model: gpt-4o-mini
@@ -373,7 +373,7 @@ agent:
   enabled: false
   # 接口基础地址，通常填写到 /v1。
   base-url: ''
-  # Agent 接口密钥。仅保存在本地配置文件，不要发到公开聊天。
+  # Agent 接口密钥。
   api-key: ''
   # 模型名称，需与服务提供方一致。
   model: gpt-4o-mini
@@ -499,7 +499,7 @@ chat-ai:
   enabled: false
   # 接口基础地址，通常填写到 /v1。
   base-url: ''
-  # 群聊 AI 接口密钥。仅保存在本地配置文件，不要发到公开聊天。
+  # 群聊 AI 接口密钥。
   api-key: ''
   # 模型名称，需与服务提供方一致。
   model: gpt-4o-mini
