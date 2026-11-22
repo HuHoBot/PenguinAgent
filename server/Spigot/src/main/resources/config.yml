@@ -4,7 +4,7 @@ config-version: 19
 webui-port: 5678
 # 服务器名称显示在查在线图片、入服提示和服务器通知中。支持 MiniMessage（如 <gradient:#22ccee:#aa66ee>名称</gradient>）、§/& 颜色码。请使用单引号包住颜色开头的值。
 serverName: 'HuHoBot'
-# QQ 机器人帐号和群列表。密钥请勿公开。
+# QQ 机器人帐号与允许工作的群列表。
 bot:
   # QQ 开放平台机器人 AppID。
   app-id: ''
