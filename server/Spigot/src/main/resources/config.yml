@@ -1,540 +1,587 @@
-config-version: 14
-
-# WebUI 端口，访问 http://127.0.0.1:<port> 管理配置。
+# HuHoBot Agent 配置；详细解释与示例见 data/Q&A.txt。
+config-version: 19
+# WebUI 监听端口。默认只绑定本机回环地址。
 webui-port: 5678
-
-# 服务器显示名称，可在进服/退服格式中通过 {server} 使用。
-serverName: "HuHoBot"
-
+# 服务器名称显示在查在线图片、入服提示和服务器通知中。支持 MiniMessage（如 <gradient:#22ccee:#aa66ee>名称</gradient>）、§/& 颜色码。请使用单引号包住颜色开头的值。
+serverName: 'HuHoBot'
+# QQ 机器人帐号和群列表。密钥请勿公开。
 bot:
-  app-id: ""
-  secret: ""
-  name: "HuHoBot"
+  # QQ 开放平台机器人 AppID。
+  app-id: ''
+  # QQ 机器人 Secret。只填在本机配置中，切勿提交到仓库或公开日志。
+  secret: ''
+  # 机器人显示名称。
+  name: HuHoBot
+  # 机器人监听/发送消息的群 OpenID 列表。
   groups: []
-  # 屏蔽 io.github.kloping.qqbot 直接通过 System.out 输出的调试信息。
+  # 是否过滤 QQ SDK 的控制台噪声日志。
   suppress-console-output: true
-  # 收到未配置群的 QQ 消息时，自动把该群 OpenID 追加到上面的 groups。
+  # 新群是否自动加入 bot.groups。
   auto-add-groups: true
-
+# 游戏与 QQ 群之间的聊天格式。
 chat-format:
-  # 游戏→QQ：{name} 为 MC 玩家名
-  from-game: "[游戏] {name}: {message}"
-  # QQ→游戏：{name} 为 QQ 用户名（绑定后默认仍是 QQ 名，可用 /MC显示名称 MC 切换）
-  # 支持 MiniMessage：<gold>、</gold>、<#FFAA00>、<bold>、<gradient:#FF0000:#00FF00> 等
-  # 也兼容旧式颜色码：&6、§6
-  from-group: "[QQ] {name}: {message}"
+  # 消息格式模板；支持 {name}、{message} 等占位符。
+  from-game: '[游戏] {name}: {message}'
+  # 消息格式模板；支持 {name}、{message} 等占位符。
+  from-group: '[QQ] {name}: {message}'
+  # 是否启用本项行为；true 开启，false 关闭。
   post-chat: true
-  # 只有以该内容开头的游戏消息才会转发；转发时会移除该内容。留空表示全部转发。
-  start-with: "#"
-
+  # 「聊天格式 · 游戏消息触发前缀」设置；按此用途填写，未使用时保持默认值。
+  start-with: '#'
+  # QQ Markdown 不支持颜色码；开启后转发前去掉 §/& 代码，避免群里出现原始标记。
+  strip-colour-codes: true
+# 玩家加入、离开和死亡的群播报。
 player-events:
+  # 「玩家事件通知 · 加入事件」设置；按此用途填写，未使用时保持默认值。
   join:
+    # 是否启用「player-events.join」功能。
     enabled: true
-    # 可用占位符：{name}、{player}、{server}、{platform}
-    format: "[游戏] {name} 加入了服务器"
+    # 消息/输出格式模板。
+    format: '[游戏] {name} 加入了服务器'
+  # 「玩家事件通知 · 离开事件」设置；按此用途填写，未使用时保持默认值。
   quit:
+    # 是否启用「player-events.quit」功能。
     enabled: true
-    # 可用占位符：{name}、{player}、{server}、{platform}
-    format: "[游戏] {name} 离开了服务器"
+    # 消息/输出格式模板。
+    format: '[游戏] {name} 离开了服务器'
+  # 「玩家事件通知 · 死亡事件」设置；按此用途填写，未使用时保持默认值。
   death:
+    # 是否启用「player-events.death」功能。
     enabled: true
-    # 可用占位符：{name}、{player}、{server}、{platform}、{killer}（击杀者）、{message}（中文死亡描述）
-    format: "[游戏] {message}"
-
-# 服务器状态通知：关机、重启、意外关闭时提醒 QQ 群。
-# 关机通知在服务器停止的瞬间发送；重启与意外关闭只能在下次启动时判断，
-# 因此会在机器人连上 QQ 后才发送。
+    # 消息/输出格式模板。
+    format: '[游戏] {name} {message}'
+# 服务器启停与性能通知。
 server-notify:
-  # 总开关，关闭后下面三项都不发送
+  # 是否启用「server-notify」功能。
   enabled: true
+  # 「服务器状态通知 · 关服通知」设置；按此用途填写，未使用时保持默认值。
   shutdown:
+    # 是否启用「server-notify.shutdown」功能。
     enabled: true
-    # 可用占位符：{server}、{platform}
-    message: "服务器已正常关闭"
+    # 发送的提示文字。
+    message: 服务器已正常关闭
+  # 「服务器状态通知 · 重启通知」设置；按此用途填写，未使用时保持默认值。
   restart:
+    # 是否启用「server-notify.restart」功能。
     enabled: true
-    # 可用占位符：{server}、{platform}
-    message: "服务器已重启完成"
+    # 发送的提示文字。
+    message: 服务器已重启完成
+  # 「服务器状态通知 · 异常停止通知」设置；按此用途填写，未使用时保持默认值。
   crash:
+    # 是否启用「server-notify.crash」功能。
     enabled: true
-    # 上次运行没有正常关闭（崩溃、kill -9、断电等）时，下次启动后发送
-    # 可用占位符：{server}、{platform}
-    message: "服务器意外关闭（崩溃或被强制结束），请管理员检查控制台"
-  # 上次正常关闭后多少秒内重新启动算作重启，建议 120-300
-  # 超过这个时间再启动只会当作普通开机，不发送通知
+    # 发送的提示文字。
+    message: 服务器意外关闭（崩溃或被强制结束），请管理员检查控制台
+  # 时间间隔，单位见配置项名称。
   restart-window: 180
-
-# 配置键对应插件数据目录 Markdown/ 下的文件。
-markdown:
-  queryOnline: "online.md"
-
-# Hybrid 同时收集命令发送者输出和服务端日志；其他值只收集命令发送者输出。
-command-sender: "Hybrid"
-
-motd:
-  server-ip: "127.0.0.1"
-  server-port: 25565
-  api: ""
-  text: ""
-  # 已启用 online-list 时，查在线命令使用本地渲染的在线列表图片，不再使用本节的外部图片接口
-  post-img: true
-  use-markdown: true
-
-# 查在线命令的本地图片渲染（雾蓝玻璃主题，带玩家皮肤头像）。
-# 关闭 enabled 后，查在线会回退到 MOTD 外部 API 图片。
-# ─────────────────── 退群自动解绑与黑名单 ───────────────────
-# 注意：QQ 官方 Bot API 不推送普通成员退群事件，只能用白名单能力「群成员列表」轮询校验。
-# 未获得该能力（调用返回 11253）时，插件会自动停用本功能并提示，不影响其他功能。
-binding:
-  member-check:
-    enabled: false              # 开启后定期校验绑定者是否仍在群内，不在则自动解绑
-    interval-minutes: 30        # 校验间隔（分钟）
-    notify-group: true          # 解绑时是否发 QQ 群通知
-
-moderation:
-  # 机器人黑名单（QQ openid）：消息不处理、入群申请直接拒绝
-  blacklist: []
-  # true = 黑名单用户的消息直接忽略；false = 只拒绝入群，消息照常处理
-  block-messages: true
-
-# ─────────────────── 强制 OTA（应急更新，可选） ───────────────────
-# 在仓库里放一个 JSON 清单（例如 versions.json）：
-#   { "minimumVersion": "1.23", "downloadUrl": "https://.../HuHoBot-Penguin-1.23.jar", "notes": "修复 XX" }
-# 插件定期读取：当前版本 >= minimumVersion 时什么都不做（绝不反复更新）；
-# 需要更新时下载 jar 到 plugins/HuHoBotPenguin/update/，同一版本只下载一次，
-# 由管理员重启服务器后替换（Minecraft 服务端无法热替换自身 jar）。
-# 留空 = 完全关闭 OTA。
-update:
-  manifest-url: ""
-  check-hours: 6
-
-# ─────────────────── 消息发送策略 ───────────────────
-# auto（默认）：收到群消息后的 5 分钟内优先用"被动回复"（同一 msg_id 最多 5 条），
-#              用完或超时自动转为"主动消息"，以节省每个群每天 1000 条主动额度。
-# active：始终主动发送（会消耗主动额度，不推荐）。
-message:
-  send-policy: "auto"
-
-# ─────────────────── 性能预警（崩溃/卡顿提前通报） ───────────────────
-# 每 60 秒检查 TPS 与内存，连续 3 分钟低于阈值/高于占用时主动通报 QQ 群，
-# 恢复后再通报一次；30 分钟内不重复告警。
-server-notify:
+  # 「服务器状态通知 · 性能通知」设置；按此用途填写，未使用时保持默认值。
   performance:
+    # 是否向配置群发送持续性能异常/恢复通知。
     enabled: true
-    tps-threshold: 15.0        # TPS 低于该值视为异常
-    memory-threshold: 0.9      # 堆内存占用比 ≥ 该值视为异常（OOM 前预警）
-
-online-list:
-  enabled: true
-  # 每页玩家数，三列布局推荐 27（3列×9行）
-  page-size: 27
-  # 图片主题：dark（深色科技风，默认）/ light（亮色清爽风）
-  theme: "dark"
-  # 是否显示节日/事件横幅（春节、中秋、国庆、圣诞、APEC 等，内置日期表）
-  events: true
-  # 单张图片最多渲染的玩家数（超过时图片只画前 N 位，完整名单以 Markdown 文字补发）
-  max-render-players: 27
-  # 玩家显示：地址、LuckPerms 前缀(称号)/后缀、名字颜色、管理员组
-  display:
-    # 查在线图片中显示的服务器地址：写纯域名即可（如 play.example.com），
-    # 不要带端口（SRV 解析会处理端口）。留空则回退 motd.server-ip；都为空就不显示。
-    address: ""
-    prefix: true            # 显示 LuckPerms 前缀（称号，含其颜色）
-    suffix: true            # 显示 LuckPerms 后缀
-    name-color: ""          # 玩家名颜色，如 "gold" / "#FFD700"；留空用默认
-    admin-groups: []        # 这些 LuckPerms 组按管理员高亮，如 [admin, 管理]
-  # 图片中的自定义信息行（显示在地址下方，支持 §颜色 / &#RRGGBB / hex / MiniMessage 标签）
-  # 例：
-  # custom-lines:
-  #   - "&#35E0C0服务器: 星昉雲宇 | 腐竹: SmallLinkBoy"
-  #   - "<gradient:#4FE3C1:#8B7CF6>欢迎加入我们的交流群</gradient>"
-  custom-lines: []
-  # 管理员置顶；组内按玩家名排序
-  admin-first: true
-  # 管理员判定权限节点；留空时只看 OP
-  admin-permission: ""
-  # 同一 QQ 群两次渲染请求的最小间隔秒数，防刷屏
-  cooldown-seconds: 3
-  skin:
-    # 是否下载并显示玩家皮肤头像；关闭则显示占位头像
-    enabled: true
-    # 离线模式没有官方皮肤时使用的头像 API（{name} / {uuid} 占位符，留空禁用）
-    # 默认 mc-heads：离线名也会返回 Steve/Alex 头像；装了 SkinsRestorer 时优先用其皮肤
-    avatar-api: "https://mc-heads.net/avatar/{name}/64"
-    connect-timeout-ms: 3000
-    read-timeout-ms: 5000
-    # 皮肤头像 LRU 缓存容量
-    cache-size: 200
-    # 皮肤并发下载线程数（1-12）
-    download-threads: 4
-  render:
-    # 渲染列数（1-3，推荐 3）
-    columns: 3
-    # 渲染字体；留空自动检测
-    font-family: ""
-    footer-text: "POWERED BY HuHoBot"
-  # 在线列表图片最大字节数，超出则拒绝发送
-  image-max-bytes: 20971520
-
-whitelist:
-  add-command: "whitelist add {name}"
-  del-command: "whitelist remove {name}"
-
-filter-regex: []
-
-admin:
-  # qq: 仅群主/QQ 群管理员；config: 仅手动名单；both: 任一满足
-  mode: both
-  openids: []
-
-features:
-  full-amount: false
-
+    # 连续低于此 TPS 时进入异常判定。
+    tps-threshold: 15.0
+    # 已用堆内存占最大堆内存的比例阈值，范围 0–1。
+    memory-threshold: 0.9
+# Markdown 模板文件映射。
+markdown:
+  # 「Markdown 模板 · 在线查询模板」设置；按此用途填写，未使用时保持默认值。
+  queryOnline: online.md
+# 服务器命令执行方式。
+command-sender: Hybrid
+# 服务器状态查询和 MOTD 输出设置。
+motd:
+  # 查询服务器地址；不会自动扫描公网 IP。
+  server-ip: 127.0.0.1
+  # 服务器端口。
+  server-port: 25565
+  # 外部状态查询 API；留空时使用默认服务。
+  api: ''
+  # 「服务器状态查询 · text」设置；按此用途填写，未使用时保持默认值。
+  text: ''
+  # 是否启用本项行为；true 开启，false 关闭。
+  post-img: true
+  # 是否启用本项行为；true 开启，false 关闭。
+  use-markdown: true
+# QQ 绑定、验证及入服限制。
 binding:
-  # 一个 QQ 号最多可以绑定的游戏账号数量，默认 1（只允许绑定一个角色）。
-  # 大于 1 时可用 /绑定 <游戏ID> 继续绑定，用 /解除绑定 <游戏ID> 解除指定角色。
+  # 「玩家绑定与入服验证 · 群成员退群检查」设置；按此用途填写，未使用时保持默认值。
+  member-check:
+    # 是否启用「binding.member-check」功能。
+    enabled: false
+    # 检查间隔分钟数。
+    interval-minutes: 30
+    # 「玩家绑定与入服验证 · 群成员退群检查 · 退群通知」设置；按此用途填写，未使用时保持默认值。
+    notify-group: true
+  # 「玩家绑定与入服验证 · 单 QQ 绑定上限」设置；按此用途填写，未使用时保持默认值。
   max-bindings: 1
-  # 绑定时是否需要游戏内 /qqbind 验证；关闭时直接绑定无需游戏内操作
-  # 【注意】强制绑定开启时，被踢出的玩家用 5 位验证码直接完成绑定，不经过本流程；
-  # 但免验证玩家主动绑定时仍走普通流程，是否需要游戏内 /qqbind 验证由本项决定
+  # 是否启用本项行为；true 开启，false 关闭。
   require-game-verification: true
-  # 强制绑定：未绑定的玩家进服务器会被踢出，并拿到一个 5 位验证码，
-  # 必须在 QQ 群执行 /绑定 <验证码> 完成绑定后才能重新进入。
-  # 如果需要开启，一定不要添加任何白名单插件，也不要开启 Minecraft 自带的白名单，
-  # 否则未绑定玩家会在白名单阶段先被拦下，拿到不了验证码。
+  # 是否启用本项行为；true 开启，false 关闭。
   force-bind: false
-  # 强制绑定提示里展示的 QQ 群号，可填多个；留空则不提示具体群号
+  # 「玩家绑定与入服验证 · 强制绑定群」列表；每项单独占一行。
   force-bind-groups: []
-  # 免验证名单：这些玩家无需 QQ 绑定即可进入服务器。
-  # 适用于受限于自身设备或环境、无法使用或安装 QQ 的人员，由管理员人工审查后添加。
+  # 「玩家绑定与入服验证 · 免验证名单」列表；每项单独占一行。
   verify-exempt: []
-
+# 黑名单与消息审核策略。
+moderation:
+  # 列表项按 YAML 列表逐行填写；空列表表示不配置（这是 QQ 成员黑名单，不是违禁词）。
+  blacklist: []
+  # 是否直接忽略黑名单用户消息。
+  block-messages: true
+  sensitive-words:
+    # 是否调用审核 AI 做二次筛查；失败时回退本地词表，不会单独因网络失败拦截。
+    ai-review: false
+    # 违规 QQ 入站消息命中后自动尝试撤回；需要机器人具备群管理权限，且平台限制两分钟窗口。
+    auto-recall: false
+    # 默认关闭。打开后停用内置基础词，只使用 data/sensitive-words/*.txt 中的自定义词。
+    # 这不会绕过平台审核、机器人权限或QQ/Minecraft协议；风险由服主承担。
+    allow-none: false
+# 服务端调度兼容：auto 按运行期类自动判断；hybrid 仅用于同时具备两种调度能力的杂交端。
+compatibility:
+  # auto / paper / folia / hybrid。plugin.yml 的声明不参与运行判断。
+  # folia：区域化调度；paper：传统 Bukkit 调度；hybrid：先区域化，失败才回退。
+  server-mode: auto
+# 服务器最近公共聊天（图片查询，仅内存，不落盘）。
+chat-log:
+  # 是否启用 /聊天记录 与 /玩家聊天 图片命令。
+  enabled: true
+  # 内存中保留的最大条数（30-5000）。
+  keep: 300
+  # 每页目标行数（5-100）；超长消息占两行，因此实际条数会减少。
+  page-size: 30
+  # 单条消息在图片中的最大字符数（20-300），超出部分用省略号。
+  max-length: 80
+  # 同一群查询冷却秒数（0-60）。
+  cooldown-seconds: 3
+# 消息投递策略。
+message:
+  # 「消息投递 · 消息发送策略」设置；按此用途填写，未使用时保持默认值。
+  send-policy: auto
+  # 2026-11-17 起，群被动回复有效期为入站后固定 60 分钟；回复不会续期。
+  passive-reply:
+    # 仅填已确认符合「机器人开发者在本群为群主或管理员」条件的群 OpenID。
+    # 这些群每条入站消息最多回复 50 次；未列出的群为 5 次。
+    # 不是「机器人账号本身为管理员」；不要凭 bot_state.member_role 推断。
+    # QQ 平台最终核验资格，配置不能绕过平台限制。不会向这些群额外发送测试消息。
+    enhanced-groups: []
+# 查在线图片、皮肤来源、名称样式及布局。
+online-list:
+  # 查在线图片顶部标题；支持 MiniMessage、§ 和 & 颜色码。
+  title: '<gradient:#62d6df:#ad9cff>在线列表</gradient>'
+  # 是否启用「online-list」功能。
+  enabled: true
+  # 每页显示的玩家数量。
+  page-size: 27
+  # 单张图片最多绘制的玩家数；超出名单以文字补充。
+  max-render-players: 27
+  # 「查在线图片 · 玩家名称显示」设置；按此用途填写，未使用时保持默认值。
+  display:
+    # 是否显示玩家称号前缀。
+    prefix: true
+    # 是否显示玩家后缀。
+    suffix: true
+    # LuckPerms 管理员组名；组内玩家按管理员样式显示。
+    admin-groups: []
+    # 查在线图片中显示的服务端/核心别名，支持颜色码；留空时自动检测。
+    core-name: ''
+    # 前缀模板。内置变量：{name} {display} {world} {ping} {server} {online} {max}；也支持 PlaceholderAPI %占位符%。
+    prefix-format: ''
+    # 后缀模板，内置变量与上相同，也支持 PlaceholderAPI %占位符%。
+    suffix-format: ''
+  # 「查在线图片 · 管理员权限节点」设置；按此用途填写，未使用时保持默认值。
+  admin-permission: ''
+  # 同一群连续查询的最短间隔秒数。
+  cooldown-seconds: 3
+  # 「查在线图片 · 头像皮肤」设置；按此用途填写，未使用时保持默认值。
+  skin:
+    # 是否加载网络皮肤；关闭后使用内置默认头像。
+    enabled: true
+    # 离线模式（online-mode=false）下默认只用内置皮肤，不向皮肤站请求贴图；
+    # 已安装 SkinsRestorer/ChangeSkin 等皮肤插件时仍会优先显示其皮肤。设为 false 恢复旧行为。
+    offline-default-skins: true
+    # 单个皮肤请求超时毫秒数；失败会回退，不应设得过大。
+    timeout-ms: 5000
+    # 头像缓存容量。
+    cache-size: 200
+    # 皮肤下载并发数；调低可减少低配服务器瞬时网络/CPU负载。
+    download-threads: 4
+    # 皮肤/头像来源按列表顺序尝试；默认先官方/皮肤站，失败再继续。
+    # type 可用 csl/mojang/ely/ashcon/crafatar/avatar；url 支持 {name}、{uuid} 占位符。
+    # 私有地址默认拒绝，只有明确可信且确需访问时才配置 allow-private: true。
+    sources:
+    # LittleSkin CSL；root 是对应皮肤站的纹理根地址。
+    - type: csl
+      # 该来源的查询 URL。
+      url: https://littleskin.cn/csl/{name}.json
+      # 皮肤站纹理根 URL。
+      root: https://littleskin.cn
+    # BlessingSkin/CSL 来源；失败后自动尝试下一项。
+    - type: csl
+      # 该来源的查询 URL。
+      url: https://skin.prinzeugen.net/csl/{name}.json
+      # 皮肤站纹理根 URL。
+      root: https://skin.prinzeugen.net
+    # Mojang 用户名查询；需要再查询官方 session profile。
+    - type: mojang
+      # 该来源的查询 URL。
+      url: https://api.mojang.com/users/profiles/minecraft/{name}
+    # Ely.by 纹理档案。
+    - type: ely
+      # 该来源的查询 URL。
+      url: https://skinsystem.ely.by/textures/{name}
+    # Ashcon 档案 API。
+    - type: ashcon
+      # 该来源的查询 URL。
+      url: https://api.ashcon.app/mojang/v2/user/{name}
+    # Crafatar 头像直链，不再按完整皮肤裁切。
+    - type: crafatar
+      # 该来源的查询 URL。
+      url: https://crafatar.com/avatars/{uuid}?size=64&overlay=true
+    # 通用头像直链，作为皮肤来源链的兜底。
+    - type: avatar
+      # 该来源的查询 URL。
+      url: https://mc-heads.net/avatar/{name}/64
+  # 查在线图片的最大 PNG 字节数。
+  image-max-bytes: 20971520
+  # 「查在线图片 · 玩家列数」设置；按此用途填写，未使用时保持默认值。
+  columns: 3
+  # 图片中展示的服务器地址；留空时不展示，避免意外公开地址。
+  address: ''
+  # 查在线图片的自定义信息行；空行不占空间，支持 MiniMessage、§ 与 & 颜色码。
+  custom-lines: []
+  # 图片底部文字。
+  footer-text: POWERED BY HuHoBot
+# 绑定成功或解绑时执行的白名单命令模板。
+whitelist:
+  # 添加白名单命令模板，可用 {name}。
+  add-command: whitelist add {name}
+  # 移除白名单命令模板，可用 {name}。
+  del-command: whitelist remove {name}
+# 需要过滤的正则表达式列表。
+filter-regex: []
+# 群管理员判断模式与管理员 OpenID。
+admin:
+  # 「管理员识别 · 管理员判断方式」设置；按此用途填写，未使用时保持默认值。
+  mode: both
+  # QQ OpenID 列表。
+  openids: []
+# 额外功能开关。
+features:
+  # 是否启用本项行为；true 开启，false 关闭。
+  full-amount: false
+# 背包图片渲染与自定义背景。
 inventory:
+  # 「背包图片 · 图片渲染」设置；按此用途填写，未使用时保持默认值。
   render:
+    # 「背包图片 · 图片渲染 · 自定义背景」设置；按此用途填写，未使用时保持默认值。
     custom-background:
-      # 开启后，从 plugins/HuHoBotPenguin/inventory/backgrounds/ 读取本地 PNG。
+      # 是否启用「inventory.render.custom-background」功能。
       enabled: false
-      inventory-file: "inventory.png"
-      # 留空时末影箱复用 inventory-file。
-      ender-chest-file: ""
-      # cover：等比裁切填满；stretch：拉伸填满。
-      fit: "cover"
-
-# /执行 命令黑名单：列出禁止通过 /执行 运行的服务器命令（不区分大小写）
-# 例如禁止 /执行 op someone：["op", "deop"]
-# 命名空间前缀与斜杠会被自动忽略：写 "plugins" 同时拦下 "/plugins"、"bukkit:plugins"、
-# "minecraft:plugins"；平台能拿到命令表时，别名（如 "pl"）也会一并拦下
+      # 自定义玩家背包背景文件名，文件放在 data/inventory/backgrounds/。
+      inventory-file: inventory.png
+      # 自定义末影箱背景文件名；留空时沿用背包背景。
+      ender-chest-file: ''
+      # 背景适配方式：cover 裁切铺满，stretch 拉伸到画布。
+      fit: cover
+# 禁止 AI 或自定义命令执行的服务器命令。
 command-blacklist: []
-
+# QQ 指令面板显示设置。
 command-panel:
-  # 仅决定 QQ 客户端是否显示管理员命令；机器人执行时仍检查管理员身份。
+  # 是否启用本项行为；true 开启，false 关闭。
   show-admin-commands: true
-
-# 更新检查：启动时后台检查一次，/版本 命令会再检查一次（10 分钟内复用结果）。
-# 数据源顺序：update-check.url 自定义地址 → GitHub 代理/CDN 的 version.txt → GitHub Releases。
-# 纯文本版本号（如 1.12.0）或 {"version":"1.12.0"} 均可；只认正式版，忽略 Pre-Release。
+# 版本更新提示检查；不控制强制安全更新策略。
 update-check:
+  # 是否启用「update-check」功能。
   enabled: true
-  # 留空使用内置数据源；可填逗号分隔的多个 URL，例如国内自建接口。
-  url: ""
-
-# PlaceholderAPI：安装 PlaceholderAPI 后，配置里的 %占位符% 会交给它解析
-# （如 chat-format.from-game: "[%playertitle%] {name}: {message}"）。
-# 未安装 PlaceholderAPI 时文本原样保留。默认配置本身不含任何 %占位符%。
+  # 来源地址；仅配置可信的 HTTP(S) 服务。
+  url: ''
+# PlaceholderAPI 占位符支持。
 placeholder-api:
+  # 是否启用「placeholder-api」功能。
   enabled: true
-
+# 各项 QQ 机器人命令的启用状态与面板参数。
 commands:
+  # 是否启用 QQ「查信息」命令。
   查信息: true
+  # 是否启用 QQ「查管理」命令。
   查管理: true
+  # 是否启用 QQ「加管理」命令。
   加管理: true
+  # 是否启用 QQ「删管理」命令。
   删管理: true
+  # 是否启用 QQ「管理方式」命令。
   管理方式: true
+  # 是否启用 QQ「添加白名单」命令。
   添加白名单: true
+  # 是否启用 QQ「删除白名单」命令。
   删除白名单: true
+  # 是否启用 QQ「查白名单」命令。
   查白名单: true
+  # 是否启用 QQ「查在线」命令。
   查在线: true
+  # 是否启用 QQ「在线服务器」命令。
   在线服务器: true
+  # 是否启用 QQ「发信息」命令。
   发信息: true
+  # 是否启用 QQ「执行命令」命令。
   执行命令: true
+  # 是否启用 QQ「执行」命令。
   执行: true
+  # 是否启用 QQ「管理员执行」命令。
   管理员执行: true
+  # 是否启用 QQ「全量」命令。
   全量: true
-  认证: true
-  解除认证: true
+  # 命令「agent」是否启用。
   agent:
+    # 是否允许群内调用 Agent 命令。
     enable: true
+    # 是否把 Agent 命令放进 QQ 指令面板。
     pushMenu: true
+    # QQ 指令面板中的排序优先级，数值越小越靠前。
     priority: 0
+  # 是否启用 QQ「我的背包」命令。
   我的背包: true
+  # 是否启用 QQ「我的末影箱」命令。
   我的末影箱: true
+  # 是否启用 QQ「背包查看」命令。
   背包查看: true
+  # 是否启用 QQ「末影箱查看」命令。
   末影箱查看: true
+  # 是否启用 QQ「锁定」命令。
   锁定: true
+  # 是否启用 QQ「解除锁定」命令。
   解除锁定: true
-
+  # 命令「AI」是否启用。
+  AI:
+    # 是否允许群聊 AI 命令。
+    enable: true
+    # 是否把群聊 AI 命令放进 QQ 指令面板。
+    pushMenu: true
+    # QQ 指令面板中的排序优先级，数值越小越靠前。
+    priority: 1
+# 敏感词 AI 复核接口；未配置时只使用本地规则。
 audit:
-  # 本地 sensitive-words/*.txt 命中后才调用 OpenAI 兼容接口二审
-  # 接口不可用时自动采用本地屏蔽结果
-  base-url: ""
-  api-key: ""
-  model: "gpt-4o-mini"
-
-# AI Agent：管理员 @机器人 /agent <任务描述> 让 AI 管理服务器
-# 需要 OpenAI 兼容的 Chat Completions 接口（支持 function calling）
-# AI 可调用工具获取插件/命令帮助，并执行服务器命令。
+  # 接口基础地址，通常填写到 /v1。
+  base-url: ''
+  # 复核接口密钥。仅保存在本地配置文件，不要发到公开聊天。
+  api-key: ''
+  # 模型名称，需与服务提供方一致。
+  model: gpt-4o-mini
+# 服务器管理 Agent 的模型、权限和上下文设置。
 agent:
+  # 是否启用「agent」功能。
   enabled: false
-  base-url: ""
-  api-key: ""
-  model: "gpt-4o-mini"
-  # auto: 自动执行命令，仅推送思考/输出/工具调用信息
-  # manual: 执行命令前需管理员在 QQ 按钮卡片上点击审批（默认）
-  command-mode: "manual"
-  # 开启后，获取插件列表 / 命令帮助 / 服务器日志等结果只交给 AI，不在群里发卡片
+  # 接口基础地址，通常填写到 /v1。
+  base-url: ''
+  # Agent 接口密钥。仅保存在本地配置文件，不要发到公开聊天。
+  api-key: ''
+  # 模型名称，需与服务提供方一致。
+  model: gpt-4o-mini
+  # 每个用户请求允许的模型/工具往返轮数（1..100）；审批或休眠恢复不会重置预算。
+  max-steps: 15
+  # 单次 sleep 工具允许等待的最长秒数（1..86400）；默认5分钟，可改为7200支持两小时。
+  # 等待不占用游戏线程或异步工作线程；重启后不恢复，持久任务用 timed-tasks.yml。
+  max-wait-seconds: 300
+  # 请求最大生成 token 数；0 表示不发送 max_tokens，使用上游默认值。
+  max-tokens: 0
+  # 模型请求读超时秒数（30..600），不是任务总时长。
+  timeout-seconds: 120
+  # 自定义 Agent 身份描述，留空使用默认；工具、权限及当前服务器规则仍会附加。
+  system-prompt: ''
+  # 「服务器管理 Agent · 命令执行模式」设置；按此用途填写，未使用时保持默认值。
+  command-mode: manual
+  # 是否启用本项行为；true 开启，false 关闭。
   hide-fetch-results: true
-
-  # 深度思考：原生推理模型用，开启后才会向接口附加思考参数（需同时配好 think-level 与 think-param）
-  # 与思考引导互斥：开启思考引导后，本项及 think-level / think-param 一律不生效
+  # 是否启用本项行为；true 开启，false 关闭。
   think: false
-  # 思考过程往哪儿送（与上面的开关相互独立）：
-  # log = 只写服务器日志，不在群里发（默认，避免刷屏）
-  # group = 作为「思考」卡片发到 QQ 群
-  # both = 两边都发
-  think-visibility: "log"
-  # 传给接口的思考参数名，按厂商选其一：
-  # reasoning_effort / effort / thinking_level / reasoning.effort / thinking.type /
-  # thinking_budget / enable_thinking
-  think-param: "reasoning_effort"
-  # 推理设置档位，按模型厂商支持情况填：
-  # none / minimal / low / medium / high / xhigh / max
-  # 也可填整数 token 预算（如 10000，-1 表示由模型自行决定），或开关值 true / false
-  # 留空表示不向接口附加任何思考参数
-  think-level: ""
-  # 思考引导：非推理模型用，给「不会自己思考」的模型追加提示词，要求它把分析写进 [思考] 标签，
-  # 程序再把标签里的内容取出来当思考过程。与深度思考互斥：开启后深度思考相关设置不生效
+  # 「服务器管理 Agent · 思考内容展示位置」设置；按此用途填写，未使用时保持默认值。
+  think-visibility: log
+  # 「服务器管理 Agent · 思考参数名」设置；按此用途填写，未使用时保持默认值。
+  think-param: reasoning_effort
+  # 「服务器管理 Agent · 思考等级」设置；按此用途填写，未使用时保持默认值。
+  think-level: ''
+  # 是否启用本项行为；true 开启，false 关闭。
   think-guide: false
-  # 思考引导提示词；留空则使用代码内置默认值
-  think-guide-prompt: |
-    你在处理 Minecraft 服务器管理任务。请严格按下面的方式工作：
-
-    1. 先在 `[思考]` 与 `[/思考]` 之间完成分析，再输出最终答复。`[思考]` 区块内的内容不会展示给用户。
-    2. 分析时依次覆盖以下几项，逐条写清结论，不要跳过：
-       - 任务理解：用户真正想达成的最终结果是什么，其中哪些是必须满足的硬性要求，哪些只是偏好。
-       - 信息盘点：已经掌握的事实（服务器与插件信息、工具返回结果、用户给的数据），以及还缺哪些信息才能动手。
-       - 方案拆解：把任务拆成可执行步骤，写明每一步用哪个工具、参数怎么填；需要执行服务器命令的步骤要写出命令原文。
-       - 风险校验：命令是否超出你的权限、是否可能误伤玩家或丢失数据、是否命中命令黑名单、执行范围是否过宽。
-       - 自检：结论有没有和已知事实矛盾；数字、坐标、物品 ID、数量、玩家名有没有抄错；方案里的每一步是否都真的调用了工具。
-    3. `[思考]` 里不要复述大段工具输出原文，只写判断和结论；分析长度与任务复杂度成正比，简单任务不要长篇大论。
-    4. `[/思考]` 之后直接输出给用户看的最终答复：中文、简洁、只讲结果和必要的操作说明，不要出现"让我想想""首先我需要分析"这类过程性表述。
-    5. 缺少关键信息时不要猜测：说明缺什么、能提供哪些选项，让用户来定。
-
-  # AI 上下文管理：对话历史按 token 计量，压缩把较早的历史换成摘要，必要时也能直接删最早的消息
+  # Agent 的思考与答复行为提示词。修改前请备份；文本会原样传给模型。
+  think-guide-prompt: "你在处理 Minecraft 服务器管理任务。请严格按下面的方式工作：\n\n1. 先在 `[思考]` 与 `[/思考]` 之间完成分析，再输出最终答复。`[思考]`\
+    \ 区块内的内容不会展示给用户。\n2. 分析时依次覆盖以下几项，逐条写清结论，不要跳过：\n   - 任务理解：用户真正想达成的最终结果是什么，其中哪些是必须满足的硬性要求，哪些只是偏好。\n\
+    \   - 信息盘点：已经掌握的事实（服务器与插件信息、工具返回结果、用户给的数据），以及还缺哪些信息才能动手。\n   - 方案拆解：把任务拆成可执行步骤，写明每一步用哪个工具、参数怎么填；需要执行服务器命令的步骤要写出命令原文。\n\
+    \   - 风险校验：命令是否超出你的权限、是否可能误伤玩家或丢失数据、是否命中命令黑名单、执行范围是否过宽。\n   - 自检：结论有没有和已知事实矛盾；数字、坐标、物品 ID、数量、玩家名有没有抄错；方案里的每一步是否都真的调用了工具。\n\
+    3. `[思考]` 里不要复述大段工具输出原文，只写判断和结论；分析长度与任务复杂度成正比，简单任务不要长篇大论。\n4. `[/思考]` 之后直接输出给用户看的最终答复：中文、简洁、只讲结果和必要的操作说明，不要出现\"\
+    让我想想\"\"首先我需要分析\"这类过程性表述。\n5. 缺少关键信息时不要猜测：说明缺什么、能提供哪些选项，让用户来定。\n"
+  # 上下文管理参数：context。
   context:
+    # 上下文管理参数：compress。
     compress:
-      # 压缩后的目标 token 数，同时作为压缩结果的校验上限（群里用 /压缩token 调整）
+      # 上下文摘要目标长度。
       target: 4000
-      # 压缩时原样保留的最近消息条数（群里用 /压缩保留 调整）
+      # 压缩后保留的最近对话条数。
       keep: 20
-      # 压缩提示词；{target} 会替换成上面的目标 token 数。留空则使用代码内置默认值
-      prompt: |
-        你正在为 Minecraft 服务器管理 AI 助手压缩一段对话上下文。压缩后的摘要会**替代**原对话继续工作，因此任何丢失的细节都等于让助手从头再犯一次错。
+      # 上下文压缩提示词。仅影响模型摘要内容，不会删除配置或存档。
+      prompt: '你正在为 Minecraft 服务器管理 AI 助手压缩一段对话上下文。压缩后的摘要会**替代**原对话继续工作，因此任何丢失的细节都等于让助手从头再犯一次错。
+
 
         请输出一份结构化摘要，严格使用下面这些标题，每个标题下最多 5 条：
 
+
         ## 任务目标
+
         用户最终想达成什么，以及目前已经完成到哪一步。
 
+
         ## 关键事实
+
         从对话和工具结果中已经确认的事实，逐条列出。数字、坐标、物品 ID、数量、玩家名、openid、群号、命令原文必须逐字保留，不要改写、不要换算、不要四舍五入。
 
+
         ## 已执行的操作
+
         已经执行过的服务器命令或改动，以及结果（成功或失败、报错信息要点）。命令用代码格式原样写出。
 
+
         ## 决策与理由
+
         做过的取舍及原因，包括用户明确表达的偏好与禁止事项（例如"不要动某个区块""以后先问再执行"）。
 
+
         ## 待办与未解决问题
+
         还没做的事、需要用户回答的问题、悬而未决的疑点。
 
+
         ## 踩过的坑
+
         失败的尝试、报错信息、被拒绝的操作，以及由此得出的"不要再这么做"的结论。
 
+
         ## 实体对照
+
         openid / member_openid / QQ 昵称 / MC 玩家名 / group_openid 之间的对应关系。
 
+
         写作要求：
+
         - 只写原对话中真实出现过的内容，不要推测、不要补充、不确定的条目直接省略。
+
         - 面向"接手继续干活的助手"写作，不要写成给人看的汇报。
+
         - 删掉寒暄、重复确认、致谢等没有信息量的内容。
+
         - 摘要总长度控制在 {target} token 以内。
+
+        '
+    # 上下文管理参数：truncate。
     truncate:
-      # /删除信息 未指定条数时默认删除的条数
+      # 需要裁剪的最旧对话条数。
       drop: 10
-
-# /执行 <key> [参数]：仅 permission=0
-# /管理员执行 <key> [参数]：可执行全部权限等级
-# 占位符：{params}、{group}、{user}、{0}、{1}...，并兼容 &1、&2...
-custom-commands:
-  # - key: "公告"
-  #   command: "say {params}"
-  #   permission: 1
-
-# ─────────────────── 命令映射与切换（教程） ───────────────────
-#
-# 用途：把内置/自定义命令改名为你喜欢的名字。
-#
-# 1) 映射（map）：原名与新名【都能用】，适合加个好记的别名。
-#    写法：原名: 新名
-#    例：查在线: 在线   →  群员发 /查在线 和 /在线 都可以查询在线列表
-#
-# 2) 切换（rename）：只有新名能用，【原名彻底停用】，适合完全重命名。
-#    写法：原名: 新名
-#    例：执行: cmd      →  群员必须发 /cmd，发 /执行 会被提示"已切换为 /cmd"
-#
-# 注意：
-# - 命令名一律【不带斜杠】，配置里写 "查在线" 而不是 "/查在线"。
-# - 改名只影响聊天里输入的命令与 QQ 指令面板的显示；命令的实际效果不变。
-# - 指令面板会自动显示映射/切换后的名字；被切换掉的原名不再出现在面板。
-# - 被切换掉的原名仍保留在命令开关（commands.<原名>.enable）里，开关按原名配置。
-# - 修改后执行 /hb reload 生效。
-#
-# 示例（把下面的 # 去掉即可启用）：
-# command-aliases:
-#   map:
-#     查在线: 在线
-#     查信息: 信息
-#   rename:
-#     执行: cmd
+  # 工具名白名单，空列表允许全部；例如 [calculate, random_choice, sleep, get_online_list]。
+  # 仅允许列表中的工具执行；不要把需要的管理工具漏掉。
+  tools: []
+# 此处可配置自定义命令映射；未使用时保持 null。
+custom-commands: null
+# 「command-aliases」设置；按此用途填写，未使用时保持默认值。
 command-aliases:
+  # 「command-aliases · map」设置；按此用途填写，未使用时保持默认值。
   map: {}
+  # 「command-aliases · rename」设置；按此用途填写，未使用时保持默认值。
   rename: {}
-
-# ─────────────────── 通用 ───────────────────
-
-# 插件消息语言：zh_CN / en_US
-language: "zh_CN"
-
-# 调试模式：输出更详细的诊断日志，便于反馈问题时打开
+# 插件消息语言，例如 zh_CN 或 en_US。
+language: zh_CN
+# 输出额外诊断日志；排障后建议关闭。
 debug: false
-
-# 状态存储后端：file(默认，command-state.ini) 或 sqlite(storage.db)
+# 运行状态存储后端；新安装默认 SQLite。
 storage:
-  type: "file"
-
-# ─────────────────── AI Agent 扩展 ───────────────────
-
-# Agent 联网搜索：provider 留空关闭；bing=原生必应(无需密钥)；custom=自定义 API
-agent:
-  search:
-    provider: ""
-    api-url: ""    # 支持 {query} {count} {apikey} 占位符的 GET 模板，或直接 POST {"query":...}
-    api-key: ""
-
-# ─────────────────── 群员聊天 AI ───────────────────
-# 与工作 Agent 完全隔离：独立接口/模型/提示词/工具/上下文
-# 同一群内所有群员共享一条聊天记录；不同群之间互相隔离
-
+  # 类型名称，按本配置段说明填写。
+  type: sqlite
+# 群聊 AI 的模型、触发词、上下文和可用工具。
 chat-ai:
+  # 是否启用「chat-ai」功能。
   enabled: false
-  base-url: ""
-  api-key: ""
-  model: "gpt-4o-mini"
-  # 触发词（默认 "ai"）：群里 @机器人 后以 ai 开头才会交给聊天 AI，例如「@机器人 ai 今天天气怎么样」
-  # 注意：QQ 客户端会把 "/xxx" 当成未知指令拦截（提示"未找到该命令"），所以默认为不带斜杠的 ai；
-  # 如确认你的环境不拦截，也可以写 "/ai"。留空 = 任何 @机器人 的非命令消息都会触发。
-  # 聊天 AI 只有只读能力（联网搜索 / 服务器状态 / 在线列表 / TTS），不能执行命令。
-  trigger: "ai"
+  # 接口基础地址，通常填写到 /v1。
+  base-url: ''
+  # 群聊 AI 接口密钥。仅保存在本地配置文件，不要发到公开聊天。
+  api-key: ''
+  # 模型名称，需与服务提供方一致。
+  model: gpt-4o-mini
+  # 群聊 AI 的触发词。
+  trigger: ai
+  # 是否启用本项行为；true 开启，false 关闭。
   think: false
-  think-level: ""
-  think-param: "reasoning_effort"
-  system-prompt: ""    # 留空使用内置默认
-  tools: []            # 允许的工具名；留空=仅搜索(若启用)
+  # 「群聊 AI · 思考等级」设置；按此用途填写，未使用时保持默认值。
+  think-level: ''
+  # 「群聊 AI · 思考参数名」设置；按此用途填写，未使用时保持默认值。
+  think-param: reasoning_effort
+  # 群聊 AI 的系统提示词。
+  system-prompt: ''
+  # 本功能允许模型调用的工具列表。
+  tools: []
+  # 「群聊 AI · 最大上下文消息数」设置；按此用途填写，未使用时保持默认值。
   max-context: 30
+  # 上下文管理参数：compress。
   compress:
+    # 上下文摘要目标长度。
     target: 4000
+    # 压缩后保留的最近对话条数。
     keep: 20
-  search:
-    provider: ""
-    api-url: ""
-    api-key: ""
-
-# ─────────────────── 联网搜索(全局默认) ───────────────────
-
+# AI 联网搜索服务。
 search:
-  provider: "none"     # none / bing / custom
-  api-url: ""
-  api-key: ""
+  # 「联网搜索 · 搜索服务商」设置；按此用途填写，未使用时保持默认值。
+  provider: none
+  # 接口 URL。
+  api-url: ''
+  # 搜索服务密钥；留空时搜索功能不可用。
+  api-key: ''
+  # 最多返回的搜索结果条数。
   result-count: 5
-
-# ─────────────────── TTS 语音合成（AI 工具：speak_tts） ───────────────────
-#
-# 聊天 AI（/ai）与工作 Agent（/agent）都可在对话中调用 speak_tts 生成 QQ 语音。
-# 统一使用 OpenAI 兼容的 chat/completions 接口（默认小米 MiMo-V2.5 TTS 系列）。
-#
-# 三种生成方式，各配一个模型 ID，【不填 = 该方式对 AI 不可见，AI 无法调用】：
-#   preset-model   预制音色（可唱歌风格；音色名填 preset-default-voice）
-#   natural-model  自然语言描述生成音色（AI 可自带描述，或使用 natural-default-voice）
-#   clone-model    音色克隆（参考音频放 tts-voices 目录，mp3/wav，≤10MB）
-#
-# 公网地址说明：QQ 服务器需要能通过 URL 拉取音频，所以必须配置 public-base-url，
-# 指向本插件 WebUI 对外的公网地址（端口映射/反代到 WebUI 的 5678 端口即可），
-# 音频经 <public-base-url>/tts-cache/<文件> 提供给 QQ。
-#
-# 语音格式：官方富媒体语音要求 silk；wav/mp3 在部分环境可直接播放，
-# 若被 QQ 拒收，请在 public-base-url 前加一层 silk 转码/转换服务。
-#
-# 每轮对话（一条用户消息）最多合成 max-per-turn 条语音。
+# 语音合成服务及缓存设置。
 tts:
+  # 是否启用「tts」功能。
   enabled: false
-  base-url: "https://api.xiaomimimo.com/v1"
-  api-key: ""
-  public-base-url: ""          # 例: "https://bot.example.com:5678"（必须公网可达）
-  format: "wav"                # wav / mp3 / pcm16（按服务商支持填写）
-  preset-model: "mimo-v2.5-tts"        # 留空=禁用预制音色
-  natural-model: "mimo-v2.5-tts-voicedesign"  # 留空=禁用自然语言音色
-  clone-model: "mimo-v2.5-tts-voiceclone"     # 留空=禁用音色克隆
-  preset-default-voice: "mimo_default"
-  natural-default-voice: "温柔亲切的中文女声"
-  clone-voices-dir: "tts-voices"       # 插件数据目录下的子文件夹
-  clone-default-voice: ""              # 默认参考音频文件名；留空=AI 需指定
+  # 接口基础地址，通常填写到 /v1。
+  base-url: https://api.xiaomimimo.com/v1
+  # 语音合成服务密钥；留空时 TTS 不会发起请求。
+  api-key: ''
+  # 服务器对外可访问的公网 URL。
+  public-base-url: ''
+  # 消息/输出格式模板。
+  format: wav
+  # 「语音合成 · 预置语音模型」设置；按此用途填写，未使用时保持默认值。
+  preset-model: mimo-v2.5-tts
+  # 「语音合成 · 自然语音模型」设置；按此用途填写，未使用时保持默认值。
+  natural-model: mimo-v2.5-tts-voicedesign
+  # 「语音合成 · 克隆语音模型」设置；按此用途填写，未使用时保持默认值。
+  clone-model: mimo-v2.5-tts-voiceclone
+  # 「语音合成 · 预置音色」设置；按此用途填写，未使用时保持默认值。
+  preset-default-voice: mimo_default
+  # 「语音合成 · 自然音色描述」设置；按此用途填写，未使用时保持默认值。
+  natural-default-voice: 温柔亲切的中文女声
+  # 本地克隆音色目录，相对 data/ 目录。
+  clone-voices-dir: tts-voices
+  # 「语音合成 · 默认克隆音色」设置；按此用途填写，未使用时保持默认值。
+  clone-default-voice: ''
+  # 每轮最多生成的语音条数。
   max-per-turn: 2
-
-# ─────────────────── 网络代理 ───────────────────
-
+# 插件网络请求的代理设置。
 network:
+  # 「网络 · 网络代理」设置；按此用途填写，未使用时保持默认值。
   proxy:
+    # 是否启用「network.proxy」功能。
     enabled: false
-    type: "http"       # http / socks
-    host: ""
+    # 类型名称，按本配置段说明填写。
+    type: http
+    # 代理主机名或 IP。
+    host: ''
+    # 网络端口。
     port: 8080
-
-# ─────────────────── 入群自动审批 ───────────────────
-# 需要 QQ 白名单能力接口(普通机器人返回 11253 时自动停用)
-# 策略按顺序匹配，第一条命中生效；openids 空=对所有申请生效
-
+# 跨服务器消息桥开关。
 proxy-bridge:
-  enabled: false      # 代理互通桥(huhobot:bridge 通道)，把游戏聊天转发给代理端广播其它子服
-
-# 入群自动审批（需要 QQ 群管理白名单能力；不可用时自动停用并提示）
-# 策略按顺序匹配，第一条命中生效：
-#   mode: allow = 直接通过；deny = 直接拒绝；ai = 交给工作 Agent 的模型判断
-#   openids: 只对这些申请人生效（留空 = 全部）
-#   prompt: ai 模式的审批规则（可自定义）
-#   reject-reason: deny / ai 拒绝时的理由
-join-approve:
+  # 是否启用「proxy-bridge」功能。
   enabled: false
-  # strategies:
-  #   - name: AI 审核
-  #     mode: ai
-  #     prompt: "放行正常玩家；拒绝广告、营销号、明显小号"
-  #   - name: 同学直通
-  #     mode: allow
-  #     openids: []
+# 新成员入群审批及自动审批策略。
+join-approve:
+  # 是否启用「join-approve」功能。
+  enabled: false
+  # 每隔多少秒执行一次。
   interval-seconds: 30
+  # 审批策略列表；空列表代表不运行自动审批规则。
   strategies: []
-  #  - name: "自动通过"
-  #    mode: "allow"        # allow=通过 / deny=拒绝
-  #    openids: []
-  #    reject-reason: ""
-

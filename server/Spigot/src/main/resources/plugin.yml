@@ -1,19 +1,18 @@
 name: HuHoBotPenguin
 version: '@version@'
 
-main: cn.huohuas001.huhobotPenguin.spigot.HuHoBotSpigot
+main: agent.spigot.HuHoBotSpigot
 api-version: '1.18'
+# 内测：默认不声明 Folia 支持；需要时手动改为 true，加载后由运行期检测决定调度方式。
 folia-supported: false
-# internal
 foiladebug: false
-softdepend: [PlaceholderAPI, ViaVersion]
+softdepend: [PlaceholderAPI, ViaVersion, LuckPerms, Vault, TAB, SkinsRestorer, ChangeSkin]
 
 commands:
   huhobot:
     description: HuHoBot control command
     usage: "/huhobot reload|info|password|webui|scripts"
     aliases: [hb]
-    permission: huhobot.command
   at:
     description: Send an @mention message to QQ group
     usage: "/at <nickname> <message>"

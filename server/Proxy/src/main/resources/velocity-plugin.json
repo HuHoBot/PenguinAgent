@@ -2,7 +2,7 @@
   "id": "huhobot",
   "name": "HuHoBotPenguin",
   "version": "${version}",
-  "description": "HuHoBot Velocity Adapter",
+  "description": "HuHoBot Penguin",
   "authors": ["HuoHuas001"],
-  "main": "cn.huohuas001.huhobotPenguin.velocity.HuHoBotVelocity"
+  "main": "agent.velocity.HuHoBotVelocity"
 }

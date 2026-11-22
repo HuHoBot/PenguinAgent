@@ -1,0 +1,10 @@
+Vanilla default skin heads: extracted from Minecraft 1.21.11 wide skin assets distributed by Mojang.
+Source: https://assets.mcasset.cloud/1.21.11/assets/minecraft/textures/entity/player/wide/
+Names: Steve, Alex, Ari, Efe, Kai, Makena, Noor, Sunny, Zuri.
+These are last-resort fallbacks only. Server/profile/plugin texture data has priority.
+
+HuHo.png remains the sole bundled illustration resource; the renderer clears only near-transparent pixels in memory before drawing it as the background.
+
+Validated source families: LittleSkin and Blessing Skin use the CustomSkinLoader API (`/csl/{name}.json` plus `/textures/{textureId}`); Mojang profile/session, Ely.by textures, and a final avatar endpoint are separate fallbacks. Configure any community station root and priority under `online-list.skin.sources`.
+
+Crafatar is a direct UUID face image fallback; Ashcon provides a Mojang-compatible profile JSON source. Neither overrides an exact service-side skin property.

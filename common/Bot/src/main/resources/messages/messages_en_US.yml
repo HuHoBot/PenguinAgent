@@ -10,6 +10,8 @@ chat-ai:
   cleared: "✅ Chat history for this group has been cleared."
   compressed: "✅ Chat history compressed"
   nothing-to-compress: "Not enough chat history in this group to compress"
+  enabled-on: "enabled"
+  enabled-off: "disabled"
   status: "Chat AI: {enabled}\nLanguage: {language}\nMessages in this group: {count}"
 
 unbind:

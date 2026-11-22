@@ -1,0 +1,6 @@
+// 由 HuHoBot Agent 自动生成：复制到 addons/hello/main.js 才会启用。
+Bird.log('hello addon ready');
+Bird.onCommand('hello', function(sender, label, args) {
+    Bird.tell(sender, '你好，' + sender.getName());
+});
+Bird.runTaskLater(function() { Bird.log('20 ticks later'); }, 20);

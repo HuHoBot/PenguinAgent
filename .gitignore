@@ -55,3 +55,6 @@ bin/
 
 ### 非源码目录 ###
 杂七杂八的玩意/
+
+# Local verification logs and temporary source generators
+.work/

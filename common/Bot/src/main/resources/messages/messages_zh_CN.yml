@@ -10,6 +10,8 @@ chat-ai:
   cleared: "✅ 本群聊天记录已清空，下次对话从零开始。"
   compressed: "✅ 聊天记录已压缩"
   nothing-to-compress: "当前群没有多少聊天记录，不需要压缩"
+  enabled-on: "已开启"
+  enabled-off: "未开启"
   status: "聊天 AI：{enabled}\n语言：{language}\n本群记录条数：{count}"
 
 unbind:

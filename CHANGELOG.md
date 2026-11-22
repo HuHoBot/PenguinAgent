@@ -1,72 +1,17 @@
 # Changelog
 
-## v1.23（2026-11-18）
+## v1.23
 
-### 新功能
-
-- feat: **强制 OTA**（`update.manifest-url`）—— 定时读取仓库中的 versions.json（`minimumVersion` / `downloadUrl` / `notes`），当前版本低于最低要求时下载 jar 到 `plugins/HuHoBotPenguin/update/`；同一版本只下载一次（update-state.json 记录），**绝不反复更新**；清单读不到自动重试一次、再失败等下次；未配置则完全静默
-- feat: **查在线主题切换** —— `online-list.render.theme: dark|light`，深色科技风 / 亮色清爽风，亮色下自动压暗过亮文字保证可读
-- feat: **真实 MOTD 与图标** —— 通过 Server List Ping 向本服查询状态，拿到 MiniMOTD 等插件改写后的彩色 MOTD 与 ping 下发的图标（与玩家在多人列表看到的一致），后台 30 秒刷新
-- feat: **LuckPerms 集成** —— 玩家卡片显示 LP 前缀（称号）/后缀（颜色全部解析），`online-list.display.{prefix,suffix,name-color,admin-groups}` 可配置，支持按 LP 组高亮管理员
-- feat: **地址专用配置** —— `online-list.display.address` 写纯域名即可（SRV 解析端口，图上不再拼接端口）
-
-### 修复
-
-- fix: **/ai 无法使用** —— QQ 客户端会拦截 "/" 开头的未知命令，聊天 AI 默认触发词改为不带斜杠的 `ai`（仍可配置）
-- fix: **分页快照丢失全部字段** —— 分页时 MOTD/图标/TPS/内存/协议等全部丢失（真机信息不显示的根因）
-- fix: 人数格式错乱（"/ 20 3" → "3 / 20"）
-- fix: 移除公网 IP 自动探测（避免泄露）；未配置地址时整行不显示
-- fix: 底部文字因 HuHo 娘而右偏 → 全图居中；Powered by HuHoBot 移至右下避开角色
-- fix: 性能卡数值与标签重叠（大内存时数字压住"内存"字样）→ 标签与数值分行
-- fix: 技术行信息过长溢出 → 只保留核心版本（去掉构建号）/品牌/Via 支持范围
-- fix: 折线图峰值样式（虚线对齐 + 三层光晕 + 胶囊标签）
-
-### 改进
-
-- change: 版本号改用 **1.23**（语义化版本管理）
-- change: 信息区高度动态计算，地址/自定义行为空时不再留下空行
-- change: HuHo 娘改为左下角半身出血（保留脸部与上身），配青色柔光
-- change: 标题"在线列表"恢复并居中
-
----
-
-## v26.1（2026-11-17）
-
-### 新功能
-
-- feat: **TTS 语音合成工具**（聊天 AI 与工作 Agent 均可调用 `speak_tts`）—— 预制音色 / 自然语言生成音色 / 音色克隆三种模式，各配一个模型 ID（不填则该能力对 AI 不可见）；统一 OpenAI 兼容 `chat/completions` 接口（默认小米 MiMo-V2.5 TTS 系列）；克隆参考音频放 `tts-voices/` 目录；每条消息最多合成 `tts.max-per-turn` 条；音频经 WebUI `/tts-cache/` 以公网 URL 提供给 QQ 富媒体语音消息（`file_type=3`）
-- feat: **命令映射与切换** —— `command-aliases.map`（原名与新名都可用）与 `command-aliases.rename`（原名彻底停用），配置文件中命令名不带斜杠；指令面板自动显示映射后的名字、隐藏被切换的原名；config.yml 内置完整教程注释
-- feat: **聊天 AI 默认前缀 `/ai`** —— `/agent` 为工作 Agent、`/ai` 为群员聊天 AI；聊天 AI 仅保留只读工具（联网搜索 / 服务器状态 / 在线列表 / TTS），绝不具备命令执行能力
-- feat: **在线列表图片信息增强** —— 彩色 MOTD（§ 颜色代码解析）、服务器图标（`server-icon.png`）、连接地址（未配置时给出明确指引）、在线/最大人数、服务端品牌、核心版本、协议版本、ViaVersion 支持范围；`online-list.max-render-players` 单图上限，超出时图片只画前 N 位并追加 Markdown 完整名单
-
-### 修复
-
-- fix: **内置字体覆盖不全** —— 原 1.8MB 裁剪字体缺"昉/雲"等生僻汉字（服务器名会显示方块），替换为完整 CJK 文泉驿微米黑（约 5MB，实测 0 缺字）
-- fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机 Leaf + 生产插件环境复现），已恢复完整 BC；修复后假凭据实测 QQ 客户端完整走通启动链路
-- fix: 代理端描述文件占位入口 —— 删除指向不存在类的 `bungee.yml` / `velocity-plugin.json`
-- fix: Folia 内测适配 —— 13 处调度统一走 `FoliaScheduler` + `runForEntity` 实体调度；三种路径实测（内测开=完整加载零异常，开关未开=干净自禁用）
-- fix: 指令面板创建失败时降级复用旧受管面板 —— QQ 服务异常/限频/配额用满（30013）不再导致面板消失（#36 同类事故面）
-- fix: 面板 stale 清理的安全边界 —— 只有本轮至少一个面板成功落地时才清理
-
-### 改进
-
-- change: **单 jar 多端** —— `HuHoBot-Penguin-26.1.jar` 一个包同时支持 Spigot/Paper/Leaf/Purpur/Folia 与 BungeeCord/Velocity（各端只加载自己的入口类与描述文件）
-- change: 指令面板全局面板模式 —— 未单独配置的群默认显示完整面板（QQ `target_type=all`）
-- change: 版本号 1.21.1 → 26.1，Gradle / plugin.yml / `/版本` 全链路同步
-- change: 渲染视觉验证 —— 3 场景 PNG 实测（满员/未配置/空服），中文字形、彩色 MOTD、截断提示全部符合预期
-
-### 支持范围
-
-- Minecraft **1.18 ～ 1.21.11**（`api-version: '1.18'`，编译目标 Paper API 1.21.11）
-- 服务端实测：Paper 1.21.11、Leaf 1.21.11（真实生产环境 29 插件）、Folia 1.21.11（内测开关）、Velocity 3.3、BungeeCord 最新构建
-- JDK：Bukkit 端 Java 17+ 建议（Leaf/Paper 1.21.11 运行 Java 25 正常）；代理端 Java 17+
-
-### 升级提示
-
-- 无破坏性配置变更；老 `config.yml` 启动时自动追加 16 个新配置项（tts.* / command-aliases.* / online-list.max-render-players）
-- TTS 需要配置 `tts.api-key` 与 `tts.public-base-url`（WebUI 公网地址）；QQ 官方语音要求 silk 格式，wav/mp3 在部分环境可用，被拒时请配合 silk 转码服务
-
----
+- 在线列表采用冰蓝、青色、银白和淡紫渐变，保留大幅 HuHo 立绘及左下角角色。卡片压缩到 76px 高、8px 间隔，移除头像上方装饰横线。
+- 玩家按管理员、称号和后缀分八组，各组内按名称稳定排序；仅管理员使用特殊高亮。延迟位于 ADMIN/ONLINE 标签右侧，字号及颜色按数值展示。
+- 没有自定义消息时自动压缩空行，核心/版本信息上移；核心显示名可配置颜色及符号。趋势刻度显示精确时间，性能条连续变色，高 MSPT 仍有可见满条。
+- 扩充 profile、Yggdrasil、CSL、皮肤插件和头像来源链，主站优先、失败再镜像；默认拒绝未授权内网来源。
+- 内置小型 JavaScript、Lua 运行时与 Java 源码扩展，不再提供 Python 或大型完整运行时包。任务、HTTP 响应和 JS 执行有界，卸载时取消遗留回调。
+- 字体后台解压与注册，保留完整现有字符覆盖及许可证；角色与默认壁纸采用像素一致的无损优化。
+- 新安装默认 SQLite WAL，旧 file 配置保留。快照单事务提交、失败回滚，空状态与未来版本数据库受到保护。
+- QQ HTTP 回调先验证原始请求签名再解析和分发，增加包体上限、ACK、重复事件处理及监听端口释放。
+- 修复命令重载后的注销与重新注册、渲染初始化阻塞、延后脚本函数回调、异常请求及资源释放问题。
+- 启动和重载时显示大号 HuHoBot 横幅。版本号统一保持 1.23。
 
 ## v1.21.1（2026-11-15）
 
@@ -96,7 +41,7 @@
 ### 新功能
 
 - feat: WebUI「命令与 QQ 面板」支持按群单独配置 —— 顶部可用下拉菜单选择群聊（默认全局配置），按群覆盖可用指令开关、是否推送到 QQ 指令面板、面板优先级，以及「管理员命令对所有人显示」
-- feat: 群配置持久化到 `plugins/HuHoBotPenguin/groups/<群OpenID>/config.yml`；仅 `bot.groups` 中的群会保留/创建配置目录，从群列表移除群时自动删除对应配置文件夹
+- feat: 群配置持久化到 `plugins/HuHoBotPenguin/data/groups/<群OpenID>/config.yml`；仅 `bot.groups` 中的群会保留/创建配置目录，从群列表移除群时自动删除对应配置文件夹
 - feat: `/查在线 [页码]` 在 Spigot/Paper 端改为本地渲染在线列表图片（雾蓝玻璃主题、玩家皮肤头像、管理员置顶、分页），不依赖外部 MOTD 图片接口；其他平台、关闭 `online-list.enabled` 或渲染失败时自动回退到原有 MOTD 图片 / Markdown 逻辑
 - feat: `/motd` 改用 `motd.txssb.cn` 的状态 JSON 与 `app_img` 图片接口；未显式指定端口时不传 `port`，交由 `stype=auto` 解析 SRV 记录（避免误判离线）
 
@@ -318,20 +263,18 @@
 
 ### 新功能
 
-- feat: 脚本扩展系统（仅 Spigot）— 用 JavaScript / Lua / Python 写脚本插件，无需编译
-- feat: 目录式脚本插件 — `addons/<名字>/` 下放 `main.js` / `main.lua` / `main.py` 加 `metadata.yaml` 即一个插件
+- feat: 脚本扩展系统（仅 Spigot）— 用 JavaScript / Lua / Java 写脚本插件，无需编译
+- feat: 目录式脚本插件 — `addons/<名字>/` 下放 `main.js` / `main.lua` / `Main.java` 加 `metadata.yaml` 即一个插件
 - feat: `Bird` 桥 — 脚本可注册 Bukkit 事件、游戏内命令（含 Tab 补全）、定时任务、HTTP 回调、QQ 群命令
 - feat: `/huhobot scripts reload [目录名]` — 重载全部或单个脚本插件
 - feat: 脚本配置与数据 — `_conf_schema.json` 声明配置默认值，`config` / `kv` 两套键值空间，`setData` 持久化
 - feat: 跨脚本事件总线 — `Bird.on` / `Bird.emit`
-- feat: 引擎按需安装 — LuaJ 打进主 jar；GraalJS、GraalPy 拆成 `addon-GraalJs` / `addon-GraalPy`，从 `plugins/HuHoBotPenguin/engines/` 加载，不放也能启动
 - feat: 扩展注册 API 支持注销 — `AddonManager.unregister`，重载时真正撤掉 QQ 面板上的旧命令
 
 ### 变更
 
 - change: 脚本加载失败或重载时撤销该脚本登记的全部内容（命令、监听器、定时任务、QQ 群命令、addon 元数据）
 - change: `_enabled: false` 与「目录里没有入口」记为「跳过」而不是「失败」
-- change: 插件停用时关闭共享的 GraalPy `Engine` 与引擎 `URLClassLoader`
 - change: 主插件保持 Java 8 字节码与 Spigot 1.16.5 基线，Java 9+ API 只允许出现在两个引擎包里
 
 ### Bug 修复
@@ -344,7 +287,6 @@
 - fix: `CommandMap` 反射只查当前类，字段在父类时所有 `onCommand` 静默失效
 - fix: 脚本加载失败时未回滚已登记的内容，半路失败的脚本会留下幽灵命令与监听器
 - fix: 启动早期脚本登记 QQ 群命令会触发面板同步，此时 QQ 尚未鉴权导致 `contextManager` 为空
-- fix: GraalPy 首次运行时 home 尚未解压完就加载 `.py` 脚本，导致标准库模块全部找不到
 - fix: 共享 Engine 的多个 Context 使用不同 host access 实例被 GraalVM 拒绝
 
 ---

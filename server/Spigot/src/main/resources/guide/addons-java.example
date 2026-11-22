@@ -1,0 +1,14 @@
+// 由 HuHoBot Agent 自动生成：复制到 addons/hello-java/Main.java 才会启用。
+// metadata.yaml 的 name 用 hello-java，entry 用 Main.java。运行服务器需完整JDK。
+import agent.spigot.scripting.AddonProgram;
+import agent.spigot.scripting.BirdScriptApi;
+
+public final class Main implements AddonProgram {
+    @Override public void start(BirdScriptApi api) {
+        api.log("hello Java addon ready");
+        api.registerBotCommand("hello-java", "Java问候", "say 你好，来自Java扩展", 0, false);
+    }
+    @Override public void stop() {
+        // 自己创建的线程或连接需自己关闭；Bird登记的命令/任务由加载器清理。
+    }
+}

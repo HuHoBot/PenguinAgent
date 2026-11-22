@@ -35,7 +35,7 @@
 | **QQ 群管理** | AI Agent 集成禁言、入群审批、自动审批策略等群管理工具 |
 | **指令面板自动同步** | 启动时自动同步命令面板到 QQ 群，支持按群有效配置分组/关联目标群（受 QQ 面板配额限制） |
 | **背包与末影箱查看** | `/我的背包`、`/我的末影箱` 查询绑定的游戏账户（多账号时可用 `/我的背包 <游戏ID>` 指定）；管理员可用 `/背包查看 <在线玩家名>`、`/末影箱查看 <在线玩家名>` |
-| **脚本扩展** | `addons/<名字>/` 目录插件，入口 `main.js` / `main.lua` / `main.py`，用 `Bird` 桥 |
+| **脚本扩展** | `addons/<名字>/` 目录插件，入口 `main.js` / `main.lua` / `Main.java`，用 `Bird` 桥 |
 
 ---
 
@@ -43,9 +43,8 @@
 
 | 平台 | 状态 | JDK 要求 | 产物 |
 |------|------|----------|------|
-| **Spigot / Paper**（api-version 1.18+） | 活跃开发 | JDK 8+ | `HuHoBot-Penguin_Spigot-<版本>.jar` |
+| **Spigot / Paper**（api-version 1.18+） | 活跃开发 | JDK 17+ | `HuHoBot-Penguin-1.23.jar` |
 | Nukkit / PMMP | 社区适配版（非本仓库维护） | — | [PenguinAgent-NukkitPlatform](https://github.com/HuHoBot/PenguinAgent-NukkitPlatform) |
-| Velocity / BungeeCord | 待适配 | — | — |
 | Allay | 待适配 | — | — |
 
 > Nukkit-MOT 适配版本维护在独立仓库 [PenguinAgent-NukkitPlatform](https://github.com/HuHoBot/PenguinAgent-NukkitPlatform)，不由本仓库维护，功能与 issue 请前往该仓库反馈。
@@ -57,7 +56,7 @@
 ### 1. 准备
 
 1. 到 [q.qq.com](https://q.qq.com/) 申请机器人，获得 **AppID** 和 **Secret**
-2. 准备运行环境：**JDK 8+**（推荐 JDK 17+）
+2. 准备运行环境：**JDK 17+**
 3. 准备 Minecraft 服务器：**Paper 1.20.5+** 或兼容 Spigot 的服务端
 
 ### 2. 构建
@@ -77,7 +76,7 @@ cd PenguinAgent
 
 ### 3. 安装
 
-将 `HuHoBot-Penguin_Spigot-<版本>.jar` 放入服务器 `plugins/` 目录，重启服务器。
+将 `HuHoBot-Penguin-1.23.jar` 放入服务器 `plugins/` 目录，重启服务器。
 
 ### 4. 配置
 
@@ -343,7 +342,7 @@ QQ 群中的 @消息会自动解析为 `§9@玩家名§r`（蓝色高亮），�
 | `取消免验证` `<玩家名>` | 从免验证名单移除玩家（仅管理员） |
 
 背包和末影箱默认使用内置底图。若要更换壁纸，将 PNG 放到
-`plugins/HuHoBotPenguin/inventory/backgrounds/`，再在 `config.yml` 中启用
+`plugins/HuHoBotPenguin/data/inventory/backgrounds/`，再在 `config.yml` 中启用
 `inventory.render.custom-background.enabled`。格子和人物区域的圆角遮罩会始终保留。
 
 ### 认证命令
@@ -474,7 +473,7 @@ server-notify:
 | 重启完成 | 下次启动时判定后发送 | 上次正常关闭且距 `restart-window` 内重新启动 |
 | 意外关闭 | 下次启动时补发 | 上次未正常收尾（崩溃、`kill -9`、断电），进程已死只能下次启动补发 |
 
-- 状态记录在插件数据目录的 `server-notify-state.properties`，不要手动删除
+- 状态记录在插件 `data/` 目录的 `server-notify-state.properties`，不要手动删除
 - 插件重载 / 手动停用不会被当成关服，也不会被当成一次重启
 - QQ 是异步鉴权的，通知会等鉴权成功后再发（最多 60 秒），未配置群或等待超时会记日志跳过
 
@@ -506,7 +505,6 @@ online-list:
 - 玩家快照在主线程采集；皮肤下载与 PNG 渲染在后台线程完成，不阻塞服务器
 - 图片按 1200px 宽渲染，正文底图按 640px 分段拼接，人数越多图片越高
 - 底图资源打包在 jar 内（`online/`），无需手动放置；渲染器初始化失败时自动回退到 MOTD 图片
-- Nukkit / Allay / 代理端未实现本地渲染，`/查在线` 仍使用原有 MOTD 图片逻辑
 
 ### 命令黑名单
 
@@ -575,7 +573,7 @@ PenguinAgent/
 
 ### 环境要求
 
-- **JDK 24**（构建时）/ **JDK 8+**（运行时，Spigot 模块）
+- **JDK 24**（构建时）/ **JDK 17+**（运行时，Spigot 模块）
 - **Gradle 9.6.1**（使用项目自带的 `gradlew`）
 - **Git**（子模块管理）
 
@@ -598,72 +596,35 @@ ls build/gather-jar/
 |------|------|
 | `common-Bot` | 平台无关核心：QQ 客户端、群消息分发、指令、AI Agent、WebUI |
 | `server-AdapterCommon` | 服务端适配公共层 |
-| `server-Spigot` | Spigot/Paper 平台适配（活跃），含 JS / Python / Lua 脚本扩展 |
-| `addon-GraalJs` | 可选引擎包：Spigot 的 GraalJS。不进主插件产物，放到 `plugins/HuHoBotPenguin/engines/` |
-| `addon-GraalPy` | 可选引擎包：Spigot 的 GraalPy。不进主插件产物，放到 `plugins/HuHoBotPenguin/engines/` |
+| `server-Spigot` | Spigot/Paper 平台适配（活跃），含 JavaScript / Lua / Java 脚本扩展 |
 | `server-Nukkit` | Nukkit/PMMP 平台适配（待适配） |
-| `server-Proxy` | Velocity/BungeeCord 代理适配（待适配） |
 | `server-Allay` | Allay 平台适配（待适配） |
 
 ---
 
-## Spigot 脚本扩展（JS / Python / Lua）
+## 脚本扩展（JavaScript / Lua / Java）
 
-一个插件是 `addons/` 下的一个目录，不是单个文件。根上直接放的 `.js` / `.lua` / `.py` 不加载。
-Lua 打在主 jar 里；GraalJS（约 34 MB）与 GraalPy（约 125 MB）拆成两个引擎包，不放也能启动：
+主 JAR 自带 JavaScript 和 Lua，小型扩展无需另装语言运行时。每个扩展放到 `addons/<名字>/`，入口为 `main.js`、`main.lua` 或 `Main.java`。Java 源码入口需完整 JDK。
 
-| 入口 | 引擎 | 放在哪 |
-|------|------|--------|
-| `main.lua` | LuaJ | 主 jar 内 |
-| `main.js` | GraalJS | `engines/HuHoBot-Engine-GraalJs-<版本>.jar` |
-| `main.py` | GraalPy（Python 3） | `engines/HuHoBot-Engine-GraalPy-<版本>.jar` |
+使用 `/huhobot scripts reload [名字]` 加载或重载可信扩展。下载的 ZIP 经过 SHA-256 校验及目录边界检查，不自动执行。Python 和大型完整运行时包不再提供；已有脚本文件不会被自动删除或转换。
 
-```bash
-./gradlew :addon-GraalJs:shadowJar :addon-GraalPy:shadowJar
-# 放到 plugins/HuHoBotPenguin/engines/
-```
-
-```
-plugins/HuHoBotPenguin/addons/hello/
-├── metadata.yaml          name / version / author / description / entry
-├── _conf_schema.json      配置声明，实际值写到 addons/config/hello.json
-└── main.js                或 main.lua / main.py
-```
-
-```
-/huhobot scripts reload
-/huhobot scripts reload hello
-```
-
-三种语言都注入 `Bird`、`Bukkit`、`server`、`plugin`、`config`、`kv`、`DATA_DIR`。
-加载失败会撤掉已经登记的 addon 和它注册过的命令、监听器、定时任务。
-两个目录写成同一个 `name` 会被拒绝。`"_enabled": false` 跳过该插件（算「跳过」不算「失败」）。
-
-两个容易踩的点：
-
-- **Lua 侧列表下标从 1 开始。** 命令参数和 `Bird` 返回的 `List` / `Map` 都会转成真正的 Lua table，
-  所以是 `args[1]`、`#Bird:getDataKeys()`、`pairs(...)`，不是 0 起。JS 和 Python 保持各自的 0 起。
-- **引擎 jar 的文件名带版本。** 和主插件版本不一致时启动会告警，脚本可能以难懂的方式失败，
-  换同一次构建产出的 jar 即可。
-
-详细说明见 [`docs/spigot-script-addons.md`](docs/spigot-script-addons.md)，
-其中「[引擎桥 API](docs/spigot-script-addons.md#11-引擎桥-api)」一节记录了主插件与引擎 jar 之间的反射契约
-（改 `GraalJsBridge` / `GraalPyBridge` 的方法签名时必须同步改 `ScriptAddonLoader`）。
-
-脚本系统借鉴自 [birdlibraryapi](https://github.com/prach1121/birdlibraryapi)（Apache-2.0），详见[许可证](#许可证)一节。
-
+完整接口、卸载行为及示例见 [脚本扩展说明](docs/spigot-script-addons.md)。
 
 ## 版本历史
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v26.1（最新）
+### v1.23（当前）
+
+亮色玩家列表 + 右侧信息栏，底部趋势/性能；原始称号/名字格式、即时进出服采样、多源皮肤。
+配置结构版本 19，详细操作请查看插件目录 `Q&A.txt`。升级前保留完整插件目录，首次升级自动备份旧 YAML。
+
+### v26.1（历史）
 
 **修复：**
 - fix: 内置字体覆盖不全（生僻字方块）→ 替换为完整 CJK 文泉驿微米黑
 - fix: BouncyCastle PQC 裁剪导致 QQ 客户端启动崩溃（真机环境复现），已恢复完整 BC
 - fix: 指令面板创建失败时降级复用旧受管面板，QQ 服务异常/配额用满不再导致面板消失（#36 同类事故面）
-- fix: Folia 内测适配（13 处调度统一走 FoliaScheduler + runForEntity 实体调度）
 
 **新功能：**
 - feat: TTS 语音合成工具（预制音色 / 自然语言音色 / 音色克隆，QQ 语音消息发送）
@@ -671,8 +632,6 @@ plugins/HuHoBotPenguin/addons/hello/
 - feat: 聊天 AI 默认前缀 `/ai`（`/agent` 为工作 Agent），聊天 AI 仅只读工具
 - feat: 在线列表图片增强 —— 彩色 MOTD / 服务器图标 / 地址 / 人数 / 品牌 / 核心 / 协议 / Via 范围，超限自动转 Markdown 名单
 - feat: 指令面板全局面板模式 —— 未单独配置的群默认显示完整面板（QQ `target_type=all`）
-- feat: 单 jar 多端 —— 一个 `HuHoBot-Penguin-26.1.jar` 同时支持 Spigot/Paper/Leaf/Purpur/Folia 与 BungeeCord/Velocity
-- feat: Folia 内测调度适配（`plugin.yml` 隐藏开关 `foiladebug`，默认关闭）
 
 **支持范围：** Minecraft 1.18 ～ 1.21.11（`api-version: '1.18'`，编译目标 Paper API 1.21.11）
 
@@ -694,7 +653,7 @@ plugins/HuHoBotPenguin/addons/hello/
 
 **新功能：**
 - feat: WebUI「命令与 QQ 面板」支持按群单独配置 —— 可按群覆盖可用指令开关、面板推送、优先级及管理员命令可见性；默认使用全局配置
-- feat: 群配置存储在 `plugins/HuHoBotPenguin/groups/<群OpenID>/config.yml`；仅 `bot.groups` 中的群保留配置目录，移除群时自动删除对应文件夹
+- feat: 群配置存储在 `plugins/HuHoBotPenguin/data/groups/<群OpenID>/config.yml`；仅 `bot.groups` 中的群保留配置目录，移除群时自动删除对应文件夹
 - feat: `/查在线 [页码]`（Spigot/Paper）默认本地渲染雾蓝玻璃主题在线列表图片：玩家皮肤头像、管理员置顶、分页；关闭 `online-list.enabled` 或渲染失败时回退 MOTD 图片/Markdown
 - feat: `/motd <地址[:端口]>` 改用 `motd.txssb.cn` 状态与图片接口；未写端口时自动解析 SRV（`stype=auto`）
 
@@ -837,13 +796,12 @@ plugins/HuHoBotPenguin/addons/hello/
 ### v1.15.0
 
 **新功能：**
-- feat: 脚本扩展系统（仅 Spigot）— 用 JavaScript / Lua / Python 写脚本插件，无需编译
-- feat: 目录式脚本插件 — `addons/<名字>/` 下放 `main.js` / `main.lua` / `main.py` 加 `metadata.yaml`
+- feat: 脚本扩展系统（仅 Spigot）— 用 JavaScript / Lua / Java 写脚本插件，无需编译
+- feat: 目录式脚本插件 — `addons/<名字>/` 下放 `main.js` / `main.lua` / `Main.java` 加 `metadata.yaml`
 - feat: `Bird` 桥 — 脚本可注册 Bukkit 事件、游戏内命令（含 Tab 补全）、定时任务、HTTP 回调、QQ 群命令
 - feat: `/huhobot scripts reload [目录名]`
 - feat: 脚本配置与数据 — `_conf_schema.json` 声明默认值，`config` / `kv` 键值空间，`setData` 持久化
 - feat: 跨脚本事件总线 — `Bird.on` / `Bird.emit`
-- feat: 引擎按需安装 — LuaJ 打进主 jar；GraalJS、GraalPy 拆成独立包从 `engines/` 加载
 
 **Bug 修复：**
 - fix: LuaJ 重载解析、容器转 userdata、宿主对象回调解包等一批绑定层问题
@@ -1061,7 +1019,7 @@ plugins/HuHoBotPenguin/addons/hello/
 
 ### 第三方资源
 
-**脚本扩展系统**（`addons/<名字>/main.js` / `main.lua` / `main.py` 与 `Bird` 桥）借鉴并移植自
+**脚本扩展系统**（`addons/<名字>/main.js` / `main.lua` / `Main.java` 与 `Bird` 桥）借鉴并移植自
 [birdlibraryapi](https://github.com/prach1121/birdlibraryapi)（Apache-2.0），原作者 prach1121。
 `BirdScriptApi` 由该项目的 `BirdAPI` 移植而来，并按 Spigot 1.16+（不用 Adventure API）与
 HuHoBot 附属插件注册做了适配；`ScriptAddonLoader`、`ScriptPackage`、`AddonManifest`、
