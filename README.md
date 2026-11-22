@@ -43,7 +43,7 @@
 
 | 平台 | 状态 | JDK 要求 | 产物 |
 |------|------|----------|------|
-| **Spigot / Paper**（api-version 1.18+） | 活跃开发 | JDK 17+ | `HuHoBot-Penguin-1.23.jar` |
+| **Spigot / Paper**（api-version 1.18+） | 活跃开发 | JDK 17+ | `HuHoBot-Penguin-1.24.jar` |
 | Nukkit / PMMP | 社区适配版（非本仓库维护） | — | [PenguinAgent-NukkitPlatform](https://github.com/HuHoBot/PenguinAgent-NukkitPlatform) |
 | Allay | 待适配 | — | — |
 
@@ -76,7 +76,7 @@ cd PenguinAgent
 
 ### 3. 安装
 
-将 `HuHoBot-Penguin-1.23.jar` 放入服务器 `plugins/` 目录，重启服务器。
+将 `HuHoBot-Penguin-1.24.jar` 放入服务器 `plugins/` 目录，重启服务器。
 
 ### 4. 配置
 
@@ -614,7 +614,7 @@ ls build/gather-jar/
 
 > 更早的版本见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/HuHoBot/PenguinAgent/releases)。
 
-### v1.23（当前）
+### v1.24（当前）
 
 亮色玩家列表 + 右侧信息栏，底部趋势/性能；原始称号/名字格式、即时进出服采样、多源皮肤。
 配置结构版本 19，详细操作请查看插件目录 `Q&A.txt`。升级前保留完整插件目录，首次升级自动备份旧 YAML。
