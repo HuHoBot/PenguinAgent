@@ -27,35 +27,68 @@ object MenuManager {
     private const val MAX_DUPLICATE_DELETES_PER_SYNC = 10
     /** 官方文档：指令面板写操作限频 10 QPM。 */
     private const val PANEL_UPDATE_RETRY_DELAY_MS = 1_000L
+    /** 多次写操作之间的最小间隔：10 QPM ≈ 每 6 秒一次，留一点余量。 */
+    private const val PANEL_WRITE_INTERVAL_MS = 6_500L
 
+    private const val LEGACY_REMARK = "HuHoBot 指令面板"
+
+    /**
+     * 同一份有效配置的群共享一个面板。
+     *
+     * [signature] 只用于本次同步内分组，**不写进面板备注**——备注必须跨次同步保持稳定，
+     * 否则命令或配置一变就会创建新面板并删除旧面板（见 [syncGroupPanels] 的说明）。
+     */
     private data class PanelProfile(
         val signature: String,
-        val remark: String,
         val items: List<JSONObject>,
         val groups: MutableList<String>,
         /** true = QQ 全局面板（target_type=all），覆盖所有群，包括未写进配置的群。 */
         val allTargets: Boolean
     )
 
+    /** 一个 profile 最终落到的面板。 */
+    private data class PanelAssignment(
+        val profile: PanelProfile,
+        val remark: String,
+        /** 复用已有面板时的详情（含当前关联群）；新建面板为 null。 */
+        val record: PanelRecord?
+    )
+
+    /**
+     * 同步所有群的指令面板。
+     *
+     * **复用已有受管面板，不要删旧建新。** QQ 客户端会缓存群当前的面板 ID：
+     * 1.21.0 把配置哈希写进面板备注，命令或群配置一变就创建新面板、删除旧面板，
+     * 结果群上短暂或长期挂着多个面板 / 已失效的 panel_id，表现为「QQ 面板不再弹出」；
+     * 反复创建还会撞上 QQ 的 20 个面板上限和 10 QPM 写频率限制。
+     *
+     * 现在的策略：
+     * 1. 按有效配置分组，槽位 0 使用旧备注，升级时直接接管历史面板（panel_id 保持不变）；
+     * 2. 优先按备注匹配面板，匹配不到就复用一个空闲受管面板并原位更新；
+     * 3. 只有受管面板数量不够时才新建；
+     * 4. 最后对齐复用面板的关联群，再清理多余的历史面板。
+     *
+     * @return true 表示本次同步没有出现创建/更新失败（目标群对齐失败只记日志，不影响返回值）。
+     */
     fun syncGroupPanels(
         starter: Starter,
         groupOpenIds: List<String>,
         allBuiltInCommands: Collection<RegisteredCommand>,
         customCommands: Collection<RegisteredCommand> = emptyList()
-    ) {
-        val plugin = BotShared.getPlugin() ?: return
+    ): Boolean {
+        val plugin = BotShared.getPlugin() ?: return false
         val groups = groupOpenIds.map(String::trim).filter(String::isNotEmpty).distinct()
         if (groups.isEmpty()) {
             plugin.log_warning("面板同步跳过: 未配置群 OpenId")
-            return
+            return true
         }
 
-        try {
+        return try {
             val start0 = starter.APPLICATION.INSTANCE.contextManager.getContextEntity(Start0::class.java)
             val token = start0.accessToken
             if (token == null) {
                 plugin.log_warning("面板同步跳过: accessToken 为空")
-                return
+                return true
             }
             val authHeader = "QQBot $token"
 
@@ -143,7 +176,7 @@ object MenuManager {
                     }
                 }
                 // QQ 写操作限频 10 QPM，多面板时主动留间隔
-                if (profiles.size > 1) Thread.sleep(700)
+                if (profiles.size > 1) Thread.sleep(PANEL_WRITE_INTERVAL_MS)
             }
 
             if (succeededProfiles == 0) {
@@ -157,7 +190,8 @@ object MenuManager {
             val stale = managed.filter { it.id !in usedPanelIds }
             stale.take(MAX_DUPLICATE_DELETES_PER_SYNC).forEach {
                 runCatching { deletePanel(authHeader, it.id) }
-                if (profiles.size + stale.size > 1) Thread.sleep(700)
+                    .onFailure { error -> plugin.log_warning("删除历史指令面板失败 (${it.id}): ${error.message}") }
+                if (stale.size > 1) Thread.sleep(PANEL_WRITE_INTERVAL_MS)
             }
             if (stale.size > MAX_DUPLICATE_DELETES_PER_SYNC) {
                 plugin.log_warning(
@@ -165,6 +199,7 @@ object MenuManager {
                         "$MAX_DUPLICATE_DELETES_PER_SYNC 个；下次同步会继续清理"
                 )
             }
+            !createFailed
         } catch (error: Exception) {
             plugin.log_error("指令面板同步失败: ${error.message}（现有面板已保留，不会导致面板消失）")
         }
@@ -403,7 +438,7 @@ object MenuManager {
     private fun parsePanelRecord(value: JSONObject): PanelRecord? {
         val id = value.getString("panel_id") ?: return null
         val panel = value.getJSONObject("panel")
-        val remark = panel?.getString("remark") ?: value.getString("remark").orEmpty()
+        val remark = (panel?.getString("remark") ?: value.getString("remark").orEmpty()).trim()
         val targets = value.getJSONArray("group_openids")?.mapNotNull { it?.toString() }.orEmpty()
         // version 在详情响应里顶层和 panel 内各有一份，两个位置都认
         val version = value.getInteger("version") ?: panel?.getInteger("version")
@@ -520,8 +555,9 @@ object MenuManager {
             } else {
                 ""
             }
+            val detail = if (!response.httpSuccess) "HTTP ${response.status}" else (response.businessError ?: "业务错误")
             throw IllegalStateException(
-                "创建指令面板失败，HTTP ${response.status}: ${response.body}$hint"
+                "创建指令面板失败，$detail: ${response.body}$hint"
             )
         }
         val result = JSON.parseObject(response.body) ?: return null
@@ -558,7 +594,7 @@ object MenuManager {
         }
     }
 
-    private data class PanelRecord(
+    internal data class PanelRecord(
         val id: String,
         val remark: String,
         val groupOpenIds: List<String>,
@@ -569,7 +605,19 @@ object MenuManager {
     )
 
     private data class ApiResponse(val status: Int, val body: String) {
-        val success: Boolean get() = status in 200..299
+        /** 仅表示 HTTP 层成功；QQ 接口可能返回 200 + 业务错误码，需结合 [businessError] 判断。 */
+        val httpSuccess: Boolean get() = status in 200..299
+
+        /**
+         * 从响应体提取业务错误信息。
+         *
+         * QQ 开放平台接口在 HTTP 200 时也可能返回 `{"code":...,"message":"..."}` 表示失败；
+         * 这类错误若被当作成功，会导致“日志成功/能查到面板但客户端不可见”等问题。
+         */
+        val businessError: String? by lazy { detectBusinessError() }
+
+        /** HTTP 与业务均成功。 */
+        val success: Boolean get() = httpSuccess && businessError == null
 
         /**
          * 这两种都值得原样重试：
@@ -580,18 +628,55 @@ object MenuManager {
             get() = body.contains("30019") || body.contains("30009")
 
         fun requireSuccess(action: String) {
-            if (!success) {
-                val hint = when {
-                    body.contains("30013") ->
-                        "；请同时检查面板总数、单面板条目数、命令名（显示宽度 14）和描述（显示宽度 30）"
-                    body.contains("30019") ->
-                        "；面板版本冲突，请稍后重试"
-                    body.contains("30009") ->
-                        "；面板操作进行中，官方写操作限频 10 QPM，请稍后重试"
-                    else -> ""
-                }
-                throw IllegalStateException("$action 失败，HTTP $status: $body$hint")
+            if (success) return
+            val detail = when {
+                !httpSuccess -> "HTTP $status"
+                else -> businessError ?: "业务错误"
             }
+            val hint = when {
+                body.contains("30013") ->
+                    "；请同时检查面板总数、单面板条目数、命令名（显示宽度 14）和描述（显示宽度 30）"
+                body.contains("30019") ->
+                    "；面板版本冲突，请稍后重试"
+                body.contains("30009") ->
+                    "；面板操作进行中，官方写操作限频 10 QPM，请稍后重试"
+                else -> ""
+            }
+            throw IllegalStateException("$action 失败，$detail: $body$hint")
+        }
+
+        private fun detectBusinessError(): String? {
+            if (!httpSuccess) return null
+            val text = body.trim()
+            if (text.isEmpty()) return null
+            val obj = runCatching { JSON.parseObject(text) }.getOrNull() ?: return null
+            // 常见错误格式：{"code":50001,"message":"..."} / {"err_code":...,"errmsg":"..."}
+            val code = obj.getInteger("code")
+                ?: obj.getInteger("err_code")
+                ?: obj.getInteger("retcode")
+                ?: obj.getInteger("error_code")
+                ?: obj.getString("code")?.toIntOrNull()
+                ?: obj.getString("err_code")?.toIntOrNull()
+            if (code != null && code != 0) {
+                val msg = obj.getString("message")
+                    ?: obj.getString("msg")
+                    ?: obj.getString("errmsg")
+                    ?: obj.getString("error")
+                    ?: "未知错误"
+                return "code=$code $msg"
+            }
+            val errMsg = obj.getString("message") ?: obj.getString("msg") ?: obj.getString("errmsg")
+            val hasSuccessPayload = obj.containsKey("panel_id") ||
+                obj.containsKey("records") ||
+                obj.containsKey("panel") ||
+                obj.containsKey("data") ||
+                obj.containsKey("next_cursor") ||
+                obj.containsKey("is_end")
+            if (!errMsg.isNullOrBlank() && !hasSuccessPayload) {
+                // 无明确成功字段且带错误描述，保守判定为失败
+                return errMsg
+            }
+            return null
         }
     }
 }
