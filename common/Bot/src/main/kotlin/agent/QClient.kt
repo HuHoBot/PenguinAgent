@@ -260,9 +260,23 @@ object QClient {
         }
     }
 
+    /** Optional SDK hook: absent in older qqpd-bot-java builds, so resolve it reflectively. */
+    private fun installSequenceAllocator(allocator: ((io.github.kloping.qqbot.api.v2.GroupMessageEvent) -> Int)?) {
+        runCatching {
+            val type = Class.forName("io.github.kloping.qqbot.impl.message.v2.BaseGroupMessageEvent")
+            val method = type.getMethod("setSequenceAllocator", java.util.function.BiFunction::class.java)
+            val fn = allocator?.let { block ->
+                java.util.function.BiFunction<io.github.kloping.qqbot.api.v2.GroupMessageEvent, Int, Int> { event, fallback ->
+                    runCatching { block(event) }.getOrDefault(fallback)
+                }
+            }
+            method.invoke(null, fn)
+        }
+    }
+
     @Synchronized fun launchClient(appid: String, secret: String, logFilePattern: String? = null) {
         val plugin = BotShared.getPlugin()
-        io.github.kloping.qqbot.impl.message.v2.BaseGroupMessageEvent.setSequenceAllocator { event, _ ->
+        installSequenceAllocator { event ->
             val group = event.groupOpenId ?: event.groupId
             passiveReplies.take(group, plugin.getGroupPassiveReplyLimit(group), event.rawMessage.id)?.second
                 ?: throw IllegalStateException("该群消息的被动回复窗口已过期或额度耗尽，请重新发送查询；不要重用 msg_seq")
@@ -937,7 +951,7 @@ object QClient {
         try {
             if (::starter.isInitialized) starter.shutdown()
         } finally {
-            io.github.kloping.qqbot.impl.message.v2.BaseGroupMessageEvent.setSequenceAllocator(null)
+            installSequenceAllocator(null)
             passiveReplies.clear()
             QqBotConsoleOutputFilter.uninstall()
         }
