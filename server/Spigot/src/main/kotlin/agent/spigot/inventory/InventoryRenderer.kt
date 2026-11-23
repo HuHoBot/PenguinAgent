@@ -216,6 +216,28 @@ object InventoryRenderer {
     }
 
     /** Render a single slot as a compact, self-contained item card for administrator queries. */
+    private val ENCHANT_CN = mapOf(
+        "protection" to "保护", "fire_protection" to "火焰保护", "feather_falling" to "摔落保护",
+        "blast_protection" to "爆炸保护", "projectile_protection" to "弹射物保护",
+        "respiration" to "水下呼吸", "aqua_affinity" to "水下速掘", "thorns" to "荆棘",
+        "depth_strider" to "深海探索者", "frost_walker" to "冰霜行者", "soul_speed" to "灵魂疾行",
+        "swift_sneak" to "迅捷潜行", "sharpness" to "锋利", "smite" to "亡灵杀手",
+        "bane_of_arthropods" to "节肢杀手", "knockback" to "击退", "fire_aspect" to "火焰附加",
+        "looting" to "抢夺", "sweeping" to "横扫之刃", "efficiency" to "效率",
+        "silk_touch" to "精准采集", "unbreaking" to "耐久", "fortune" to "时运",
+        "power" to "力量", "punch" to "冲击", "flame" to "火矢", "infinity" to "无限",
+        "luck_of_the_sea" to "海之眷顾", "lure" to "饵钓", "loyalty" to "忠诚",
+        "impaling" to "穿刺", "riptide" to "激流", "channeling" to "引雷",
+        "multishot" to "多重射击", "quick_charge" to "快速装填", "piercing" to "穿透",
+        "mending" to "经验修补", "vanishing_curse" to "绑定诅咒", "binding_curse" to "消失诅咒"
+    )
+
+    private fun roman(level: Int): String = when (level) {
+        1 -> "I"; 2 -> "II"; 3 -> "III"; 4 -> "IV"; 5 -> "V"
+        6 -> "VI"; 7 -> "VII"; 8 -> "VIII"; 9 -> "IX"; 10 -> "X"
+        else -> level.toString()
+    }
+
     private fun durabilityText(item: ItemStack): String {
         val max = item.type.maxDurability.toInt()
         if (max <= 0) return "无"
@@ -258,8 +280,10 @@ object InventoryRenderer {
             if (meta?.hasEnchants() == true) {
                 y += 8
                 g.drawString("附魔：", 350, y); y += 28
-                meta.enchants.entries.take(8).forEach { enchant ->
-                    g.drawString("• ${enchant.key.key} ${enchant.value}", 370, y); y += 26
+                for ((enchantment, level) in meta.enchants.entries.take(8)) {
+                    val key = enchantment.key.key
+                    val label = ENCHANT_CN[key] ?: key
+                    g.drawString("• $label ${roman(level)}", 370, y); y += 26
                 }
             }
             val damage = (meta as? Damageable)?.damage ?: 0
