@@ -197,8 +197,7 @@ object QrLoginManager {
                     active.message = "授权成功，正在连接机器人..."
                     plugin.log_info("")
                     plugin.log_info("========== 扫码成功 ==========")
-                    plugin.log_info("AppID: ${credentials.appId}")
-                    plugin.log_info("Secret: ${credentials.appSecret.take(6)}****")
+                    plugin.log_info("机器人凭据已保存（内容不显示）")
                     // 凭据已写入，走正常启动路径（异步拉起客户端）
                     plugin.launchQqClient()
                     return

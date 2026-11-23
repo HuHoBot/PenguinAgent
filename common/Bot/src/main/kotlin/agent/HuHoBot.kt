@@ -112,6 +112,8 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
         val logger = this
         LoggerImpl.setLogSink(object : LoggerImpl.LogSink {
             override fun log(message: String, level: Int) {
+                // SDK 的连接日志会带机器人昵称/AppID，公开日志中一律不落。
+                if (message.contains("connected!") || message.contains("Bot(")) return
                 when (level) {
                     LoggerImpl.LogSink.ERROR_LEVEL -> logger.log_error("QQ SDK: ${LogSafety.clean(message)}")
                     LoggerImpl.LogSink.DEBUG_LEVEL -> logger.log_debug("QQ SDK: ${LogSafety.clean(message)}")

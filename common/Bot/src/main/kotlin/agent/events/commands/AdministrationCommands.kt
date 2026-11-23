@@ -175,7 +175,7 @@ class AdministrationCommands : CommandSupport() {
         if (!requireAdmin(plugin, event)) return
         val target = targetOpenId(event, params)
         if (target.isNullOrBlank()) {
-            reply(plugin, event, "用法：@某人 踢人（或 踢人 <openid>）")
+            reply(plugin, event, "用法：/踢人 @某人（群里 @机器人 后直接发也可以）")
             return
         }
         val starter = agent.QClient.getStarter()
@@ -214,10 +214,15 @@ class AdministrationCommands : CommandSupport() {
 
     /** 取 @ 的成员 openid，没有 @ 时用参数文本（openid）。 */
     private fun targetOpenId(event: GroupMessageEvent, params: String): String? {
-        val mention = runCatching {
-            event.rawMessage.mentions?.firstOrNull()?.id
+        // 群聊 v2 事件的 @ 在 metadata.mentions 中，rawMessage.mentions 常为空。
+        val mentioned = runCatching {
+            val list = event.metadata?.getJSONArray("mentions") ?: return@runCatching null
+            (0 until list.size).mapNotNull { i ->
+                val m = list.getJSONObject(i) ?: return@mapNotNull null
+                if (m.getBoolean("is_you") == true) null else m.getString("member_openid")
+            }.firstOrNull { !it.isNullOrBlank() }
         }.getOrNull()
-        return mention?.takeIf(String::isNotBlank) ?: params.trim().takeIf(String::isNotBlank)
+        return mentioned?.takeIf(String::isNotBlank) ?: params.trim().takeIf(String::isNotBlank)
     }
 
 }
