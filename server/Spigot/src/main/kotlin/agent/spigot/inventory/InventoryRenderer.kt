@@ -216,6 +216,28 @@ object InventoryRenderer {
     }
 
     /** Render a single slot as a compact, self-contained item card for administrator queries. */
+    /** 读取潜影盒与收纳袋内的物品；其它物品返回空列表。 */
+    private fun containerContents(meta: org.bukkit.inventory.meta.ItemMeta?): List<ItemStack> {
+        if (meta == null) return emptyList()
+        return runCatching {
+            if (meta is org.bukkit.inventory.meta.BlockStateMeta) {
+                val state = meta.blockState
+                if (state is org.bukkit.block.ShulkerBox) {
+                    return@runCatching state.inventory.contents.filterNotNull().filter { !it.type.isAir }
+                }
+            }
+            // 收纳袋在较新版本才有 BundleMeta，用反射兼容旧 API。
+            val isBundle = meta.javaClass.methods.firstOrNull { it.name == "isBundle" && it.parameterCount == 0 }
+                ?.invoke(meta) as? Boolean
+            if (isBundle == true) {
+                val items = meta.javaClass.methods.firstOrNull { it.name == "getItems" && it.parameterCount == 0 }
+                    ?.invoke(meta) as? Array<*>
+                return@runCatching items?.filterIsInstance<ItemStack>()?.filter { !it.type.isAir }.orEmpty()
+            }
+            emptyList()
+        }.getOrDefault(emptyList())
+    }
+
     private val ENCHANT_CN = mapOf(
         "protection" to "保护", "fire_protection" to "火焰保护", "feather_falling" to "摔落保护",
         "blast_protection" to "爆炸保护", "projectile_protection" to "弹射物保护",
@@ -285,6 +307,18 @@ object InventoryRenderer {
                     val label = ENCHANT_CN[key] ?: key
                     g.drawString("• $label ${roman(level)}", 370, y); y += 26
                 }
+            }
+            val contents = containerContents(meta)
+            if (contents.isNotEmpty()) {
+                y += 6
+                g.drawString("内容物（${contents.size} 件）：", 350, y); y += 26
+                contents.take(6).forEach { inside ->
+                    val insideName = inside.itemMeta?.takeIf { m -> m.hasDisplayName() }?.displayName
+                        ?: inside.type.name.lowercase().replace('_', ' ')
+                    g.drawString("• ${insideName.replace(Regex("§."), "").take(24)} ×${inside.amount}", 370, minOf(590, y))
+                    y += 24
+                }
+                if (contents.size > 6) { g.drawString("… 还有 ${contents.size - 6} 件", 370, minOf(590, y)) }
             }
             val damage = (meta as? Damageable)?.damage ?: 0
             if (item.type.maxDurability > 0) {
