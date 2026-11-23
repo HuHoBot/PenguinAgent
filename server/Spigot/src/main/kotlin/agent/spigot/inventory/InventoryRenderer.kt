@@ -216,15 +216,22 @@ object InventoryRenderer {
     }
 
     /** Render a single slot as a compact, self-contained item card for administrator queries. */
+    private fun durabilityText(item: ItemStack): String {
+        val max = item.type.maxDurability.toInt()
+        if (max <= 0) return "无"
+        val damage = (item.itemMeta as? org.bukkit.inventory.meta.Damageable)?.damage ?: 0
+        return "${max - damage}/$max"
+    }
+
     fun renderSingleItem(snapshot: InventorySnapshot, item: ItemStack, slot: Int, enderChest: Boolean): ByteArray? {
         if (item.type.isAir || item.amount <= 0) return null
         val image = BufferedImage(960, 620, BufferedImage.TYPE_INT_ARGB)
         val g = image.createGraphics()
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g.paint = GradientPaint(0f, 0f, Color(31, 42, 62, 255), 960f, 620f, Color(75, 58, 105, 255))
+            g.paint = GradientPaint(0f, 0f, Color(244, 249, 253), 960f, 620f, Color(233, 240, 252))
             g.fillRect(0, 0, 960, 620)
-            g.color = Color(255, 255, 255, 220)
+            g.color = Color(38, 54, 76)
             g.font = agent.spigot.manager.FontManager.font(uiFontFamily, Font.BOLD, 30)
             g.drawString(if (enderChest) "末影箱槽位 $slot" else "背包槽位 $slot", 44, 54)
             val texture = getTexture(item) ?: fallbackTexture
@@ -236,13 +243,13 @@ object InventoryRenderer {
                     g.drawRoundRect(54, 104, 240, 240, 24, 24)
                 }
             }
-            g.color = Color.WHITE
+            g.color = Color(38, 54, 76)
             g.font = agent.spigot.manager.FontManager.font(uiFontFamily, Font.BOLD, 28)
             val meta = item.itemMeta
             val name = if (meta?.hasDisplayName() == true) meta.displayName else item.type.name.lowercase().replace('_', ' ')
             g.drawString(name.replace(Regex("§."), ""), 350, 136)
             g.font = agent.spigot.manager.FontManager.font(uiFontFamily, Font.PLAIN, 22)
-            g.drawString("数量：${item.amount}    Material：${item.type.key}", 350, 178)
+            g.drawString("数量：${item.amount}    耐久：${durabilityText(item)}", 350, 178)
             var y = 222
             meta?.lore?.take(8)?.forEach { line ->
                 g.drawString(line.replace(Regex("§."), "").take(42), 350, y)
