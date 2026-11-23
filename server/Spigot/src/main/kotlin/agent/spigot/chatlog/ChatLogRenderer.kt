@@ -39,7 +39,9 @@ object ChatLogRenderer {
         val family = FontManager.chooseFont("")
         val title = if (playerFilter.isNullOrBlank()) "服务器聊天记录" else "$playerFilter 的聊天记录"
         val header = 112
-        val listH = (entries.size * (CARD_H + GAP)).coerceAtLeast(CARD_H)
+        val perMessageWidth = WIDTH - M * 2 - 40
+        val lineCounts = entries.map { messageLines(it.message, perMessageWidth) }
+        val listH = lineCounts.sumOf { cardHeight(it) + GAP }.coerceAtLeast(cardHeight(1))
         val footer = 74
         val height = header + listH + footer
         val image = BufferedImage(WIDTH, height, BufferedImage.TYPE_INT_RGB)
@@ -61,20 +63,23 @@ object ChatLogRenderer {
 
             var y = header
             if (entries.isEmpty()) {
-                card(g, M, y, WIDTH - M * 2, CARD_H + 16)
+                card(g, M, y, WIDTH - M * 2, cardHeight(1) + 16)
                 g.font = font(family, Font.PLAIN, 20); g.color = MUTED
                 g.drawString("最近没有可显示的公共聊天。", M + 22, y + 40)
             }
             val stamp = SimpleDateFormat("HH:mm:ss", Locale.ROOT)
-            for (entry in entries) {
-                card(g, M, y, WIDTH - M * 2, CARD_H)
+            entries.forEachIndexed { index, entry ->
+                val lines = lineCounts[index]
+                val height = cardHeight(lines)
+                card(g, M, y, WIDTH - M * 2, height)
                 drawRich(g, entry.display.ifBlank { entry.name }, M + 20, y + 26, 520, 17, family, 1, boldFirst = true)
                 g.font = font(family, Font.PLAIN, 13); g.color = MUTED
                 val time = stamp.format(Date(entry.at))
                 g.drawString(time, WIDTH - M - 20 - g.fontMetrics.stringWidth(time), y + 24)
                 val text = if (entry.message.length > maxLength) entry.message.take(maxLength) + "…" else entry.message
-                drawRich(g, text, M + 20, y + 50, WIDTH - M * 2 - 40, 18, family, 1)
-                y += CARD_H + GAP
+                // 长消息在卡片内换行显示，避免一条占满或过早省略。
+                drawRich(g, text, M + 20, y + 50, perMessageWidth, 18, family, lines)
+                y += height + GAP
             }
 
             g.font = font(family, Font.PLAIN, 14); g.color = MUTED
@@ -119,6 +124,15 @@ object ChatLogRenderer {
             g.drawString("…", minOf(px, x + w - 10), base + line * (size + 6))
         }
     }
+
+    /** Conservative estimate: CJK glyphs are about one font-size wide. */
+    private fun messageLines(text: String, width: Int): Int {
+        if (text.isEmpty()) return 1
+        val perLine = (width / 18).coerceAtLeast(12)
+        return ((text.length + perLine - 1) / perLine).coerceIn(1, 4)
+    }
+
+    private fun cardHeight(lines: Int): Int = 38 + lines * 22
 
     private fun card(g: Graphics2D, x: Int, y: Int, w: Int, h: Int) {
         val shape = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat(), 16f, 16f)
