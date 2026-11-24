@@ -1,5 +1,19 @@
 # HuHoBot Penguin 1.24 使用手册
 
+## 目录
+1. 快速开始
+2. 目录结构
+3. 配置分区
+4. 命令
+5. QQ 平台限制
+6. 扩展
+7. 排错速查
+8. 验证与版本
+9. 从零开服速查
+10. 配置模块说明
+11. 扩展编写
+12. 常见问题
+
 本文件由插件自动生成。如果你修改了它，插件会保留你的版本，并把新版作为 `Q&A.md.new` 放在旁边。
 
 ## 1. 快速开始
@@ -126,3 +140,66 @@ SDK 控制台输出默认屏蔽；排障时可临时关闭，但不要把带 tok
 
 ## 8. 验证与版本
 1.24 主包通过全部组件/回归测试、打包 JS 回调烟测，并完成启动、重载与指令路由回归。生产 QQ 投递、踢人与撤回需要你自己的凭据与群权限验证。
+
+## 9. 从零开服速查
+
+1. 准备 Java 17 或更高版本的服务器核心（Paper、Purpur、Leaf 等均可）。
+2. 把主包放入 `plugins/`，启动一次，确认生成 `plugins/HuHoBotPenguin/`。
+3. 在 QQ 开放平台创建机器人，取得 AppID 与 Secret，填入 `config.yml` 的 `bot` 段；也可以启动后扫码授权。
+4. 把机器人拉进群，群号 openid 可留空自动收录，或手动填入 `bot.groups`。
+5. 执行 `/huhobot reload`，在群里发 `/查在线` 验证图片。
+
+## 10. 配置模块说明
+
+- **bot**：机器人凭据、群列表、控制台日志开关。
+- **online-list**：查在线图片的标题、地址、列数、玩家上限、皮肤来源与缓存。
+- **inventory**：背包/末影箱背景、单格物品图与自定义背景。
+- **chat-log**：`/聊天记录` 与 `/玩家聊天` 的页大小、保留条数、单条长度。
+- **message**：被动优先或主动发送、被动额度配置。
+- **moderation**：黑名单、违禁词、AI 复核、自动撤回。
+- **agent**：服务器的 AI 助手（步数、等待上限、模型与工具白名单）。
+- **chat-ai**：群聊 AI 的模型、触发词、上下文与工具。
+- **tts**：语音模型、密钥、公网地址与每轮条数。
+- **network**：插件网络请求代理。
+
+每一项上方都有中文说明；不确定时保持默认值即可。
+
+## 11. 扩展编写
+
+最小结构：
+
+```
+plugins/HuHoBotPenguin/addons/hello/
+├── metadata.yaml
+└── main.js
+```
+
+`metadata.yaml`：
+
+```yaml
+name: hello
+version: '1.0.0'
+author: '你的名字'
+description: '问候示例'
+entry: main.js
+```
+
+`main.js`：
+
+```javascript
+Bird.log('hello ready');
+Bird.onCommand('hello', function(sender) {
+    Bird.tell(sender, '你好，' + sender.getName());
+});
+```
+
+Lua 用 `main.lua`，Java 用 `Main.java` 实现 `AddonProgram`。示例文件在 `data/guide/`，复制后修改，不会自动启用。重载命令：`/huhobot scripts reload hello`。
+
+## 12. 常见问题
+
+- **图片不显示**：检查字体是否加载完成、`online-list.enabled` 是否为 true。
+- **头像是默认皮肤**：离线服默认使用内置皮肤；安装皮肤插件或关闭 `offline-default-skins`。
+- **群里命令没反应**：确认机器人已进群、`bot.groups` 正确、命令未被其它插件占用。
+- **AI 不回复**：检查 `agent` 或 `chat-ai` 的接口地址、密钥、模型名与工具白名单。
+- **语音失败**：`tts.public-base-url` 必须是公网可访问地址，且音频格式需被 QQ 接受。
+- **配置改坏**：插件会保留旧配置并在日志提示行号；修复 YAML 后重载即可。
