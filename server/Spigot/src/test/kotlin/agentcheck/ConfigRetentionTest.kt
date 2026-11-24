@@ -51,6 +51,25 @@ my-own-key: keep-me-too
         assertEquals(out,ConfigUpgrade.transform(out,configText))
     }
 
+    @Test fun earliestConfigUpgradesToEveryCurrentKeyWithoutLosingValues() {
+        val earliest = "config-version: 1\nserverName: 'Legacy Name'\nbot:\n  app-id: '123456'\n  groups:\n  - OLDGROUP\n"
+        val upgraded = ConfigUpgrade.transform(earliest, configText)
+        val current = YamlConfiguration().apply { loadFromString(upgraded) }
+        val defaults = YamlConfiguration().apply { loadFromString(configText) }
+        val missing = defaults.getValues(true).keys.filter { key ->
+            defaults.get(key) !is org.bukkit.configuration.ConfigurationSection &&
+                !key.contains('.') || true
+        }.filter { key ->
+            defaults.get(key) !is org.bukkit.configuration.ConfigurationSection &&
+                !current.contains(key, true) && !current.contains(key, false)
+        }
+        assertTrue(missing.isEmpty(), "missing keys after upgrade: ${missing.take(10)}")
+        assertEquals("Legacy Name", current.getString("serverName"))
+        assertEquals("123456", current.getString("bot.app-id"))
+        assertEquals(listOf("OLDGROUP"), current.getStringList("bot.groups"))
+        assertEquals(ConfigUpgrade.VERSION, current.getInt("config-version"))
+    }
+
     @Test fun patchingZeroIndentListsAndFoldedScalarsStaysValidYaml() {
         val raw = """config-version: 19
 bot:
