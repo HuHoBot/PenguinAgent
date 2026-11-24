@@ -74,6 +74,7 @@ class AvatarCache(
     private val provider = SkinSources(sources,connectTimeoutMs,readTimeoutMs)
     fun close(){provider.close()}
     private val failed = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val inflight = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<ByteArray?>>()
     private fun load(player: OnlineListPlayer): BufferedImage? {
         val key = player.uuid + ":" + player.skinUrl.orEmpty() + ":" + player.headUrl
         cache[key]?.let { return it }
@@ -106,7 +107,16 @@ class AvatarCache(
 
     private fun download(url: String): BufferedImage? {
         SkinDiskCache.get(url)?.let { SkinSources.image(it) }?.let { return it }
-        val bytes = (if (fetcher != null) fetcher.invoke(url) else provider.fetchUrl(url)) ?: return null
+        val future = inflight.computeIfAbsent(url) {
+            java.util.concurrent.CompletableFuture<ByteArray?>().also { target ->
+                java.util.concurrent.CompletableFuture.runAsync({
+                    try { target.complete(if (fetcher != null) fetcher.invoke(url) else provider.fetchUrl(url)) }
+                    catch (error: Throwable) { target.completeExceptionally(error) }
+                    finally { inflight.remove(url) }
+                })
+            }
+        }
+        val bytes = runCatching { future.get(8, java.util.concurrent.TimeUnit.SECONDS) }.getOrNull() ?: return null
         SkinDiskCache.put(url, bytes)
         return SkinSources.image(bytes)
     }

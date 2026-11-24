@@ -98,3 +98,23 @@ class SchedulerModeTest {
         assertFalse(agent.spigot.manager.FoliaScheduler.isFolia())
     }
 }
+
+
+class JoinQuitMessageTest {
+    @Test fun joinAndQuitFormatsAlwaysContainThePlayerName() {
+        val p = object : agent.provider.ConfigProvider {
+            override fun getChatFormat() = agent.provider.ChatFormat("[游戏] {name}: {message}", "[QQ] {name}: {message}", true, "")
+            override fun getMotd() = agent.provider.Motd("", 0, "", "", false, false)
+            override fun getBotName() = "test"
+            override fun getPlatform() = "test"
+            override fun getPluginVersion() = "test"
+        }
+        val names = listOf("Astra", "Steve_123", "玩家名")
+        for (name in names) {
+            val join = p.formatPlayerJoinMessage(name)
+            val quit = p.formatPlayerQuitMessage(name)
+            assertTrue(join.contains(name), join)
+            assertTrue(quit.contains(name), quit)
+        }
+    }
+}
