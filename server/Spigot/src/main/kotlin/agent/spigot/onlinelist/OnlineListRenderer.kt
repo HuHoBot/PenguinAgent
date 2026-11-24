@@ -203,7 +203,11 @@ class OnlineListRenderer(
         y+=rich(g,"<bold>$count</bold>",x,y+20,w,17,2,draw)*23+6
         // 两行 JSON/MiniMessage MOTD 换行保留；侧栏窄时可自然延伸，所有已测行计入高度。
         if(s.motd.isNotBlank()) {
-            y+=rich(g,s.motd.replace("\\n","\n"),x,y+20,w,17,8,draw)*23+7
+            val motdPlain=McTextParser.plainText(s.motd)
+            // 长 MOTD：缩小字号并允许多行，尽量完整呈现，不挤占下方信息。
+            val motdSize=if(motdPlain.length>90)15 else 17
+            val motdLines=if(motdPlain.length>90)12 else 8
+            y+=rich(g,s.motd.replace("\\n","\n"),x,y+20,w,motdSize,motdLines,draw)*(motdSize+6)+7
         }
         if(s.serverIp.isNotBlank()) { y+=rich(g,"<bold>服务器地址：</bold>${s.serverIp}",x,y+20,w,17,3,draw)*23+7 }
         for(line in customLines.filter { McTextParser.plainText(it).isNotBlank() }.take(6))
