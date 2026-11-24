@@ -1,7 +1,5 @@
 # HuHoBot Agent 配置；详细解释与示例见 data/Q&A.txt。
 config-version: 19
-# WebUI 监听端口。默认只绑定本机回环地址。
-webui-port: 5678
 # 服务器名称显示在查在线图片、入服提示和服务器通知中。支持 MiniMessage（如 <gradient:#22ccee:#aa66ee>名称</gradient>）、§/& 颜色码。请使用单引号包住颜色开头的值。
 serverName: 'HuHoBot'
 # QQ 机器人帐号与允许工作的群列表。
@@ -53,78 +51,22 @@ player-events:
     format: '[游戏] {name} {message}'
     # 采用其它死亡信息插件写入事件的文本（它们可用变量自定义）；关闭时使用内置中文描述。
     use-plugin-message: false
-# 服务器启停与性能通知。
-server-notify:
-  # 是否启用「server-notify」功能。
-  enabled: true
-  # 「服务器状态通知 · 关服通知」设置；按此用途填写，未使用时保持默认值。
-  shutdown:
-    # 是否启用「server-notify.shutdown」功能。
-    enabled: true
-    # 发送的提示文字。
-    message: 服务器已正常关闭
-  # 「服务器状态通知 · 重启通知」设置；按此用途填写，未使用时保持默认值。
-  restart:
-    # 是否启用「server-notify.restart」功能。
-    enabled: true
-    # 发送的提示文字。
-    message: 服务器已重启完成
-  # 「服务器状态通知 · 异常停止通知」设置；按此用途填写，未使用时保持默认值。
-  crash:
-    # 是否启用「server-notify.crash」功能。
-    enabled: true
-    # 发送的提示文字。
-    message: 服务器意外关闭（崩溃或被强制结束），请管理员检查控制台
-  # 时间间隔，单位见配置项名称。
-  restart-window: 180
-  # 「服务器状态通知 · 性能通知」设置；按此用途填写，未使用时保持默认值。
-  performance:
-    # 是否向配置群发送持续性能异常/恢复通知。
-    enabled: true
-    # 连续低于此 TPS 时进入异常判定。
-    tps-threshold: 15.0
-    # 已用堆内存占最大堆内存的比例阈值，范围 0–1。
-    memory-threshold: 0.9
-# Markdown 模板文件映射。
-markdown:
-  # 「Markdown 模板 · 在线查询模板」设置；按此用途填写，未使用时保持默认值。
-  queryOnline: online.md
-# 服务器命令执行方式。
-command-sender: Hybrid
-# 服务器状态查询和 MOTD 输出设置。
-motd:
-  # 查询服务器地址；不会自动扫描公网 IP。
-  server-ip: 127.0.0.1
-  # 服务器端口。
-  server-port: 25565
-  # 外部状态查询 API；留空时使用默认服务。
-  api: ''
-  # 「服务器状态查询 · text」设置；按此用途填写，未使用时保持默认值。
-  text: ''
+# 额外功能开关。
+features:
   # 是否启用本项行为；true 开启，false 关闭。
-  post-img: true
-  # 是否启用本项行为；true 开启，false 关闭。
-  use-markdown: true
-# QQ 绑定、验证及入服限制。
-binding:
-  # 「玩家绑定与入服验证 · 群成员退群检查」设置；按此用途填写，未使用时保持默认值。
-  member-check:
-    # 是否启用「binding.member-check」功能。
-    enabled: false
-    # 检查间隔分钟数。
-    interval-minutes: 30
-    # 「玩家绑定与入服验证 · 群成员退群检查 · 退群通知」设置；按此用途填写，未使用时保持默认值。
-    notify-group: true
-  # 「玩家绑定与入服验证 · 单 QQ 绑定上限」设置；按此用途填写，未使用时保持默认值。
-  max-bindings: 1
-  # 是否启用本项行为；true 开启，false 关闭。
-  require-game-verification: true
-  # 是否启用本项行为；true 开启，false 关闭。
-  force-bind: false
-  # 「玩家绑定与入服验证 · 强制绑定群」列表；每项单独占一行。
-  force-bind-groups: []
-  # 「玩家绑定与入服验证 · 免验证名单」列表；每项单独占一行。
-  verify-exempt: []
+  full-amount: false
+# 消息投递策略。
+# ==================== 消息投递 ====================
+message:
+  # 「消息投递 · 消息发送策略」设置；按此用途填写，未使用时保持默认值。
+  send-policy: auto
+  # 2026-11-17 起，群被动回复有效期为入站后固定 60 分钟；回复不会续期。
+  passive-reply:
+    # 仅填已确认符合「机器人开发者在本群为群主或管理员」条件的群 OpenID。
+    # 这些群每条入站消息最多回复 50 次；未列出的群为 5 次。
+    # 不是「机器人账号本身为管理员」；不要凭 bot_state.member_role 推断。
+    # QQ 平台最终核验资格，配置不能绕过平台限制。不会向这些群额外发送测试消息。
+    enhanced-groups: []
 # 黑名单与消息审核策略。
 # ==================== 审核与黑名单 ====================
 moderation:
@@ -140,36 +82,6 @@ moderation:
     # 默认关闭。打开后停用内置基础词，只使用 data/sensitive-words/*.txt 中的自定义词。
     # 这不会绕过平台审核、机器人权限或QQ/Minecraft协议；风险由服主承担。
     allow-none: false
-# 服务端调度兼容：auto 按运行期类自动判断；hybrid 仅用于同时具备两种调度能力的杂交端。
-compatibility:
-  # auto / paper / folia / hybrid。plugin.yml 的声明不参与运行判断。
-  # folia：区域化调度；paper：传统 Bukkit 调度；hybrid：先区域化，失败才回退。
-  server-mode: auto
-# 服务器最近公共聊天（图片查询，仅内存，不落盘）。
-# ==================== 聊天记录 ====================
-chat-log:
-  # 是否启用 /聊天记录 与 /玩家聊天 图片命令。
-  enabled: true
-  # 内存中保留的最大条数（30-5000）。
-  keep: 300
-  # 每页目标行数（5-100）；超长消息占两行，因此实际条数会减少。
-  page-size: 30
-  # 单条消息在图片中的最大字符数（20-300），超出部分用省略号。
-  max-length: 80
-  # 同一群查询冷却秒数（0-60）。
-  cooldown-seconds: 3
-# 消息投递策略。
-# ==================== 消息投递 ====================
-message:
-  # 「消息投递 · 消息发送策略」设置；按此用途填写，未使用时保持默认值。
-  send-policy: auto
-  # 2026-11-17 起，群被动回复有效期为入站后固定 60 分钟；回复不会续期。
-  passive-reply:
-    # 仅填已确认符合「机器人开发者在本群为群主或管理员」条件的群 OpenID。
-    # 这些群每条入站消息最多回复 50 次；未列出的群为 5 次。
-    # 不是「机器人账号本身为管理员」；不要凭 bot_state.member_role 推断。
-    # QQ 平台最终核验资格，配置不能绕过平台限制。不会向这些群额外发送测试消息。
-    enhanced-groups: []
 # 查在线图片、皮肤来源、名称样式及布局。
 # ==================== 查在线图片 ====================
 online-list:
@@ -258,24 +170,6 @@ online-list:
   custom-lines: []
   # 图片底部文字。
   footer-text: POWERED BY HuHoBot
-# 绑定成功或解绑时执行的白名单命令模板。
-whitelist:
-  # 添加白名单命令模板，可用 {name}。
-  add-command: whitelist add {name}
-  # 移除白名单命令模板，可用 {name}。
-  del-command: whitelist remove {name}
-# 需要过滤的正则表达式列表。
-filter-regex: []
-# 群管理员判断模式与管理员 OpenID。
-admin:
-  # 「管理员识别 · 管理员判断方式」设置；按此用途填写，未使用时保持默认值。
-  mode: both
-  # QQ OpenID 列表。
-  openids: []
-# 额外功能开关。
-features:
-  # 是否启用本项行为；true 开启，false 关闭。
-  full-amount: false
 # 背包图片渲染与自定义背景。
 # ==================== 背包与末影箱图片 ====================
 inventory:
@@ -291,90 +185,19 @@ inventory:
       ender-chest-file: ''
       # 背景适配方式：cover 裁切铺满，stretch 拉伸到画布。
       fit: cover
-# 禁止 AI 或自定义命令执行的服务器命令。
-command-blacklist: []
-# QQ 指令面板显示设置。
-command-panel:
-  # 是否启用本项行为；true 开启，false 关闭。
-  show-admin-commands: true
-# 版本更新提示检查；不控制强制安全更新策略。
-update-check:
-  # 是否启用「update-check」功能。
+# 服务器最近公共聊天（图片查询，仅内存，不落盘）。
+# ==================== 聊天记录 ====================
+chat-log:
+  # 是否启用 /聊天记录 与 /玩家聊天 图片命令。
   enabled: true
-  # 来源地址；仅配置可信的 HTTP(S) 服务。
-  url: ''
-# PlaceholderAPI 占位符支持。
-placeholder-api:
-  # 是否启用「placeholder-api」功能。
-  enabled: true
-# 各项 QQ 机器人命令的启用状态与面板参数。
-commands:
-  # 是否启用 QQ「查信息」命令。
-  查信息: true
-  # 是否启用 QQ「查管理」命令。
-  查管理: true
-  # 是否启用 QQ「加管理」命令。
-  加管理: true
-  # 是否启用 QQ「删管理」命令。
-  删管理: true
-  # 是否启用 QQ「管理方式」命令。
-  管理方式: true
-  # 是否启用 QQ「添加白名单」命令。
-  添加白名单: true
-  # 是否启用 QQ「删除白名单」命令。
-  删除白名单: true
-  # 是否启用 QQ「查白名单」命令。
-  查白名单: true
-  # 是否启用 QQ「查在线」命令。
-  查在线: true
-  # 是否启用 QQ「在线服务器」命令。
-  在线服务器: true
-  # 是否启用 QQ「发信息」命令。
-  发信息: true
-  # 是否启用 QQ「执行命令」命令。
-  执行命令: true
-  # 是否启用 QQ「执行」命令。
-  执行: true
-  # 是否启用 QQ「管理员执行」命令。
-  管理员执行: true
-  # 是否启用 QQ「全量」命令。
-  全量: true
-  # 命令「agent」是否启用。
-  agent:
-    # 是否允许群内调用 Agent 命令。
-    enable: true
-    # 是否把 Agent 命令放进 QQ 指令面板。
-    pushMenu: true
-    # QQ 指令面板中的排序优先级，数值越小越靠前。
-    priority: 0
-  # 是否启用 QQ「我的背包」命令。
-  我的背包: true
-  # 是否启用 QQ「我的末影箱」命令。
-  我的末影箱: true
-  # 是否启用 QQ「背包查看」命令。
-  背包查看: true
-  # 是否启用 QQ「末影箱查看」命令。
-  末影箱查看: true
-  # 是否启用 QQ「锁定」命令。
-  锁定: true
-  # 是否启用 QQ「解除锁定」命令。
-  解除锁定: true
-  # 命令「AI」是否启用。
-  AI:
-    # 是否允许群聊 AI 命令。
-    enable: true
-    # 是否把群聊 AI 命令放进 QQ 指令面板。
-    pushMenu: true
-    # QQ 指令面板中的排序优先级，数值越小越靠前。
-    priority: 1
-# 敏感词 AI 复核接口；未配置时只使用本地规则。
-audit:
-  # 接口基础地址，通常填写到 /v1。
-  base-url: ''
-  # 复核接口密钥（可选）。
-  api-key: ''
-  # 模型名称，需与服务提供方一致。
-  model: gpt-4o-mini
+  # 内存中保留的最大条数（30-5000）。
+  keep: 300
+  # 每页目标行数（5-100）；超长消息占两行，因此实际条数会减少。
+  page-size: 30
+  # 单条消息在图片中的最大字符数（20-300），超出部分用省略号。
+  max-length: 80
+  # 同一群查询冷却秒数（0-60）。
+  cooldown-seconds: 3
 # 服务器管理 Agent 的模型、权限和上下文设置。
 # ==================== AI Agent ====================
 agent:
@@ -486,22 +309,6 @@ agent:
   # 工具名白名单，空列表允许全部；例如 [calculate, random_choice, sleep, get_online_list]。
   # 仅允许列表中的工具执行；不要把需要的管理工具漏掉。
   tools: []
-# 此处可配置自定义命令映射；未使用时保持 null。
-custom-commands: null
-# 「command-aliases」设置；按此用途填写，未使用时保持默认值。
-command-aliases:
-  # 「command-aliases · map」设置；按此用途填写，未使用时保持默认值。
-  map: {}
-  # 「command-aliases · rename」设置；按此用途填写，未使用时保持默认值。
-  rename: {}
-# 插件消息语言，例如 zh_CN 或 en_US。
-language: zh_CN
-# 输出额外诊断日志；排障后建议关闭。
-debug: false
-# 运行状态存储后端；新安装默认 SQLite。
-storage:
-  # 类型名称，按本配置段说明填写。
-  type: sqlite
 # 群聊 AI 的模型、触发词、上下文和可用工具。
 # ==================== 群聊 AI ====================
 chat-ai:
@@ -533,16 +340,6 @@ chat-ai:
     target: 4000
     # 压缩后保留的最近对话条数。
     keep: 20
-# AI 联网搜索服务。
-search:
-  # 「联网搜索 · 搜索服务商」设置；按此用途填写，未使用时保持默认值。
-  provider: none
-  # 接口 URL。
-  api-url: ''
-  # 搜索服务密钥；留空时搜索功能不可用。
-  api-key: ''
-  # 最多返回的搜索结果条数。
-  result-count: 5
 # 语音合成服务及缓存设置。
 # ==================== 语音合成 ====================
 tts:
@@ -572,6 +369,24 @@ tts:
   clone-default-voice: ''
   # 每轮最多生成的语音条数。
   max-per-turn: 2
+# AI 联网搜索服务。
+search:
+  # 「联网搜索 · 搜索服务商」设置；按此用途填写，未使用时保持默认值。
+  provider: none
+  # 接口 URL。
+  api-url: ''
+  # 搜索服务密钥；留空时搜索功能不可用。
+  api-key: ''
+  # 最多返回的搜索结果条数。
+  result-count: 5
+# 敏感词 AI 复核接口；未配置时只使用本地规则。
+audit:
+  # 接口基础地址，通常填写到 /v1。
+  base-url: ''
+  # 复核接口密钥（可选）。
+  api-key: ''
+  # 模型名称，需与服务提供方一致。
+  model: gpt-4o-mini
 # 插件网络请求的代理设置。
 # ==================== 网络 ====================
 network:
@@ -585,10 +400,68 @@ network:
     host: ''
     # 网络端口。
     port: 8080
-# 跨服务器消息桥开关。
-proxy-bridge:
-  # 是否启用「proxy-bridge」功能。
-  enabled: false
+# 运行状态存储后端；新安装默认 SQLite。
+storage:
+  # 类型名称，按本配置段说明填写。
+  type: sqlite
+# 插件消息语言，例如 zh_CN 或 en_US。
+language: zh_CN
+# 输出额外诊断日志；排障后建议关闭。
+debug: false
+# WebUI 监听端口。默认只绑定本机回环地址。
+webui-port: 5678
+# 服务器命令执行方式。
+command-sender: Hybrid
+# 此处可配置自定义命令映射；未使用时保持 null。
+custom-commands: null
+# 「command-aliases」设置；按此用途填写，未使用时保持默认值。
+command-aliases:
+  # 「command-aliases · map」设置；按此用途填写，未使用时保持默认值。
+  map: {}
+  # 「command-aliases · rename」设置；按此用途填写，未使用时保持默认值。
+  rename: {}
+# 版本更新提示检查；不控制强制安全更新策略。
+update-check:
+  # 是否启用「update-check」功能。
+  enabled: true
+  # 来源地址；仅配置可信的 HTTP(S) 服务。
+  url: ''
+# PlaceholderAPI 占位符支持。
+placeholder-api:
+  # 是否启用「placeholder-api」功能。
+  enabled: true
+# 服务器启停与性能通知。
+server-notify:
+  # 是否启用「server-notify」功能。
+  enabled: true
+  # 「服务器状态通知 · 关服通知」设置；按此用途填写，未使用时保持默认值。
+  shutdown:
+    # 是否启用「server-notify.shutdown」功能。
+    enabled: true
+    # 发送的提示文字。
+    message: 服务器已正常关闭
+  # 「服务器状态通知 · 重启通知」设置；按此用途填写，未使用时保持默认值。
+  restart:
+    # 是否启用「server-notify.restart」功能。
+    enabled: true
+    # 发送的提示文字。
+    message: 服务器已重启完成
+  # 「服务器状态通知 · 异常停止通知」设置；按此用途填写，未使用时保持默认值。
+  crash:
+    # 是否启用「server-notify.crash」功能。
+    enabled: true
+    # 发送的提示文字。
+    message: 服务器意外关闭（崩溃或被强制结束），请管理员检查控制台
+  # 时间间隔，单位见配置项名称。
+  restart-window: 180
+  # 「服务器状态通知 · 性能通知」设置；按此用途填写，未使用时保持默认值。
+  performance:
+    # 是否向配置群发送持续性能异常/恢复通知。
+    enabled: true
+    # 连续低于此 TPS 时进入异常判定。
+    tps-threshold: 15.0
+    # 已用堆内存占最大堆内存的比例阈值，范围 0–1。
+    memory-threshold: 0.9
 # 新成员入群审批及自动审批策略。
 join-approve:
   # 是否启用「join-approve」功能。
@@ -597,3 +470,131 @@ join-approve:
   interval-seconds: 30
   # 审批策略列表；空列表代表不运行自动审批规则。
   strategies: []
+
+# QQ 绑定、验证及入服限制。
+binding:
+  # 「玩家绑定与入服验证 · 群成员退群检查」设置；按此用途填写，未使用时保持默认值。
+  member-check:
+    # 是否启用「binding.member-check」功能。
+    enabled: false
+    # 检查间隔分钟数。
+    interval-minutes: 30
+    # 「玩家绑定与入服验证 · 群成员退群检查 · 退群通知」设置；按此用途填写，未使用时保持默认值。
+    notify-group: true
+  # 「玩家绑定与入服验证 · 单 QQ 绑定上限」设置；按此用途填写，未使用时保持默认值。
+  max-bindings: 1
+  # 是否启用本项行为；true 开启，false 关闭。
+  require-game-verification: true
+  # 是否启用本项行为；true 开启，false 关闭。
+  force-bind: false
+  # 「玩家绑定与入服验证 · 强制绑定群」列表；每项单独占一行。
+  force-bind-groups: []
+  # 「玩家绑定与入服验证 · 免验证名单」列表；每项单独占一行。
+  verify-exempt: []
+# 服务器状态查询和 MOTD 输出设置。
+motd:
+  # 查询服务器地址；不会自动扫描公网 IP。
+  server-ip: 127.0.0.1
+  # 服务器端口。
+  server-port: 25565
+  # 外部状态查询 API；留空时使用默认服务。
+  api: ''
+  # 「服务器状态查询 · text」设置；按此用途填写，未使用时保持默认值。
+  text: ''
+  # 是否启用本项行为；true 开启，false 关闭。
+  post-img: true
+  # 是否启用本项行为；true 开启，false 关闭。
+  use-markdown: true
+# Markdown 模板文件映射。
+markdown:
+  # 「Markdown 模板 · 在线查询模板」设置；按此用途填写，未使用时保持默认值。
+  queryOnline: online.md
+# 服务端调度兼容：auto 按运行期类自动判断；hybrid 仅用于同时具备两种调度能力的杂交端。
+compatibility:
+  # auto / paper / folia / hybrid。plugin.yml 的声明不参与运行判断。
+  # folia：区域化调度；paper：传统 Bukkit 调度；hybrid：先区域化，失败才回退。
+  server-mode: auto
+# 绑定成功或解绑时执行的白名单命令模板。
+whitelist:
+  # 添加白名单命令模板，可用 {name}。
+  add-command: whitelist add {name}
+  # 移除白名单命令模板，可用 {name}。
+  del-command: whitelist remove {name}
+# 需要过滤的正则表达式列表。
+filter-regex: []
+# 群管理员判断模式与管理员 OpenID。
+admin:
+  # 「管理员识别 · 管理员判断方式」设置；按此用途填写，未使用时保持默认值。
+  mode: both
+  # QQ OpenID 列表。
+  openids: []
+# 禁止 AI 或自定义命令执行的服务器命令。
+command-blacklist: []
+# QQ 指令面板显示设置。
+command-panel:
+  # 是否启用本项行为；true 开启，false 关闭。
+  show-admin-commands: true
+# 各项 QQ 机器人命令的启用状态与面板参数。
+commands:
+  # 是否启用 QQ「查信息」命令。
+  查信息: true
+  # 是否启用 QQ「查管理」命令。
+  查管理: true
+  # 是否启用 QQ「加管理」命令。
+  加管理: true
+  # 是否启用 QQ「删管理」命令。
+  删管理: true
+  # 是否启用 QQ「管理方式」命令。
+  管理方式: true
+  # 是否启用 QQ「添加白名单」命令。
+  添加白名单: true
+  # 是否启用 QQ「删除白名单」命令。
+  删除白名单: true
+  # 是否启用 QQ「查白名单」命令。
+  查白名单: true
+  # 是否启用 QQ「查在线」命令。
+  查在线: true
+  # 是否启用 QQ「在线服务器」命令。
+  在线服务器: true
+  # 是否启用 QQ「发信息」命令。
+  发信息: true
+  # 是否启用 QQ「执行命令」命令。
+  执行命令: true
+  # 是否启用 QQ「执行」命令。
+  执行: true
+  # 是否启用 QQ「管理员执行」命令。
+  管理员执行: true
+  # 是否启用 QQ「全量」命令。
+  全量: true
+  # 命令「agent」是否启用。
+  agent:
+    # 是否允许群内调用 Agent 命令。
+    enable: true
+    # 是否把 Agent 命令放进 QQ 指令面板。
+    pushMenu: true
+    # QQ 指令面板中的排序优先级，数值越小越靠前。
+    priority: 0
+  # 是否启用 QQ「我的背包」命令。
+  我的背包: true
+  # 是否启用 QQ「我的末影箱」命令。
+  我的末影箱: true
+  # 是否启用 QQ「背包查看」命令。
+  背包查看: true
+  # 是否启用 QQ「末影箱查看」命令。
+  末影箱查看: true
+  # 是否启用 QQ「锁定」命令。
+  锁定: true
+  # 是否启用 QQ「解除锁定」命令。
+  解除锁定: true
+  # 命令「AI」是否启用。
+  AI:
+    # 是否允许群聊 AI 命令。
+    enable: true
+    # 是否把群聊 AI 命令放进 QQ 指令面板。
+    pushMenu: true
+    # QQ 指令面板中的排序优先级，数值越小越靠前。
+    priority: 1
+# 跨服务器消息桥开关。
+proxy-bridge:
+  # 是否启用「proxy-bridge」功能。
+  enabled: false
