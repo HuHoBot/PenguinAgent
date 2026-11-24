@@ -798,18 +798,38 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         }
     }
 
-    override fun getPlayerInventoryItemImage(playerName: String, slot: Int, enderChest: Boolean): ByteArray? {
+    override fun getPlayerInventoryItemImage(playerName: String, slot: Int, enderChest: Boolean, innerSlot: Int): ByteArray? {
         val snapshot = findInventorySnapshot(playerName) ?: return null
         val item = (if (enderChest) snapshot.enderChest.getOrNull(slot) else inventorySlot(snapshot, slot))
             ?: return null
-        return InventoryRenderer.renderSingleItem(snapshot, item, slot, enderChest)
+        val target = if (innerSlot >= 0) containerItems(item).getOrNull(innerSlot) ?: return null else item
+        return InventoryRenderer.renderSingleItem(snapshot, target, slot, enderChest)
     }
 
-    override fun getPlayerInventoryItemInfo(playerName: String, slot: Int, enderChest: Boolean): String? {
+    override fun getPlayerInventoryItemInfo(playerName: String, slot: Int, enderChest: Boolean, innerSlot: Int): String? {
         val snapshot = findInventorySnapshot(playerName) ?: return null
         val item = (if (enderChest) snapshot.enderChest.getOrNull(slot) else inventorySlot(snapshot, slot)) ?: return null
-        return describeItem(item, slot, enderChest)
+        val target = if (innerSlot >= 0) containerItems(item).getOrNull(innerSlot) ?: return null else item
+        val prefix = if (innerSlot >= 0) "容器内槽位：$innerSlot\n" else ""
+        return prefix + describeItem(target, slot, enderChest)
     }
+
+    /** 读取潜影盒/收纳袋内容物；其它物品返回空列表。 */
+    private fun containerItems(item: org.bukkit.inventory.ItemStack): List<org.bukkit.inventory.ItemStack> = runCatching {
+        val meta = item.itemMeta ?: return@runCatching emptyList()
+        if (meta is org.bukkit.inventory.meta.BlockStateMeta) {
+            val state = meta.blockState
+            if (state is org.bukkit.block.ShulkerBox) return@runCatching state.inventory.contents.filterNotNull()
+        }
+        val bundle = meta.javaClass.methods.firstOrNull { it.name == "isBundle" && it.parameterCount == 0 }
+            ?.invoke(meta) as? Boolean
+        if (bundle == true) {
+            val items = meta.javaClass.methods.firstOrNull { it.name == "getItems" && it.parameterCount == 0 }
+                ?.invoke(meta) as? Array<*>
+            return@runCatching items?.filterIsInstance<org.bukkit.inventory.ItemStack>().orEmpty()
+        }
+        emptyList()
+    }.getOrDefault(emptyList())
 
     private fun inventorySlot(snapshot: InventorySnapshot, slot: Int): org.bukkit.inventory.ItemStack? = when {
         slot in 0..35 -> snapshot.storage.getOrNull(slot)

@@ -41,20 +41,25 @@ class InventoryCommands : CommandSupport() {
         sendSingleItem(plugin, event, params, true)
 
     private fun sendSingleItem(plugin: HuHoBot, event: GroupMessageEvent, params: String, ender: Boolean) {
-        val pieces = params.trim().split(Regex("\\s+"), limit = 2)
-        if (pieces.size != 2) {
-            reply(plugin, event, if (ender) "用法：/末影箱物品查询 <玩家名> <0-26>" else "用法：/背包物品查询 <玩家名> <0-40>")
+        val pieces = params.trim().split(Regex("\\s+"), limit = 3)
+        if (pieces.size < 2) {
+            reply(plugin, event, if (ender) "用法：/末影箱物品查询 <玩家名> <0-26> [容器内槽位]" else "用法：/背包物品查询 <玩家名> <0-40> [容器内槽位]")
             return
         }
         val playerName = pieces[0]
         val slot = pieces[1].toIntOrNull()
         val max = if (ender) 26 else 40
+        val innerSlot = pieces.getOrNull(2)?.toIntOrNull() ?: -1
+        if (innerSlot >= 0 && innerSlot > 26) {
+            reply(plugin, event, "参数错误：容器内槽位只能是 0-26")
+            return
+        }
         if (!playerName.matches(Regex("[A-Za-z0-9_]{1,16}")) || slot == null || slot !in 0..max) {
             reply(plugin, event, if (ender) "参数错误：末影箱槽位只能是 0-26" else "参数错误：背包槽位只能是 0-40")
             return
         }
-        val image = plugin.getPlayerInventoryItemImage(playerName, slot, ender)
-        val info = plugin.getPlayerInventoryItemInfo(playerName, slot, ender)
+        val image = plugin.getPlayerInventoryItemImage(playerName, slot, ender, innerSlot)
+        val info = plugin.getPlayerInventoryItemInfo(playerName, slot, ender, innerSlot)
         if (image == null || info == null) {
             reply(plugin, event, "找不到该玩家、槽位为空，或玩家从未在本服产生可读的存档数据。")
             return

@@ -331,8 +331,8 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     fun getPlayerEnderChestImage(playerName: String): ByteArray? = null
 
     /** Render one original inventory slot (0-40) or ender slot (0-26). */
-    fun getPlayerInventoryItemImage(playerName: String, slot: Int, enderChest: Boolean = false): ByteArray? = null
-    fun getPlayerInventoryItemInfo(playerName: String, slot: Int, enderChest: Boolean = false): String? = null
+    fun getPlayerInventoryItemImage(playerName: String, slot: Int, enderChest: Boolean = false, innerSlot: Int = -1): ByteArray? = null
+    fun getPlayerInventoryItemInfo(playerName: String, slot: Int, enderChest: Boolean = false, innerSlot: Int = -1): String? = null
 }
 
 private val DEFAULT_MARKDOWN_TEMPLATES = mapOf(
