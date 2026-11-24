@@ -27,7 +27,9 @@ class PlayerEventFormat(
      * 死亡播报格式，可用 {name}、{player}、{server}、{platform}、{killer}、{message}。
      * {message} 是中文死亡描述（不含死者名，如「被苦力怕杀死了」），{killer} 是击杀者名。
      */
-    val deathFormat: String = "[游戏] {name} 死亡了"
+    val deathFormat: String = "[游戏] {name} {message}",
+    /** 采用其它死亡信息插件写入事件的文本；关闭时使用内置中文描述。 */
+    val usePluginMessage: Boolean = false
 )
 
 class Motd(

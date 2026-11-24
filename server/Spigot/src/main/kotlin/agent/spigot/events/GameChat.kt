@@ -42,7 +42,8 @@ class GameChat : Listener {
         QClient.broadcastPlayerDeath(
             event.entity.name,
             DeathMessage.describe(event),
-            DeathMessage.killerOf(event)
+            DeathMessage.killerOf(event),
+            event.deathMessage
         )
     }
 }

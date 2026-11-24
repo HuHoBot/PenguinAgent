@@ -409,13 +409,17 @@ object QClient {
     }
 
     /** 按配置向所有 QQ 群发送玩家死亡播报。 */
-    fun broadcastPlayerDeath(playerName: String, deathMessage: String?, killerName: String? = null) {
+    fun broadcastPlayerDeath(playerName: String, deathMessage: String?, killerName: String? = null, pluginDeathMessage: String? = null) {
         if (!::starter.isInitialized) return
         val plugin = BotShared.getPlugin()
-        if (!plugin.getPlayerEventFormat().deathEnabled) return
+        val format = plugin.getPlayerEventFormat()
+        if (!format.deathEnabled) return
+        val chosen = if (format.usePluginMessage && !pluginDeathMessage.isNullOrBlank()) {
+            agent.tools.McColours.strip(pluginDeathMessage)
+        } else deathMessage
         val text = plugin.formatPlayerDeathMessage(
             escapeMarkdown(playerName),
-            deathMessage?.let(::escapeMarkdown),
+            chosen?.let(::escapeMarkdown),
             killerName?.let(::escapeMarkdown)
         )
         sendTextToGroups(text, "发送玩家死亡播报")

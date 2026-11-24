@@ -50,6 +50,8 @@ player-events:
     enabled: true
     # 消息/输出格式模板。
     format: '[游戏] {name} {message}'
+    # 采用其它死亡信息插件写入事件的文本（它们可用变量自定义）；关闭时使用内置中文描述。
+    use-plugin-message: false
 # 服务器启停与性能通知。
 server-notify:
   # 是否启用「server-notify」功能。
