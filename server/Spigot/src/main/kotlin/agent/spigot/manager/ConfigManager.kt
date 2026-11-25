@@ -514,6 +514,9 @@ class ConfigManager(
     fun ttsCloneDefaultVoice(): String = plugin.config.getString("tts.clone-default-voice", "") ?: ""
     fun ttsMaxPerTurn(): Int = plugin.config.getInt("tts.max-per-turn", 2)
 
+    /** 语音上传方式：url=需要 public-base-url；qq-upload=尝试通过 QQ 上传（暂受限） */
+    fun getTtsUploadMode(): String = plugin.config.getString("tts.upload-mode", "url")?.trim().orEmpty()
+
     fun chatAiThink(): Boolean = plugin.config.getBoolean("chat-ai.think", false)
 
     fun chatAiThinkLevel(): String = plugin.config.getString("chat-ai.think-level", "") ?: ""
@@ -547,6 +550,10 @@ class ConfigManager(
     fun searchApiKey(): String = plugin.config.getString("search.api-key", "") ?: ""
 
     fun searchResultCount(): Int = plugin.config.getInt("search.result-count", 5).coerceIn(1, 10)
+
+    fun searchFetchPages(): Boolean = plugin.config.getBoolean("search.fetch-pages", false)
+
+    fun searchJsCode(): String = plugin.config.getString("search.js-code", "") ?: ""
 
     // ── 网络代理 ──
 

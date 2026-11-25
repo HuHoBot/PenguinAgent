@@ -127,7 +127,9 @@ object AiApprover {
             provider = config.searchProvider.ifBlank { "none" },
             apiUrl = config.searchApiUrl,
             apiKey = config.searchApiKey,
-            resultCount = 5
+            resultCount = 5,
+            fetchPages = config.searchFetchPages,
+            jsCode = config.searchJsCode
         )
 
     // ── 消息构造（与 AgentManager 保持同构，但独立持有，便于未来差异演化） ──

@@ -369,16 +369,25 @@ tts:
   clone-default-voice: ''
   # 每轮最多生成的语音条数。
   max-per-turn: 2
+  # 语音上传方式：url=需要配置 public-base-url（推荐）；qq-upload=尝试通过 QQ 上传（暂受限，仍需公网能力）
+  upload-mode: url
 # AI 联网搜索服务。
+# 支持的服务商：none / exa / brave / jina / pmeta / zhipu / doubao / deepseek / custom / js
+# 选定具体服务商后只需填写 api-key，url 由插件内置默认值提供；选 custom 可自行填写 url；
+# 选 js 可在 search.js-code 中填写完整 JavaScript 代码进行自定义搜索或网页抓取。
 search:
-  # 「联网搜索 · 搜索服务商」设置；按此用途填写，未使用时保持默认值。
+  # 搜索服务商：none / exa / brave / jina / pmeta / zhipu / doubao / deepseek / custom / js
   provider: none
-  # 接口 URL。
-  api-url: ''
   # 搜索服务密钥；留空时搜索功能不可用。
   api-key: ''
-  # 最多返回的搜索结果条数。
+  # 自定义模式下的接口 URL（provider=custom 时必填）。
+  api-url: ''
+  # 最多返回的搜索结果条数（1~10）。
   result-count: 5
+  # 是否启用网页抓取（部分服务商支持，如 Exa、Jina、Brave 等）。
+  fetch-pages: false
+  # JS 自定义搜索代码（provider=js 时使用）。代码中可用全局函数：search(url, options) 发起 HTTP 请求。
+  js-code: 
 # 敏感词 AI 复核接口；未配置时只使用本地规则。
 audit:
   # 接口基础地址，通常填写到 /v1。

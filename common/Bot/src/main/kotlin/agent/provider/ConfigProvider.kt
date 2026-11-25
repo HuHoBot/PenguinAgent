@@ -386,6 +386,9 @@ interface ConfigProvider {
     /** 每条消息（一轮对话）最多合成语音条数。 */
     fun getTtsMaxPerTurn(): Int = 2
 
+    /** 语音上传方式：url=需要 public-base-url；qq-upload=尝试通过 QQ 上传。 */
+    fun getTtsUploadMode(): String = "url"
+
     /** 发送策略：auto=被动优先(默认)，active=总是主动发送。 */
     fun getSendPolicy(): String = "auto"
 
@@ -428,6 +431,8 @@ interface ConfigProvider {
     fun getSearchApiUrl(): String = ""
     fun getSearchApiKey(): String = ""
     fun getSearchResultCount(): Int = 5
+    fun getSearchFetchPages(): Boolean = false
+    fun getSearchJsCode(): String = ""
 
     // ------------------------------------------------------ 网络代理（AI 请求 / 搜索 / 更新检查）
 

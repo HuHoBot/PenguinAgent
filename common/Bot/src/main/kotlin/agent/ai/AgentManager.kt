@@ -385,10 +385,17 @@ object AgentManager {
                     AgentTools.TOOL_WEB_SEARCH -> {
                         val query0 = query.getString("query")?.trim().orEmpty()
                         val text = if (config.searchProvider.isBlank() || config.searchProvider == "none") {
-                            "未启用搜索：请在配置中设置 agent.search.provider（bing 或 custom）"
+                            "未启用搜索：请在配置中设置 agent.search.provider（exa/brave/jina/pmeta/zhipu/doubao/deepseek/custom/js/none）"
                         } else {
                             val results = SearchProvider.search(
-                                SearchProvider.Config(config.searchProvider, config.searchApiUrl, config.searchApiKey),
+                                SearchProvider.Config(
+                                    provider = config.searchProvider,
+                                    apiUrl = config.searchApiUrl,
+                                    apiKey = config.searchApiKey,
+                                    resultCount = 5,
+                                    fetchPages = config.searchFetchPages,
+                                    jsCode = config.searchJsCode
+                                ),
                                 query0
                             )
                             SearchProvider.summarize(results)

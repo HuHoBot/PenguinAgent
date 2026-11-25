@@ -167,7 +167,9 @@ object ChatAiManager {
                 provider = provider,
                 apiUrl = plugin.getChatAiSearchApiUrl(),
                 apiKey = plugin.getChatAiSearchApiKey(),
-                resultCount = plugin.getSearchResultCount().coerceIn(1, 10)
+                resultCount = plugin.getSearchResultCount().coerceIn(1, 10),
+                fetchPages = plugin.getSearchFetchPages(),
+                jsCode = plugin.getSearchJsCode()
             )
         } else null
         return ChatAiConfig(

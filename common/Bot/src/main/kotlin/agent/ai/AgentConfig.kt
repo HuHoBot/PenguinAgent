@@ -53,7 +53,11 @@ class AgentConfig(
     /** 联网搜索配置（provider 空 = 关闭）。 */
     val searchProvider: String = "",
     val searchApiUrl: String = "",
-    val searchApiKey: String = ""
+    val searchApiKey: String = "",
+    /** 是否启用网页抓取。 */
+    val searchFetchPages: Boolean = false,
+    /** JS 自定义搜索代码（provider=js 时使用）。 */
+    val searchJsCode: String = ""
 ) {
     /** 是否具备调用 AI 的前提条件（已启用且配置了接口地址与密钥）。 */
     val usable: Boolean

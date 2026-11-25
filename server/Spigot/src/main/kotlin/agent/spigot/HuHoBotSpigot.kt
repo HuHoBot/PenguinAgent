@@ -1210,6 +1210,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getSearchApiUrl(): String = configManager.searchApiUrl()
     override fun getSearchApiKey(): String = configManager.searchApiKey()
     override fun getSearchResultCount(): Int = configManager.searchResultCount()
+    override fun getSearchFetchPages(): Boolean = configManager.searchFetchPages()
+    override fun getSearchJsCode(): String = configManager.searchJsCode()
 
     override fun getProxyEnabled(): Boolean = configManager.proxyEnabled()
 
@@ -1226,6 +1228,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun getTtsCloneVoicesDir(): String = configManager.ttsCloneVoicesDir()
     override fun getTtsCloneDefaultVoice(): String = configManager.ttsCloneDefaultVoice()
     override fun getTtsMaxPerTurn(): Int = configManager.ttsMaxPerTurn()
+    override fun getTtsUploadMode(): String = configManager.getTtsUploadMode()
 
     override fun getSendPolicy(): String = configManager.sendPolicy()
     override fun getGroupPassiveReplyLimit(groupOpenId: String): Int = configManager.groupPassiveReplyLimit(groupOpenId)

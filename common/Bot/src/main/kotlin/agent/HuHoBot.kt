@@ -224,7 +224,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
             allowedTools = getAgentTools(),
             searchProvider = getAgentSearchProvider(),
             searchApiUrl = getAgentSearchApiUrl(),
-            searchApiKey = getAgentSearchApiKey()
+            searchApiKey = getAgentSearchApiKey(),
+            searchFetchPages = getSearchFetchPages(),
+            searchJsCode = getSearchJsCode()
         )
     }
 
@@ -318,6 +320,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
 
     /** WebUI 绑定地址；默认 127.0.0.1，需要局域网访问时显式改为 0.0.0.0。 */
     fun getWebUiBindAddress(): String = "127.0.0.1"
+
+    override fun getSearchFetchPages(): Boolean = false
+    override fun getSearchJsCode(): String = ""
 
     fun getOnlineList(): List<String>
 

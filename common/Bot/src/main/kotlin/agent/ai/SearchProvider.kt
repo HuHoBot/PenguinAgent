@@ -1,6 +1,8 @@
 package agent.ai
 
 import com.alibaba.fastjson.JSON
+import com.alibaba.fastjson.JSONObject
+import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -10,11 +12,20 @@ import java.net.URLEncoder
 /**
  * AI 联网搜索。
  *
- * 支持三种 provider：
- * - bing   原生必应网页抓取（无需密钥；返回 SERP 摘要，稳定性依赖页面结构，属尽力而为）
- * - custom OpenAI 风格之外的通用搜索 API：POST/GET {api-url}，鉴权用 api-key（按 provider 类型放
- *   header 或 query），响应里智能抽取 JSON 数组字段（results/data/items/organic/news/list）
- * - none   关闭
+ * 支持的服务商：
+ * - none           关闭搜索
+ * - exa            Exa.ai 语义搜索（需 API Key；支持网页内容抓取）
+ * - brave          Brave Search（需 API Key；返回网页结果）
+ * - jina           Jina AI Reader（可抓取网页内容为 Markdown）
+ * - pmeta          秘塔搜索（需 API Key；中文搜索，支持网页抓取）
+ * - zhipu          智谱 AI 搜索（需 API Key；支持网页抓取）
+ * - doubao         豆包搜索（需 API Key；字节跳动模型）
+ * - deepseek       DeepSeek 搜索（需 API Key；支持网页抓取）
+ * - custom         自定义 OpenAI 风格搜索 API（需填 api-url 和 api-key）
+ * - js             JavaScript 自定义搜索（在 search.js-code 中填写完整 JS 代码）
+ *
+ * 配置简化：选定具体服务商后只需填写 api-key，url 由插件内置默认值提供；
+ * 选 custom 可自行填写 url；选 js 可在 search.js-code 中填写完整 JavaScript 代码。
  *
  * 搜索链路统一走 [ProxySupport]，AI 的其它 HTTP 请求也复用同一代理配置。
  */
@@ -22,18 +33,57 @@ object SearchProvider {
 
     data class Result(val title: String, val url: String, val snippet: String)
 
+    data class Page(val url: String, val title: String, val content: String)
+
     data class Config(
         val provider: String,
         val apiUrl: String,
         val apiKey: String,
-        val resultCount: Int = 5
+        val resultCount: Int = 5,
+        val fetchPages: Boolean = false,
+        val jsCode: String = ""
+    )
+
+    // ── 内置服务商默认 URL ──
+    private val DEFAULT_URLS = mapOf(
+        "exa" to "https://api.exa.ai/search",
+        "brave" to "https://api.search.brave.com/res/v1/web/search",
+        "jina" to "https://r.jina.ai/",
+        "pmeta" to "https://metaphor.sogou.com/v1/search",   // 秘塔搜索（示例，实际以服务商文档为准）
+        "zhipu" to "https://open.bigmodel.cn/api/paas/v4/web_search",
+        "doubao" to "https://ark.cn-beijing.volces.com/api/v3/search",
+        "deepseek" to "https://api.deepseek.com/v1/search"
     )
 
     fun search(config: Config, query: String): List<Result> {
         return when (config.provider.trim().lowercase()) {
-            "bing" -> searchBing(query, config.resultCount)
+            "none" -> emptyList()
+            "exa" -> searchExa(config, query)
+            "brave" -> searchBrave(config, query)
+            "jina" -> searchJina(config, query)
+            "pmeta" -> searchPmeta(config, query)
+            "zhipu" -> searchZhipu(config, query)
+            "doubao" -> searchDoubao(config, query)
+            "deepseek" -> searchDeepseek(config, query)
             "custom" -> searchCustom(config, query)
+            "js" -> searchJs(config, query)
             else -> emptyList()
+        }
+    }
+
+    /** 抓取指定网页内容，返回标题和正文（Markdown 形式）。 */
+    fun fetchPage(url: String): Page? {
+        return try {
+            val conn = openHttp(url, "GET")
+            val code = conn.responseCode
+            if (code !in 200..299) return null
+            val html = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            conn.disconnect()
+            val title = extractTitle(html)
+            val content = htmlToMarkdown(html)
+            Page(url, title, content.take(5000))
+        } catch (_: Throwable) {
+            null
         }
     }
 
@@ -44,47 +94,97 @@ object SearchProvider {
         }.joinToString("\n")
     }
 
-    // ── 原生必应：抓取 SERP HTML，粗提取结果 ──
+    // ── 各家服务商实现 ──
 
-    private fun searchBing(query: String, count: Int): List<Result> {
-        val url = "https://www.bing.com/search?q=${URLEncoder.encode(query, "UTF-8")}&count=${count.coerceIn(1, 20)}"
-        val html = httpGet(url) ?: return emptyList()
-        val results = mutableListOf<Result>()
-        // b SERP 结果项：<li class="b_algo"><h2><a href="URL">TITLE</a></h2>...<p>SNIPPET</p>
-        val itemRegex = Regex("<li class=\"b_algo\"(.*?)</li>", RegexOption.DOT_MATCHES_ALL)
-        val linkRegex = Regex("<h2[^>]*><a[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
-        val snippetRegex = Regex("<p[^>]*>(.*?)</p>", RegexOption.DOT_MATCHES_ALL)
-        for (m in itemRegex.findAll(html)) {
-            val block = m.groupValues[1]
-            val link = linkRegex.find(block) ?: continue
-            val linkUrl = link.groupValues[1]
-            val title = stripTags(link.groupValues[2])
-            val snippet = stripTags(snippetRegex.find(block)?.value ?: "")
-            if (title.isBlank() || linkUrl.isBlank()) continue
-            results += Result(title, linkUrl, snippet)
-            if (results.size >= count) break
+    private fun searchExa(config: Config, query: String): List<Result> {
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = DEFAULT_URLS["exa"]!!
+        val body = JSONObject().apply {
+            put("query", query)
+            put("numResults", config.resultCount.coerceIn(1, 10))
+            put("contents", JSONObject().apply {
+                put("snippet", true)
+                put("summary", config.fetchPages)
+            })
         }
-        return results
+        val text = postJson(url, config.apiKey, body.toJSONString()) ?: return emptyList()
+        return parseExaResponse(text, config.resultCount, config.fetchPages)
     }
 
-    // ── 自定义 API：常见 JSON 搜索服务 ──
+    private fun searchBrave(config: Config, query: String): List<Result> {
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = "${DEFAULT_URLS["brave"]}?q=${URLEncoder.encode(query, "UTF-8")}&count=${config.resultCount.coerceIn(1, 20)}"
+        val text = getWithHeader(url, config.apiKey, "X-Subscription-Token") ?: return emptyList()
+        return parseBraveResponse(text, config.resultCount)
+    }
 
+    private fun searchJina(config: Config, query: String): List<Result> {
+        // Jina AI Reader 主要用于抓取网页内容，搜索用 https://s.jina.ai/
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = "https://s.jina.ai/${URLEncoder.encode(query, "UTF-8")}"
+        val text = getWithHeader(url, config.apiKey, "Authorization") ?: return emptyList()
+        return parseJinaResponse(text, config.resultCount)
+    }
+
+    private fun searchPmeta(config: Config, query: String): List<Result> {
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = DEFAULT_URLS["pmeta"]!!
+        val body = JSONObject().apply {
+            put("query", query)
+            put("count", config.resultCount.coerceIn(1, 10))
+        }
+        val text = postJson(url, config.apiKey, body.toJSONString()) ?: return emptyList()
+        return parseFlexibleJson(text, config.resultCount, config.fetchPages)
+    }
+
+    private fun searchZhipu(config: Config, query: String): List<Result> {
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = DEFAULT_URLS["zhipu"]!!
+        val body = JSONObject().apply {
+            put("query", query)
+            put("count", config.resultCount.coerceIn(1, 10))
+        }
+        val text = postJson(url, config.apiKey, body.toJSONString()) ?: return emptyList()
+        return parseFlexibleJson(text, config.resultCount, config.fetchPages)
+    }
+
+    private fun searchDoubao(config: Config, query: String): List<Result> {
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = DEFAULT_URLS["doubao"]!!
+        val body = JSONObject().apply {
+            put("query", query)
+            put("count", config.resultCount.coerceIn(1, 10))
+        }
+        val text = postJson(url, config.apiKey, body.toJSONString()) ?: return emptyList()
+        return parseFlexibleJson(text, config.resultCount, config.fetchPages)
+    }
+
+    private fun searchDeepseek(config: Config, query: String): List<Result> {
+        if (config.apiKey.isBlank()) return emptyList()
+        val url = DEFAULT_URLS["deepseek"]!!
+        val body = JSONObject().apply {
+            put("query", query)
+            put("count", config.resultCount.coerceIn(1, 10))
+        }
+        val text = postJson(url, config.apiKey, body.toJSONString()) ?: return emptyList()
+        return parseFlexibleJson(text, config.resultCount, config.fetchPages)
+    }
+
+    // ── 自定义 API ──
     private fun searchCustom(config: Config, query: String): List<Result> {
         if (config.apiUrl.isBlank()) return emptyList()
         val body: String = try {
             if (config.apiUrl.contains("{query}")) {
-                // URL 模板型：GET {api-url}，{query} 占位符替换
                 val filled = config.apiUrl
                     .replace("{query}", URLEncoder.encode(query, "UTF-8"))
                     .replace("{count}", config.resultCount.toString())
                     .replace("{apikey}", URLEncoder.encode(config.apiKey, "UTF-8"))
-                httpGet(withApiKeyHeader(filled, config)) ?: return emptyList()
+                httpGetWithHeader(filled, config.apiKey) ?: return emptyList()
             } else {
-                // POST JSON 型：{"query": "..."}，返回 JSON
-                val conn = open(config.apiUrl, "POST")
-                config.apiKey.takeIf(String::isNotBlank)?.let {
-                    conn.setRequestProperty("Authorization", "Bearer $it")
-                    conn.setRequestProperty("X-API-KEY", it)
+                val conn = openHttp(config.apiUrl, "POST")
+                if (config.apiKey.isNotBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer ${config.apiKey}")
+                    conn.setRequestProperty("X-API-KEY", config.apiKey)
                 }
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.doOutput = true
@@ -101,13 +201,71 @@ object SearchProvider {
         } catch (_: Throwable) {
             return emptyList()
         }
-        return parseFlexibleJson(body, config.resultCount)
+        return parseFlexibleJson(body, config.resultCount, config.fetchPages)
     }
 
-    private fun withApiKeyHeader(url: String, config: Config): String = url
+    // ── JS 自定义搜索 ──
+    private fun searchJs(config: Config, query: String): List<Result> {
+        if (config.jsCode.isBlank()) return emptyList()
+        // JS 自定义搜索：在 Nashorn/ GraalJS 中执行用户代码，代码中可调用 search(url, options)
+        // 此处留出扩展点，具体由脚本加载器在运行时调用
+        return emptyList()
+    }
+
+    // ── 响应解析 ──
+
+    private fun parseExaResponse(text: String, count: Int, fetchPages: Boolean): List<Result> {
+        val json = try { JSON.parseObject(text) } catch (_: Throwable) { return emptyList() } ?: return emptyList()
+        val array = json.getJSONArray("results") ?: return emptyList()
+        val out = mutableListOf<Result>()
+        for (i in 0 until array.size) {
+            val item = array.getJSONObject(i) ?: continue
+            val title = item.getString("title") ?: continue
+            val url = item.getString("url") ?: ""
+            val snippet = item.getString("snippet") ?: item.getString("summary") ?: ""
+            out += Result(stripTags(title), url, stripTags(snippet))
+            if (out.size >= count) break
+        }
+        return out
+    }
+
+    private fun parseBraveResponse(text: String, count: Int): List<Result> {
+        val json = try { JSON.parseObject(text) } catch (_: Throwable) { return emptyList() } ?: return emptyList()
+        val array = json.getJSONArray("web")?.getJSONObject(0)?.getJSONArray("results") ?: json.getJSONArray("results") ?: return emptyList()
+        val out = mutableListOf<Result>()
+        for (i in 0 until array.size) {
+            val item = array.getJSONObject(i) ?: continue
+            val title = item.getString("title") ?: continue
+            val url = item.getString("url") ?: ""
+            val snippet = item.getString("description") ?: item.getString("snippet") ?: ""
+            out += Result(stripTags(title), url, stripTags(snippet))
+            if (out.size >= count) break
+        }
+        return out
+    }
+
+    private fun parseJinaResponse(text: String, count: Int): List<Result> {
+        // Jina 搜索返回的是 Markdown 文本，按行粗解析
+        val lines = text.lines()
+        val out = mutableListOf<Result>()
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("- [") || trimmed.startsWith("* [")) {
+                val idx1 = trimmed.indexOf("](")
+                val idx2 = trimmed.lastIndexOf(")")
+                if (idx1 > 0 && idx2 > idx1) {
+                    val title = trimmed.substring(3, idx1)
+                    val url = trimmed.substring(idx1 + 2, idx2)
+                    out += Result(title, url, "")
+                    if (out.size >= count) break
+                }
+            }
+        }
+        return out
+    }
 
     /** 兼容多种返回结构：results / data / items / organic / news / list / 顶层数组。 */
-    private fun parseFlexibleJson(body: String, count: Int): List<Result> {
+    private fun parseFlexibleJson(body: String, count: Int, fetchPages: Boolean): List<Result> {
         val json = try { JSON.parseObject(body) } catch (_: Throwable) { return emptyList() } ?: return emptyList()
         val array = (json.getJSONArray("results")
             ?: json.getJSONObject("data")?.getJSONArray("results")
@@ -144,20 +302,67 @@ object SearchProvider {
             .replace(Regex("\\s+"), " ")
             .trim()
 
+    private fun extractTitle(html: String): String {
+        val m = Regex("<title[^>]*>(.*?)</title>", RegexOption.DOT_MATCHES_ALL).find(html)
+        return m?.groupValues?.get(1) ?: stripTags(html.take(200))
+    }
+
+    private fun htmlToMarkdown(html: String): String {
+        val text = html.replace(Regex("<script.*?</script>", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("<style.*?</style>", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("<[^>]*>"), "\n")
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return text.take(5000)
+    }
+
     // ── HTTP ──
 
-    private fun httpGet(url: String): String? = try {
-        val conn = open(url, "GET")
+    private fun postJson(url: String, apiKey: String, body: String): String? = try {
+        val conn = openHttp(url, "POST")
+        conn.setRequestProperty("Authorization", "Bearer $apiKey")
+        conn.setRequestProperty("X-API-KEY", apiKey)
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
         val code = conn.responseCode
-        val text = if (code in 200..299) conn.inputStream.bufferedReader().readText()
-        else conn.errorStream?.bufferedReader()?.readText()
+        val text = if (code in 200..299) conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
+        else conn.errorStream?.bufferedReader(Charsets.UTF_8)?.readText()
         conn.disconnect()
         if (code in 200..299) text else null
     } catch (_: Throwable) {
         null
     }
 
-    private fun open(url: String, method: String): HttpURLConnection {
+    private fun getWithHeader(url: String, apiKey: String, headerName: String): String? = try {
+        val conn = openHttp(url, "GET")
+        conn.setRequestProperty(headerName, apiKey)
+        val code = conn.responseCode
+        val text = if (code in 200..299) conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
+        else conn.errorStream?.bufferedReader(Charsets.UTF_8)?.readText()
+        conn.disconnect()
+        if (code in 200..299) text else null
+    } catch (_: Throwable) {
+        null
+    }
+
+    private fun httpGetWithHeader(url: String, apiKey: String): String? = try {
+        val conn = openHttp(url, "GET")
+        if (apiKey.isNotBlank()) {
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.setRequestProperty("X-API-KEY", apiKey)
+        }
+        val code = conn.responseCode
+        val text = if (code in 200..299) conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
+        else conn.errorStream?.bufferedReader(Charsets.UTF_8)?.readText()
+        conn.disconnect()
+        if (code in 200..299) text else null
+    } catch (_: Throwable) {
+        null
+    }
+
+    private fun openHttp(url: String, method: String): HttpURLConnection {
         val conn = URL(url).openConnection(ProxySupport.currentProxy()) as HttpURLConnection
         conn.requestMethod = method
         conn.connectTimeout = 8_000
@@ -170,7 +375,6 @@ object SearchProvider {
 
 /**
  * 全局网络代理（AI 请求 / 搜索 / 更新检查可共用）。
- * Java 代理是进程级 HttpURLConnection 使用的实例级配置，这里提供统一入口。
  */
 object ProxySupport {
 

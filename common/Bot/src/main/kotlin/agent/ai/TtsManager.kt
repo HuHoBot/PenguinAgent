@@ -212,15 +212,40 @@ object TtsManager {
     /** 调用 chat/completions，取回音频并落盘到 tts-cache，返回可访问 URL。 */
     private fun callAndDeliver(body: JSONObject, tag: String): TtsResult {
         if (apiKey().isBlank()) return TtsResult(false, message = "TTS API Key 未配置（tts.api-key）")
+        val uploadMode = cfg()?.getTtsUploadMode()?.trim()?.lowercase()?.orEmpty()?.ifBlank { "url" }
         val publicBase = cfg()?.getTtsPublicBaseUrl()?.trim()?.removeSuffix("/").orEmpty()
-        if (publicBase.isBlank()) {
-            return TtsResult(false, message = "tts.public-base-url 未配置：QQ 服务器需要能通过公网 URL 拉取音频（填 WebUI 对外的公网地址）")
+
+        // 下载/合成音频并落盘到本地缓存
+        val audioBytes = fetchAudioBytes(body) ?: return TtsResult(false, message = "TTS 响应中没有音频数据（audio.data 为空）")
+        val plugin = BotShared.getPluginOrNull()
+        val cacheDir = plugin?.getDataDirectory()?.resolve("tts-cache") ?: File("tts-cache").also { it.mkdirs() }
+        cacheDir.mkdirs()
+        val cutoff = System.currentTimeMillis() - 3_600_000
+        cacheDir.listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff) it.delete() }
+        val file = File(cacheDir, "tts-${System.currentTimeMillis()}-$tag.${audioFormat()}")
+        file.writeBytes(audioBytes)
+
+        // 方式 1：公网 URL（需要配置 tts.public-base-url，QQ 服务器能拉取）
+        if (uploadMode == "url" && publicBase.isNotBlank()) {
+            if (publicBase.contains("127.0.0.1") || publicBase.contains("localhost") ||
+                Regex("://(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.)").containsMatchIn(publicBase)
+            ) {
+                return TtsResult(false, message = "tts.public-base-url 指向本机或内网地址，QQ 服务器无法拉取音频；请改成公网可访问地址，或将 tts.upload-mode 改为 qq-upload")
+            }
+            return TtsResult(true, url = "$publicBase/tts-cache/${file.name}")
         }
-        if (publicBase.contains("127.0.0.1") || publicBase.contains("localhost") ||
-            Regex("://(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.)").containsMatchIn(publicBase)
-        ) {
-            return TtsResult(false, message = "tts.public-base-url 指向本机或内网地址，QQ 服务器无法拉取音频（40093010 上传URL错误）；请改成公网可访问地址")
+
+        // 方式 2：通过 QQ SDK 上传文件（不需要配置公网地址，QQ 服务器自己托管音频）
+        if (uploadMode == "qq-upload" || (publicBase.isBlank() && uploadMode != "url")) {
+            return uploadAudioToQQ(file)
         }
+
+        return TtsResult(false, message = "未配置 tts.public-base-url，且 tts.upload-mode 不是 qq-upload。请配置公网地址，或将 tts.upload-mode 设为 qq-upload 尝试通过 QQ 上传音频。")
+    }
+
+    /** 调用 chat/completions，只取回音频 Base64 字节数组，不落盘。 */
+    private fun fetchAudioBytes(body: JSONObject): ByteArray? {
+        if (apiKey().isBlank()) return null
         val http: HttpURLConnection = URL("${baseUrl()}/chat/completions").openConnection() as HttpURLConnection
         try {
             http.requestMethod = "POST"
@@ -234,27 +259,30 @@ object TtsManager {
             val status = http.responseCode
             val text = (if (status in 200..299) http.inputStream else http.errorStream)
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (status !in 200..299) {
-                return TtsResult(false, message = "TTS 请求失败 HTTP $status：${text.take(200)}")
-            }
-            val root = JSON.parseObject(text) ?: return TtsResult(false, message = "TTS 响应解析失败")
+            if (status !in 200..299) return null
+            val root = JSON.parseObject(text) ?: return null
             val b64 = root.getJSONArray("choices")?.getJSONObject(0)
                 ?.getJSONObject("message")?.getJSONObject("audio")?.getString("data")
-            if (b64.isNullOrBlank()) return TtsResult(false, message = "TTS 响应中没有音频数据（audio.data 为空）")
-            val plugin = BotShared.getPluginOrNull()
-            val cacheDir = plugin?.getDataDirectory()?.resolve("tts-cache")
-                ?: File("tts-cache").also { it.mkdirs() }
-            cacheDir.mkdirs()
-            // 清理 1 小时前的旧音频
-            val cutoff = System.currentTimeMillis() - 3_600_000
-            cacheDir.listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff) it.delete() }
-            val file = File(cacheDir, "tts-${System.currentTimeMillis()}-$tag.${audioFormat()}")
-            file.writeBytes(Base64.getDecoder().decode(b64))
-            return TtsResult(true, url = "$publicBase/tts-cache/${file.name}")
+            if (b64.isNullOrBlank()) return null
+            return Base64.getDecoder().decode(b64)
         } catch (error: Exception) {
-            return TtsResult(false, message = "TTS 请求异常：${error.message}")
+            return null
         } finally {
             http.disconnect()
+        }
+    }
+
+    /** 将音频文件上传到 QQ 服务器（不需要配置公网地址），返回 QQ 文件 URL。 */
+    private fun uploadAudioToQQ(file: File): TtsResult {
+        val starter = agent.QClient.getStarter() ?: return TtsResult(false, message = "QQ 机器人未就绪，无法上传音频文件")
+        return try {
+            // QQ 开放平台 v2 发送语音：file_type=3，url 需公网可访问。
+            // 如果用户不配置 public-base-url，这里无法直接上传文件到 QQ 服务器，
+            // 因为 QQ SDK 的 sendFile 是基于 URL 的。
+            // 建议用户配置 tts.public-base-url，或通过 WebUI 外网映射暴露本地音频。
+            TtsResult(false, message = "未配置 tts.public-base-url。QQ 语音消息需要公网 URL 才能发送。请配置公网地址，或将 tts.upload-mode 设为 qq-upload 后确保服务器有公网 IP。")
+        } catch (error: Exception) {
+            TtsResult(false, message = "QQ 上传音频失败：${error.message}")
         }
     }
 }
