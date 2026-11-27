@@ -94,6 +94,12 @@ class BindingCommands : CommandSupport() {
         userId: String,
         code: String
     ) {
+        // 防爆破：连续输错验证码会临时锁定
+        if (PendingBindingStore.isBlocked(userId)) {
+            val left = PendingBindingStore.lockRemainingSeconds(userId)
+            reply(plugin, event, "验证码错误次数过多，请 ${left / 60 + 1} 分钟后再试")
+            return
+        }
         // 先看上限再消费验证码：达到上限时验证码保留，玩家解除旧角色后还能继续用
         val maxBindings = plugin.getMaxBindings()
         val bound = CommandRepositories.bindings.getBinding(userId)
@@ -108,9 +114,11 @@ class BindingCommands : CommandSupport() {
 
         val pending = PendingBindingStore.consumeForceCode(code)
         if (pending == null) {
+            PendingBindingStore.recordFailure(userId)
             reply(plugin, event, "验证码无效或已过期，请重新进入服务器获取新的验证码")
             return
         }
+        PendingBindingStore.clearFailures(userId)
 
         val playerName = pending.playerName
         val qqUsername = event.sender?.username ?: "未知用户"

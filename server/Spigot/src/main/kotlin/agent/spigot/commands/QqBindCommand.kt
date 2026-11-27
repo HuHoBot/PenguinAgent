@@ -25,11 +25,19 @@ class QqBindCommand : CommandExecutor {
         }
 
         val code = args[0].trim()
+        // 防爆破：连续输错验证码会临时锁定该玩家
+        if (PendingBindingStore.isBlocked(sender.name)) {
+            val left = PendingBindingStore.lockRemainingSeconds(sender.name)
+            sender.sendMessage("${ChatColor.RED}验证码错误次数过多，请 ${left / 60 + 1} 分钟后再试")
+            return true
+        }
         val pending = PendingBindingStore.consume(code)
         if (pending == null) {
+            PendingBindingStore.recordFailure(sender.name)
             sender.sendMessage("${ChatColor.RED}验证码无效或已过期，请在 QQ 群中重新使用 /绑定 命令")
             return true
         }
+        PendingBindingStore.clearFailures(sender.name)
 
         val playerName = sender.name
 

@@ -20,7 +20,50 @@ object PendingBindingStore {
     private const val CODE_LENGTH = 5
     private const val EXPIRE_MILLIS = 5 * 60 * 1000L // 5 分钟过期
 
+    // ── 验证码防爆破：滑动窗口内失败次数超限后锁定 ──
+    private const val MAX_FAILURES = 5
+    private const val FAILURE_WINDOW = 10 * 60 * 1000L   // 10 分钟窗口
+    private const val LOCK_MILLIS = 15 * 60 * 1000L      // 触发后锁定 15 分钟
+    private val failureTimes = ConcurrentHashMap<String, java.util.ArrayDeque<Long>>()
+    private val lockUntil = ConcurrentHashMap<String, Long>()
+
     private val secureRandom = SecureRandom()
+
+    /** 该身份（QQ openid 或游戏玩家名）是否因验证码错误次数过多被临时锁定。 */
+    fun isBlocked(key: String): Boolean {
+        if (key.isBlank()) return false
+        val until = lockUntil[key] ?: return false
+        if (System.currentTimeMillis() > until) { lockUntil.remove(key); return false }
+        return true
+    }
+
+    /** 剩余锁定秒数；未锁定返回 0。 */
+    fun lockRemainingSeconds(key: String): Long {
+        val until = lockUntil[key] ?: return 0
+        val left = (until - System.currentTimeMillis()) / 1000
+        return if (left > 0) left else 0
+    }
+
+    /** 记录一次验证码尝试失败；10 分钟内累计 5 次即锁定 15 分钟。 */
+    fun recordFailure(key: String) {
+        if (key.isBlank() || isBlocked(key)) return
+        val now = System.currentTimeMillis()
+        val deque = failureTimes.computeIfAbsent(key) { java.util.ArrayDeque() }
+        synchronized(deque) {
+            deque.addLast(now)
+            while (deque.isNotEmpty() && now - deque.peekFirst() > FAILURE_WINDOW) deque.pollFirst()
+            if (deque.size >= MAX_FAILURES) {
+                lockUntil[key] = now + LOCK_MILLIS
+                deque.clear()
+            }
+        }
+    }
+
+    /** 验证成功后清除该身份的失败记录。 */
+    fun clearFailures(key: String) {
+        failureTimes.remove(key)
+        lockUntil.remove(key)
+    }
 
     enum class BindMode {
         /** 等待玩家进游戏执行 /qqbind */

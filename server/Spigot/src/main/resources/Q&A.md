@@ -968,3 +968,64 @@ Bird.onCommand('welcome', function(sender) {
 ---
 
 > 本手册由 HuHoBot Penguin 1.24 自动生成。如有配置项未在此处覆盖，请以 config.yml 项上方的中文注释为准，或联系插件开发者。
+
+
+---
+
+## 11. 新增：安全与兼容说明（1.24 补充）
+
+### 11.1 AI 违禁词双向过滤（自动开启，无需配置）
+
+所有 QQ 群里的 AI（服务器管理 Agent 和聊天 AI）都接入了违禁词过滤，方向有两个：
+
+- **你说的话 → AI**：消息里如果包含违禁词，插件会先把违禁词替换成 `*违禁词*`（星号包住原词）再传给 AI。AI 能理解你想说什么，但也明确知道这些词是被屏蔽的，不会在回答里原样复述。
+- **AI 的回答 → 群**：AI 返回的正文发送前会再做一次同样的检查，命中违禁词同样替换成 `*违禁词*` 后才发到群里。工具调用的参数、代码块里的内容（命令、代码）不做替换，保证准确性。
+
+词表就是审核用的那套（`data/sensitive-words/*.txt` + 内置基础词），在 WebUI 或 config.yml 的 moderation 里改词表即可同时生效。此功能自动开启，无需任何配置。
+
+### 11.2 绑定验证码防爆破（自动开启）
+
+强制绑定和普通绑定都使用 5 位验证码，现在加了防爆破保护：
+
+- 同一个 QQ 用户（或游戏内同一个玩家）在 10 分钟内连续输错验证码 5 次，会被临时锁定 15 分钟，期间无法再尝试。
+- 锁定期间会提示“验证码错误次数过多，请 X 分钟后再试”。
+- 验证成功后自动清除失败记录，正常用户不受影响。
+
+### 11.3 旧版扩展兼容（1.23 及更早版本的扩展都能跑）
+
+1.24 重构了扩展系统（Rhino JavaScript + LuaJ + Java），同时保留了对旧版的兼容：
+
+- **Python 扩展（main.py）**：1.24 主包不再内置 Python 引擎（旧版引擎约 125MB）。如果你有 main.py 扩展，把旧版的 `HuHoBot-Engine-GraalPy-<版本>.jar` 放到 `plugins/HuHoBotPenguin/engines/` 目录即可继续运行；没有引擎时日志会给出明确的迁移提示。
+- **JavaScript 扩展**：如果你保留了旧版的 `HuHoBot-Engine-GraalJs-<版本>.jar` 放在 `engines/`，JS 扩展会优先用 GraalJS 引擎（完整 ES2022 语法，和 1.23 行为一致）；没有引擎时用内置 Rhino（覆盖大多数常用语法）。
+- **Lua 扩展**：不受影响，一直内置支持。
+- **Java 扩展**：1.24 新增支持（`Main.java` 实现 `AddonProgram` 接口）。
+- 旧版目录结构（`addons/<名字>/main.js|main.lua|main.py` + `metadata.yaml`）完全兼容，无需任何改动。
+
+### 11.4 TTS 语音上传方式（tts.upload-mode）
+
+- `url`（默认）：需要配置 `tts.public-base-url`（公网地址），QQ 服务器通过它拉取音频。
+- `qq-upload`：不强制要求公网地址；如果你的服务器本身有公网 IP 或做了内网穿透，可直接尝试。
+
+### 11.5 联网搜索服务商一览（search.provider 可选值）
+
+| 值 | 服务商 | 需要填写 |
+|---|---|---|
+| none | 关闭 | — |
+| exa | Exa.ai 语义搜索 | api-key |
+| brave | Brave Search | api-key |
+| jina | Jina AI（搜索 + 网页转 Markdown） | api-key |
+| pmeta | 秘塔搜索 | api-key |
+| zhipu | 智谱 AI 搜索 | api-key |
+| doubao | 豆包搜索 | api-key |
+| deepseek | DeepSeek 搜索 | api-key |
+| custom | 自定义接口 | api-key + api-url |
+| js | JavaScript 自定义搜索代码 | search.js-code |
+
+选定服务商后只需填 `api-key`，接口地址由插件内置，无需再填 URL。`search.fetch-pages: true` 可开启网页正文抓取（部分服务商支持）。
+
+### 11.6 深度思考与联网搜索
+
+Agent 和聊天 AI 都支持：
+
+- **深度思考**：`agent.think`（原生推理）或 `agent.think-guide`（提示词模拟），二者互斥。
+- **联网搜索**：Agent 用 `agent.search.provider`，聊天 AI 用 `chat-ai.search.provider`；都留空时回退到全局 `search.provider`。服务商只需填 API key。

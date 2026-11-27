@@ -24,7 +24,7 @@ import java.util.List;
 public final class ScriptPackage {
 
     /** 入口探测顺序：metadata.yaml 的 entry 优先，否则按此表找第一个存在的。 */
-    private static final String[] DEFAULT_ENTRIES = {"main.js", "main.lua", "Main.java"};
+    private static final String[] DEFAULT_ENTRIES = {"main.js", "main.lua", "Main.java", "main.py"};
 
     private final File directory;
     private final AddonManifest manifest;

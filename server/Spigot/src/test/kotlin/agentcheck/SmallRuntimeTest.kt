@@ -22,8 +22,9 @@ class SmallRuntimeTest {
     }
     @Test fun javaScriptNeedsNoExternalLanguageVm() {
         val root=Files.createTempDirectory("small-addon").toFile();val dir=root.resolve("a").apply{mkdir()}
-        dir.resolve("main.py").writeText("raise RuntimeError('not supported')")
-        assertNull(ScriptPackage.open(dir,root))
+        // 1.24 兼容层：main.py 恢复为合法入口（engines/ 放回旧 GraalPy 引擎即可运行）
+        dir.resolve("main.py").writeText("pass")
+        assertEquals(".py",ScriptPackage.open(dir,root)!!.language())
         dir.resolve("main.js").writeText("JSON.stringify({ok:true})")
         assertEquals(".js",ScriptPackage.open(dir,root)!!.language())
     }

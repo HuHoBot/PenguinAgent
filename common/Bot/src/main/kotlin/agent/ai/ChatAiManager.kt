@@ -54,6 +54,8 @@ object ChatAiManager {
             text = text.substring(trigger.length).trim()
         }
         if (text.isEmpty()) text = "你好"
+        // 入站违禁词掩蔽：*原词* 形式传给模型，模型可知语境且不会复述违禁词。
+        text = AiContentGuard.maskInbound(plugin, text)
         if (!running.add(groupOpenId)) {
             reply("上一条还在思考中，稍等一下再问我…")
             return true
@@ -95,7 +97,10 @@ object ChatAiManager {
                 return true
             }
             messages.add(assistantMessage(reply0, null))
-            reply(reply0!!)
+            // 出站违禁词过滤：AI 正文命中替换成 *原词* 后再发群。
+            val (outbound, hits) = AiContentGuard.filterOutbound(plugin, reply0!!)
+            if (hits.isNotEmpty()) plugin.log_info("聊天 AI 回复命中违禁词已掩蔽：${hits.joinToString("、")}")
+            reply(outbound)
             return true
         } finally {
             running.remove(groupOpenId)

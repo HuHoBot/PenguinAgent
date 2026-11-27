@@ -64,16 +64,62 @@ public class ScriptAddonLoader {
         this.plugin = plugin;
         this.scriptsFolder = new File(plugin.getDataFolder(), "addons");
         this.addonStateFolder = plugin.getDataDirectory();
+        this.enginesFolder = new File(plugin.getDataFolder(), "engines");
         if (!scriptsFolder.exists()) {
             scriptsFolder.mkdirs();
         }
+    }
+
+    // ── 旧版引擎兼容：engines/ 目录里的 HuHoBot-Engine-GraalJs/GraalPy jar 仍然可用 ──
+    private final File enginesFolder;
+    private volatile ClassLoader engineClassLoader;
+    private volatile String engineLoaderError;
+
+    /**
+     * 把 engines/ 下的引擎 jar 挂到独立 ClassLoader（兼容 1.23 及更早版本的
+     * HuHoBot-Engine-GraalJs-*.jar / HuHoBot-Engine-GraalPy-*.jar）。没有引擎返回 null。
+     */
+    private ClassLoader engineLoader() {
+        ClassLoader cached = engineClassLoader;
+        if (cached != null) return cached;
+        synchronized (this) {
+            if (engineClassLoader != null) return engineClassLoader;
+            File[] jars = enginesFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".jar"));
+            if (jars == null || jars.length == 0) return null;
+            try {
+                URL[] urls = new URL[jars.length];
+                for (int i = 0; i < jars.length; i++) urls[i] = jars[i].toURI().toURL();
+                engineClassLoader = new URLClassLoader(urls, ScriptAddonLoader.class.getClassLoader());
+                plugin.getLogger().info("已从 " + enginesFolder.getPath() + " 加载旧版脚本引擎（"
+                        + jars.length + " 个 jar），JS/Python 扩展将优先使用 Graal 引擎");
+                return engineClassLoader;
+            } catch (Throwable error) {
+                engineLoaderError = "脚本引擎加载失败: " + error.getMessage();
+                plugin.getLogger().warning(engineLoaderError);
+                return null;
+            }
+        }
+    }
+
+    /** 在旧引擎 jar 中按名字找桥接类；新旧包名都尝试。 */
+    private Class<?> findBridge(ClassLoader loader, String simpleName) {
+        String[] candidates = {
+                "cn.huohuas001.huhobot.graaljs." + simpleName,
+                "cn.huohuas001.huhobot.graalpy." + simpleName,
+                "agent.spigot.scripting." + simpleName
+        };
+        for (String name : candidates) {
+            try { return Class.forName(name, true, loader); } catch (Throwable ignored) { }
+        }
+        return null;
     }
 
     /** 三个受支持的脚本语言，扩展名只在这里解析一次。 */
     private enum Lang {
         LUA(".lua", "Lua"),
         JS(".js", "JavaScript"),
-        JAVA(".java", "Java");
+        JAVA(".java", "Java"),
+        PY(".py", "Python");
 
         private final String extension;
         private final String displayName;
@@ -109,7 +155,7 @@ public class ScriptAddonLoader {
             warnStrayScripts();
             File[] dirs = scriptsFolder.listFiles(File::isDirectory);
             if (dirs == null || dirs.length == 0) {
-                plugin.getLogger().info("addons 目录没有脚本插件（建一个目录，放 main.js / main.lua / Main.java）: "
+                plugin.getLogger().info("addons 目录没有脚本插件（建一个目录，放 main.js / main.lua / Main.java / main.py）: "
                         + scriptsFolder.getPath());
                 return results;
             }
@@ -149,7 +195,7 @@ public class ScriptAddonLoader {
         if(closing)return ScriptLoadResult.error(dir.getName(),"扩展加载已取消");
         ScriptPackage pkg = ScriptPackage.open(dir, addonStateFolder);
         if (pkg == null) {
-            String msg = "目录里没有 main.js / main.lua / Main.java";
+            String msg = "目录里没有 main.js / main.lua / Main.java / main.py";
             plugin.getLogger().warning("[" + dir.getName() + "] " + msg + "，已跳过");
             return ScriptLoadResult.skipped(dir.getName(), msg);
         }
@@ -183,6 +229,9 @@ public class ScriptAddonLoader {
                 break;
             case JAVA:
                 result = loadJavaScript(pkg);
+                break;
+            case PY:
+                result = loadPythonScript(pkg);
                 break;
             default:
                 result = loadBuiltinJs(pkg);
@@ -275,6 +324,10 @@ public class ScriptAddonLoader {
     }
 
     private ScriptLoadResult loadBuiltinJs(ScriptPackage pkg) {
+        // 兼容优先：engines/ 里有旧版 GraalJS 引擎时先走 GraalJS（完整 ES2022+，1.23 及更早
+        // 版本的扩展都在它上面运行），失败或没有引擎再回退内置 Rhino。
+        ScriptLoadResult graal = loadGraalJsScript(pkg);
+        if (graal != null) return graal;
         BirdScriptApi api=new BirdScriptApi(plugin,pkg.name(),addonStateFolder);
         RhinoBridge session=null;
         try{
@@ -282,6 +335,81 @@ public class ScriptAddonLoader {
             final RhinoBridge ready=session;activate(pkg,ready,api,ready::runPrepared);
             plugin.getLogger().info("Loaded addon: "+pkg.name()+" (bundled JavaScript)");return ScriptLoadResult.ok(pkg.name());
         }catch(Throwable error){closeSession(session);rollback(pkg.name(),api);return ScriptLoadResult.error(pkg.name(),firstLine(error.toString()));}
+    }
+
+    /** 尝试用 engines/ 里的旧版 GraalJS 引擎加载 JS 扩展；引擎不存在时返回 null（交给 Rhino）。 */
+    private ScriptLoadResult loadGraalJsScript(ScriptPackage pkg) {
+        ClassLoader loader = engineLoader();
+        if (loader == null) return null;
+        Class<?> bridge = findBridge(loader, "GraalJsBridge");
+        if (bridge == null) return null;
+        Object session = null;
+        BirdScriptApi api = new BirdScriptApi(plugin, pkg.name(), addonStateFolder);
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(loader);
+        try {
+            session = bridge.getMethod("open").invoke(null);
+            Thread.currentThread().setContextClassLoader(previous);
+            previous = null;
+            bindCommon(session, api, pkg);
+            session.getClass().getMethod("eval", File.class).invoke(session, pkg.entryFile());
+            final Object ready = session;
+            activate(pkg, ready, api, () -> { });
+            plugin.getLogger().info("Loaded addon: " + pkg.name() + " (GraalJS engine)");
+            return ScriptLoadResult.ok(pkg.name());
+        } catch (Throwable t) {
+            closeSession(session);
+            rollback(pkg.name(), api);
+            plugin.getLogger().warning("[" + pkg.name() + "] GraalJS 引擎加载失败，回退内置 Rhino："
+                    + firstLine(String.valueOf(causeOf(t).getMessage() != null ? causeOf(t).getMessage() : t.toString())));
+            return null;
+        } finally {
+            if (previous != null) Thread.currentThread().setContextClassLoader(previous);
+        }
+    }
+
+    /**
+     * Python 扩展（1.23 及更早版本支持 main.py）。
+     * 引擎不在主 jar 里：engines/ 有旧版 GraalPy 引擎 jar 时继续可用；
+     * 没有时给出明确的迁移提示，而不是一句难懂的 "目录里没有 main.js"。
+     */
+    private ScriptLoadResult loadPythonScript(ScriptPackage pkg) {
+        ClassLoader loader = engineLoader();
+        if (loader == null) {
+            String msg = "1.24 起不再内置 Python 引擎。请把旧版的 HuHoBot-Engine-GraalPy-<版本>.jar 放到 "
+                    + enginesFolder.getPath() + " 以继续运行 Python 扩展，或将 main.py 改写为 main.js";
+            plugin.getLogger().severe("[" + pkg.name() + "] " + msg);
+            return ScriptLoadResult.error(pkg.name(), msg);
+        }
+        Class<?> bridge = findBridge(loader, "GraalPyBridge");
+        if (bridge == null) {
+            String msg = "engines/ 里没有找到 GraalPy 桥（GraalPyBridge）。请放回旧版的 HuHoBot-Engine-GraalPy-<版本>.jar";
+            plugin.getLogger().severe("[" + pkg.name() + "] " + msg);
+            return ScriptLoadResult.error(pkg.name(), msg);
+        }
+        Object session = null;
+        BirdScriptApi api = new BirdScriptApi(plugin, pkg.name(), addonStateFolder);
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(loader);
+        try {
+            session = bridge.getMethod("open").invoke(null);
+            Thread.currentThread().setContextClassLoader(previous);
+            previous = null;
+            bindCommon(session, api, pkg);
+            session.getClass().getMethod("eval", File.class).invoke(session, pkg.entryFile());
+            final Object ready = session;
+            activate(pkg, ready, api, () -> { });
+            plugin.getLogger().info("Loaded addon: " + pkg.name() + " (GraalPy engine)");
+            return ScriptLoadResult.ok(pkg.name());
+        } catch (Throwable t) {
+            closeSession(session);
+            rollback(pkg.name(), api);
+            String msg = firstLine(String.valueOf(causeOf(t).getMessage() != null ? causeOf(t).getMessage() : t.toString()));
+            plugin.getLogger().severe("[" + pkg.name() + "] Python 扩展加载失败: " + msg);
+            return ScriptLoadResult.error(pkg.name(), msg);
+        } finally {
+            if (previous != null) Thread.currentThread().setContextClassLoader(previous);
+        }
     }
     private ScriptLoadResult loadJavaScript(ScriptPackage pkg) {
         BirdScriptApi api=new BirdScriptApi(plugin,pkg.name(),addonStateFolder);

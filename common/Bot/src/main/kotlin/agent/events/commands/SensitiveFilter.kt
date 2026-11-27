@@ -62,6 +62,32 @@ object SensitiveFilter {
         return SensitiveAuditResult(value, sanitized, matches, blocked, ai.blocked, ai.reason)
     }
 
+    /** 公开匹配接口：返回文本中命中的词表（供 AI 入站/出站过滤复用同一套归一化防护）。 */
+    fun findMatches(value: String, words: List<String>, allowNone: Boolean = false): List<String> {
+        if (value.isBlank()) return emptyList()
+        return effectiveWords(words, allowNone).filter { containsCanonical(value, it) }
+    }
+
+    /**
+     * 星号包裹掩蔽：违禁词替换为 *原词*（保留原词并标记），供 AI 上下文使用——
+     * 模型既能理解语境，又明确知道哪些词被平台屏蔽。
+     */
+    fun maskWrapped(value: String, matches: List<String>): String {
+        var result = value
+        matches.sortedByDescending { it.length }.forEach { word ->
+            if (word.isBlank()) return@forEach
+            result = result.replace(word, "*" + word + "*", ignoreCase = true)
+        }
+        return result
+    }
+
+    /** 便捷入口：直接返回掩蔽后的文本（*词* 格式）与命中词。 */
+    fun maskForAi(value: String, words: List<String>, allowNone: Boolean = false): Pair<String, List<String>> {
+        val hits = findMatches(value, words, allowNone)
+        if (hits.isEmpty()) return value to emptyList()
+        return maskWrapped(value, hits) to hits
+    }
+
     /** Compatibility API used by existing formatting paths. */
     fun filter(
         value: String,

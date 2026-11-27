@@ -96,7 +96,7 @@ object AgentManager {
             // 复用前必须复位，否则新任务会在 runLoop 入口被立刻判定为"已停止"而直接结束。
             session.stopped = false
             session.memberNames.putAll(mentionMapValues(event))
-            session.messages.add(userMessage("请帮我：$fullTask"))
+            session.messages.add(userMessage("请帮我：" + AiContentGuard.maskInbound(plugin, fullTask)))
         } else {
             session = AgentSession(UUID.randomUUID().toString(), groupOpenId, requestUserId, fullTask)
             session.memberNames.putAll(mentionMapValues(event))
@@ -126,7 +126,7 @@ object AgentManager {
                     "   - 禁止询问用户 group_openid 或 member_openid。" +
                     (if (guide.isNotEmpty()) "\n\n以下是 Minecraft 命令语法速查（完整内容通过 load_skill 获取）：\n$guide" else "")
             ))
-            session.messages.add(userMessage("请帮我：$fullTask"))
+            session.messages.add(userMessage("请帮我：" + AiContentGuard.maskInbound(plugin, fullTask)))
         }
 
         sendGroupMessage(event, "已收到任务，AI 助手开始处理…")
@@ -864,7 +864,10 @@ object AgentManager {
 
     private fun sendToGroup(plugin: HuHoBot, session: AgentSession, content: String) {
         if (session.stopped || content.isBlank()) return
-        splitMessages(content).forEach { chunk ->
+        // 出站违禁词过滤：正文命中替换成 *原词* 后再发群（工具调用参数不经过此路径）。
+        val (filtered, hits) = AiContentGuard.filterOutbound(plugin, content)
+        if (hits.isNotEmpty()) plugin.log_info("Agent 回复命中违禁词已掩蔽：${hits.joinToString("、")}")
+        splitMessages(filtered).forEach { chunk ->
             if (session.stopped) return
             plugin.sendMarkdownToGroup(session.groupOpenId, chunk)
         }
