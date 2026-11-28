@@ -69,7 +69,22 @@ object MenuManager {
             }
             val profiles = linkedMapOf<String, PanelProfile>()
             for (groupId in groups) {
-                val items = buildItemsForGroup(plugin, groupId, allBuiltInCommands, customCommands)
+                var items = buildItemsForGroup(plugin, groupId, allBuiltInCommands, customCommands)
+                if (items.isEmpty()) {
+                    // 群覆盖把面板清空（所有命令 pushMenu=false）时，绝不让该群变成
+                    // 「@机器人不弹面板」：回退到默认（全局）面板配置。
+                    val fallback = buildItems(
+                        allBuiltInCommands.filter { plugin.getCommandList()[it.command] != false }
+                            .filter { plugin.getCommandMenuList()[it.command] != false },
+                        customCommands,
+                        plugin.getCommandMenuPriorities(),
+                        plugin.showAdminCommandsInMenu()
+                    )
+                    if (fallback.isNotEmpty()) {
+                        plugin.log_warning("群 $groupId 的自定义面板配置为空，已回退默认面板")
+                        items = fallback
+                    }
+                }
                 if (items.isEmpty()) continue
                 val limited = if (items.size > MAX_ITEMS) items.take(MAX_ITEMS) else items
                 val signature = panelSignature(limited, plugin.showAdminCommandsInMenu(groupId))
