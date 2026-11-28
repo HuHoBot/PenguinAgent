@@ -1,0 +1,15 @@
+# 由 HuHoBot Agent 自动生成：这是教程，不会自动执行。
+# 复制需要的项目到 data/timed-tasks.yml 的 tasks: 下；不要直接覆盖整个活动文件。
+# cron 与 interval-seconds 二选一；cron 为 分 时 日 月 周，使用服务器本地时区。
+# group 留空发给 bot.groups 全部群，也可以填一个群OpenID。
+# message 与 command 至少填一个；可同时填写。命令仍经过黑名单。
+# 不想启用任何任务时，活动文件写 tasks: []。
+tasks:
+  - name: 每天早安
+    cron: '0 9 * * *'
+    group: ''
+    message: '早上好，服务器已开放。'
+  - name: 周期保存示例
+    interval-seconds: 21600
+    group: ''
+    command: 'save-all'

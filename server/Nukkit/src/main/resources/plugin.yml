@@ -1,5 +1,5 @@
 name: HuHoBotPenguin
-main: cn.huohuas001.huhobotPenguin.nukkit.HuHoBotNukkit
+main: agent.nukkit.HuHoBotNukkit
 version: '${version}'
 api: ["1.0.5"]
 load: POSTWORLD

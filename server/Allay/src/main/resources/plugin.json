@@ -1,5 +1,5 @@
 {
-  "entrance": "cn.huohuas001.huhobotPenguin.allay.HuHoBotAllay",
+  "entrance": "agent.allay.HuHoBotAllay",
   "name": "HuHoBotPenguin",
   "authors": ["HuoHuas001"],
   "version": "${version}",

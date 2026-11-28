@@ -51,6 +51,7 @@ tasks.shadowJar {
     // 注意：本模块源码直接引用 Velocity 提供的 net.kyori.adventure.text.Component，
     // 因此不能整体 relocate("net.kyori")，否则会把对该 API 的引用一起改掉。
     // 若要启用本模块，需单独处理 common-Bot 带入的 Adventure（排除或按平台适配）。
+    filesMatching("META-INF/services/**") { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
     mergeServiceFiles()
 }
 

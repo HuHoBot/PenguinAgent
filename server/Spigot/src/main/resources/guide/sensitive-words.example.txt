@@ -1,0 +1,5 @@
+由 HuHoBot Agent 自动生成：复制到 data/sensitive-words/custom.txt 后按需填写。
+# UTF-8 文本，每行一个词；空行和 # 开头行不会加载。
+# 这里不列出内置基础词。删除自定义文件或清空内容时，内置词仍会生效。
+# 要停用内置词，只能在配置中明确打开 moderation.sensitive-words.allow-none；风险由服主承担。
+替换为你自己的词

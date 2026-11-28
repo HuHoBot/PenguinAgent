@@ -1,0 +1,7 @@
+{
+  "minimumVersion": "1.23.1",
+  "version": "1.23.1",
+  "downloadUrl": "https://github.com/HuHoBot/PenguinAgent/releases/download/v1.23.1/HuHoBot-Penguin-1.23.1.jar",
+  "sha256": "<64 lowercase hex characters; optional but recommended>",
+  "notes": "发布前填写真实哈希。本示例不是活动策略，MEU.json 不存在时插件忽略。"
+}

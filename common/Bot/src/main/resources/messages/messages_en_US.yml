@@ -1,0 +1,27 @@
+# HuHoBot message strings (English)
+command:
+  disabled: "This command has been disabled by an administrator"
+  no-admin: "You do not have permission to use this command"
+  no-permission-group: "Your permission group does not include this command"
+
+chat-ai:
+  busy: "Still thinking about the previous message, please wait a moment…"
+  empty-reply: "The assistant has no reply right now, please try again later."
+  cleared: "✅ Chat history for this group has been cleared."
+  compressed: "✅ Chat history compressed"
+  nothing-to-compress: "Not enough chat history in this group to compress"
+  enabled-on: "enabled"
+  enabled-off: "disabled"
+  status: "Chat AI: {enabled}\nLanguage: {language}\nMessages in this group: {count}"
+
+unbind:
+  confirm-title: "Unbind this account?"
+  confirm-body: "Bound character: {player}\nThe whitelist entry will be removed as well. No choice within 30s cancels."
+  not-yours: "This is not your binding. Please let the requester operate it."
+  timeout: "Timed out, unbind cancelled"
+  cancelled: "Unbind cancelled"
+  done: "Unbound character: {player}"
+
+agent:
+  approval-timeout: "Approval timed out, the operation was rejected automatically"
+  no-permission: "You are not allowed to approve this, please let an administrator handle it"

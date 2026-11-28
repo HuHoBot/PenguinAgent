@@ -1,0 +1,4 @@
+-- 由 HuHoBot Agent 自动生成：复制到 addons/hello-lua/main.lua 才会启用。
+-- metadata.yaml 的 name 请用 hello-lua，entry 用 main.lua。Lua调用Bird实例方法用冒号。
+Bird:log('hello Lua addon ready')
+Bird:registerBotCommand('hello-lua', 'Lua问候', 'say 你好，来自Lua扩展', 0, false)

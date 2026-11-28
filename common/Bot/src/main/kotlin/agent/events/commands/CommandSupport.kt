@@ -1,0 +1,161 @@
+package agent.events.commands
+
+import agent.HuHoBot
+import agent.QClient
+import agent.datapack.AdministratorAccessMode
+import agent.state.CommandRepositories
+import io.github.kloping.qqbot.api.v2.GroupMessageEvent
+import io.github.kloping.qqbot.entities.ex.msg.MessageChain
+
+/**
+ * 迁移命令共享的上下文工具。
+ *
+ * 这里统一处理群/用户标识、管理员鉴权、敏感词审核和游戏命令回报，
+ * 具体命令类只保留业务流程。
+ */
+abstract class CommandSupport : BaseCommand() {
+
+    protected fun groupId(event: GroupMessageEvent): String =
+        event.groupOpenId ?: event.groupId
+
+    protected fun userId(event: GroupMessageEvent): String =
+        event.sender?.openid ?: event.sender?.id ?: ""
+
+    protected fun reply(plugin: HuHoBot, event: GroupMessageEvent, message: String) {
+        val groupId = groupId(event)
+        QClient.sendTextToGroup(groupId, plugin.auditText(message))
+    }
+
+    protected fun sendMessage(event: GroupMessageEvent, message: String) {
+        QClient.sendTextToGroup(groupId(event), message)
+    }
+
+    protected fun replyWithImg(plugin: HuHoBot, event: GroupMessageEvent, message: String,imgUrl: String) {
+        plugin.replyWithImg(event,message,imgUrl)
+    }
+
+    /** 发送 PNG 字节数组作为图片消息。 */
+    protected fun replyWithImgBytes(plugin: HuHoBot, event: GroupMessageEvent, text: String, imgBytes: ByteArray) {
+        try {
+            val groupId = groupId(event)
+            val message = MessageChain()
+                .apply { if (text.isNotBlank()) text(plugin.auditText(text)) }
+                .image(imgBytes)
+            event.sendMessage(message)
+        } catch (error: Exception) {
+            plugin.log_error("发送图片消息失败: ${error.message}")
+        }
+    }
+
+    /** 检查用户是否为管理员（不发送错误消息）。 */
+    protected fun isAdmin(plugin: HuHoBot, event: GroupMessageEvent): Boolean {
+        val groupId = groupId(event)
+        val userId = userId(event)
+        val qqAdmin = memberRole(event) in setOf("owner", "admin")
+        val manualAdmin = userId in plugin.getAdminList() ||
+            CommandRepositories.administrators.contains(groupId, userId)
+        val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
+        val configuredMode = CommandRepositories.groupSettings.administratorMode(groupId, defaultMode)
+        return when (configuredMode) {
+            AdministratorAccessMode.QQ -> qqAdmin
+            AdministratorAccessMode.MANUAL -> manualAdmin
+            AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin
+        }
+    }
+
+    protected fun requireAdmin(plugin: HuHoBot, event: GroupMessageEvent): Boolean {
+        val groupId = groupId(event)
+        val userId = userId(event)
+        val qqAdmin = memberRole(event) in setOf("owner", "admin")
+        val manualAdmin = userId in plugin.getAdminList() ||
+            CommandRepositories.administrators.contains(groupId, userId)
+
+        val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
+        val configuredMode = CommandRepositories.groupSettings.administratorMode(groupId, defaultMode)
+        val allowed = when (configuredMode) {
+            AdministratorAccessMode.QQ -> qqAdmin
+            AdministratorAccessMode.MANUAL -> manualAdmin
+            AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin
+        }
+
+        if (!allowed) {
+            sendMessage(event, "你没有执行此命令的管理员权限")
+        }
+        return allowed
+    }
+
+    protected fun executeGameCommand(
+        plugin: HuHoBot,
+        event: GroupMessageEvent,
+        command: String,
+        direct: Boolean
+    ) {
+        val outgoingCommand = if (direct) {
+            command
+        } else {
+            "huhobot run ${groupId(event)} ${userId(event)} $command"
+        }
+
+        // 命令黑名单检查：前缀、命名空间、别名都在 guard 里统一规范化后再比较
+        if (CommandBlacklistGuard.isBlocked(plugin, outgoingCommand)) {
+            sendMessage(event, "此命令已被管理员禁止执行")
+            return
+        }
+
+        plugin.sendCommand(outgoingCommand).whenComplete { result, error ->
+            when {
+                error != null || result == null -> sendMessage(event, "游戏桥接未配置或执行失败")
+                else -> {
+                    val raw = result.getRawString()
+                        .replace(Regex("\u001B\\[[0-9;]*m"), "")
+                        .replace(Regex("\\[[0-9;]*m"), "")
+                        .replace(Regex("§[0-9a-fk-orA-FK-OR]"), "")
+                    QClient.replyText(event, raw.ifBlank { "已发送执行请求" })
+                }
+            }
+        }
+    }
+
+    protected fun executeCustomCommand(
+        plugin: HuHoBot,
+        event: GroupMessageEvent,
+        params: String,
+        admin: Boolean
+    ) {
+        val type = if (admin) "adminrun" else "run"
+        executeGameCommand(
+            plugin = plugin,
+            event = event,
+            command = "huhobot $type ${groupId(event)} ${userId(event)} $params",
+            direct = true
+        )
+    }
+
+    private fun memberRole(event: GroupMessageEvent): String = try {
+        event.sender?.meta?.getString("member_role")?.lowercase() ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+
+    companion object {
+        /** 静态管理员检查，供 BaseCommand.handleMessage 仅管理员命令拦截使用。 */
+        fun checkAdmin(plugin: HuHoBot, event: GroupMessageEvent): Boolean {
+            val groupId = event.groupOpenId ?: event.groupId
+            val userId = event.sender?.openid ?: event.sender?.id ?: ""
+            val qqAdmin = try {
+                event.sender?.meta?.getString("member_role")?.lowercase() in setOf("owner", "admin")
+            } catch (_: Exception) { false }
+            val manualAdmin = userId in plugin.getAdminList() ||
+                CommandRepositories.administrators.contains(groupId, userId)
+            // 权限组：成员所在权限组配置 admin=true 时按管理员对待
+            val permissionGroupAdmin = agent.state.PermissionGroupsStore.isAdminByGroup(userId)
+            val defaultMode = AdministratorAccessMode.fromConfig(plugin.getAdminMode())
+            val configuredMode = CommandRepositories.groupSettings.administratorMode(groupId, defaultMode)
+            return when (configuredMode) {
+                AdministratorAccessMode.QQ -> qqAdmin || permissionGroupAdmin
+                AdministratorAccessMode.MANUAL -> manualAdmin || permissionGroupAdmin
+                AdministratorAccessMode.BOTH -> qqAdmin || manualAdmin || permissionGroupAdmin
+            }
+        }
+    }
+}

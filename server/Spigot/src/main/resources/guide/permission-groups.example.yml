@@ -1,0 +1,17 @@
+# 由 HuHoBot Agent 自动生成：这是教程，不会作为活动权限组自动载入。
+# 把需要的组复制到 data/permission-groups.yml 的 groups: 下，再执行配置重载。
+# members 填 QQ 成员 member_openid；不是QQ号码，也不是 group_openid。
+# 一个成员属于多组时按文件顺序取第一个匹配组，不叠加。
+# commands 不带 /；空列表表示继承全局配置，不表示禁止全部。
+# admin: true 授予插件管理员能力，慎用；不会替代QQ平台群管权限。
+groups:
+  - name: helpers
+    members:
+      - '替换为成员A的member_openid'
+      - '替换为成员B的member_openid'
+    commands: ['查在线', 'motd']
+    admin: false
+  - name: operators
+    members: ['替换为受信任管理员的member_openid']
+    commands: []
+    admin: true

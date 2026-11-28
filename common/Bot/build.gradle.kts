@@ -4,6 +4,13 @@ plugins {
     kotlin("plugin.lombok")
 }
 
+val qqSdkSources = tasks.register<Sync>("prepareQqSdkSources") {
+    from(rootProject.file("deps/qqpd-bot-java/src/main/java")) {
+        exclude("io/github/kloping/qqbot/Starter.java", "io/github/kloping/qqbot/network/hookauth/HookAuth.java")
+    }
+    into(layout.buildDirectory.dir("generated/sources/qq-sdk/main"))
+}
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(8)) // 设置 JDK 8
@@ -14,7 +21,7 @@ java {
     // are used immediately without importing its Gradle build.
     sourceSets {
         named("main") {
-            java.srcDir(rootProject.file("deps/qqpd-bot-java/src/main/java"))
+            java.srcDir(qqSdkSources)
         }
     }
 }
@@ -28,6 +35,8 @@ dependencies {
     }
     implementation("io.github.kloping:JvUtils:0.4.9-Beta1") {
         exclude(group = "org.slf4j", module = "slf4j-api")
+        // QQ SDK uses JvUtils utilities, not its optional CronUtils JDBC scheduler.
+        exclude(group = "org.quartz-scheduler", module = "quartz")
     }
     implementation("org.java-websocket:Java-WebSocket:1.6.0")
     implementation("org.slf4j:slf4j-api:2.0.13")
@@ -36,10 +45,10 @@ dependencies {
     implementation("org.jsoup:jsoup:1.15.4")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.fusesource.jansi:jansi:2.4.0")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.79")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.87")
 
     // Used by both the submodule sources and this module's Kotlin sources.
-    implementation("com.alibaba:fastjson:2.0.32")
+    implementation("com.alibaba:fastjson:2.0.66")
 
     // MiniMessage：群→游戏消息支持 <gold>、<#FFAA00> 等新式颜色写法。
     implementation("net.kyori:adventure-text-minimessage:4.17.0")
@@ -49,8 +58,11 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok:1.18.26")
 
     testImplementation(kotlin("test"))
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.46.1.3")
 }
 
 repositories {
     mavenCentral()
 }
+
+tasks.named("compileKotlin") { dependsOn(qqSdkSources) }

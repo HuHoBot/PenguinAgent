@@ -1,0 +1,10 @@
+# 由 HuHoBot Agent 自动生成：复制到 addons/hello/metadata.yaml 后按需填写。
+# 仅支持顶层 key: value 字符串；不用嵌套、列表或多行块。
+# 字段说明写在独立注释行，不在值后写行内注释。
+# name 为唯一扩展名，不能带路径分隔符，改名会改变配置/数据文件的对应关系。
+name: hello
+version: '1.0.0'
+author: 'Server owner'
+description: '一个不含外部依赖的问候扩展'
+# JS填main.js；Lua填main.lua；Java填Main.java。入口路径必须位于本扩展目录内。
+entry: main.js

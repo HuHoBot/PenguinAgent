@@ -1,0 +1,50 @@
+[
+  {
+    "source": "NotoSansCJKsc-Regular.otf",
+    "file": "HuHoCJK.otf",
+    "family": "HuHo CJK",
+    "codepoints": 44810,
+    "bytes": 8785260,
+    "sha256": "32ea0520a6798c43665880cfe8737bdc1948eb7eaf5eb51c11c9d63fe3b12ea5",
+    "resource": "HuHoCJK.otf.xz",
+    "resourceEncoding": "xz",
+    "resourceBytes": 5611008,
+    "resourceSHA256": "d425afb3351e1f34f8c967d46bdbebbab3b483450be2927a032b96f2d430df5c"
+  },
+  {
+    "source": "NotoSans.ttf",
+    "file": "HuHoSans.ttf",
+    "family": "HuHo Sans",
+    "codepoints": 3094,
+    "bytes": 374792,
+    "sha256": "c076cbf5d04cb1e54743f39ffc2ba80e3dcef72428de5fb53369275db7229c93",
+    "resource": "HuHoSans.ttf.xz",
+    "resourceEncoding": "xz",
+    "resourceBytes": 158708,
+    "resourceSHA256": "761884fdd955ab32e173ff2d2c71fee29e3df5422bdc0cc01174fc8a13b6d406"
+  },
+  {
+    "source": "NotoSansSymbols2-Regular.ttf",
+    "file": "HuHoSymbolsWide.ttf",
+    "family": "HuHo Symbols Wide",
+    "codepoints": 2955,
+    "bytes": 677104,
+    "sha256": "9ebaed2c8606065f8e31b08f7eda1515ee0ae93e436443e7665e8aff663e99bb",
+    "resource": "HuHoSymbolsWide.ttf.xz",
+    "resourceEncoding": "xz",
+    "resourceBytes": 261432,
+    "resourceSHA256": "d5bb87056ae8d45a489da9434ac4fcc098529fd899e4e03ecf6c67fb8ea4ea7b"
+  },
+  {
+    "source": "NotoEmoji.ttf",
+    "file": "HuHoEmoji.ttf",
+    "family": "HuHo Emoji",
+    "codepoints": 1489,
+    "bytes": 863164,
+    "sha256": "f5c4a7773869ab0665376cb189715754a2a71c77e484787ab2d99c72b4820ef0",
+    "resource": "HuHoEmoji.ttf.xz",
+    "resourceEncoding": "xz",
+    "resourceBytes": 504076,
+    "resourceSHA256": "9eb66a71f63d0cd4a9b446fc704aeb842f3ed1efd1cb478ee21878b3bcea7566"
+  }
+]

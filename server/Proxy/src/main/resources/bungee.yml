@@ -1,5 +1,5 @@
 name: HuHoBotPenguin
 version: '${version}'
-main: cn.huohuas001.huhobotPenguin.bungee.HuHoBotBungee
+main: agent.bungee.HuHoBotBungee
 author: HuoHuas001
-description: HuHoBot BungeeCord Adapter
+description: HuHoBot Penguin
