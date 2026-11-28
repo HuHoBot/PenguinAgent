@@ -106,6 +106,17 @@ interface ConfigProvider {
     /** 每日群报发送时间（HH:mm）。 */
     fun getDailyReportTime(): String = "08:00"
 
+    /** 中心化链接上报开关。 */
+    fun isLinkEnabled(): Boolean = false
+    /** 平台地址。 */
+    fun getLinkBaseUrl(): String = ""
+    /** 服务器 key。 */
+    fun getLinkServerKey(): String = ""
+    /** 中心化 WebUI 登录名（哈希后参与鉴权）。 */
+    fun getLinkWebuiUser(): String = ""
+    /** 中心化 WebUI 密码（只传哈希）。 */
+    fun getLinkWebuiPass(): String = ""
+
     /** 每个群最多保留的记忆条数。 */
     fun getAgentMemoryMaxItems(): Int = 200
 

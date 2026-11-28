@@ -533,6 +533,21 @@ motd:
   post-img: true
   # 是否启用本项行为；true 开启，false 关闭。
   use-markdown: true
+# 中心化链接：把服务器接入 huhobot.us.ci（或你自己部署的同款站点），
+# 定时上报在线人数/玩家/最近聊天，平台返回展示页链接；也支持中心化 WebUI。
+link:
+  # 是否启用。
+  enabled: false
+  # 平台地址；公共服务填 https://huhobot.us.ci，自部署填你自己的域名。
+  base-url: 'https://huhobot.us.ci'
+  # 在平台控制台「新建服务器」得到的 key（只在创建时显示一次）。
+  server-key: ''
+  # 上报间隔秒数（平台写接口有限频，别低于 30）。
+  report-interval-seconds: 60
+  # 中心化 WebUI 登录名与密码；只以哈希形式参与鉴权，明文不出服务器。
+  # 不配置则中心化 WebUI 不可用（展示页不受影响）。
+  webui-user: ''
+  webui-pass: ''
 # 每日群报：到设定时间向所有配置群推送过去 24 小时的服务器摘要。
 daily-report:
   # 是否启用每日群报。

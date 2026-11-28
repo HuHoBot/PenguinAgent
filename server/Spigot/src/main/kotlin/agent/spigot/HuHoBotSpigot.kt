@@ -132,6 +132,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         performanceWatcher.start()
         // 每日群报（daily-report.enabled 时按设定时间推送）
         agent.spigot.monitor.DailyReportTask.start(this)
+        // 中心化链接（link.enabled 时定时上报，展示页/中心化 WebUI）
+        agent.spigot.manager.LinkReporter.start(this)
         // 强制 OTA（应急漏洞修补；未配置清单地址时完全静默）
         otaUpdater.start()
         // 退群自动解绑（轮询群成员列表，需 QQ 白名单能力）
@@ -213,6 +215,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         runCatching { agent.spigot.manager.FontManager.shutdown() }
         runCatching { performanceWatcher.stop() }
         runCatching { agent.spigot.monitor.DailyReportTask.stop() }
+        runCatching { agent.spigot.manager.LinkReporter.stop() }
         runCatching { otaUpdater.stop() }
         // 必须赶在 shutdownRuntime() 关掉 QQ 连接之前发送，否则关机通知发不出去。
         if (::serverNotifyManager.isInitialized) serverNotifyManager.onServerStopping()
@@ -1174,6 +1177,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun isBindingCardEnabled(): Boolean = configManager.bindingCardEnabled()
     override fun isDailyReportEnabled(): Boolean = configManager.dailyReportEnabled()
     override fun getDailyReportTime(): String = configManager.dailyReportTime()
+    override fun isLinkEnabled(): Boolean = configManager.linkEnabled()
+    override fun getLinkBaseUrl(): String = configManager.linkBaseUrl()
+    override fun getLinkServerKey(): String = configManager.linkServerKey()
+    override fun getLinkWebuiUser(): String = configManager.linkWebuiUser()
+    override fun getLinkWebuiPass(): String = configManager.linkWebuiPass()
 
     override fun getBindingCardImage(qqUserId: String): ByteArray? {
         if (!configManager.bindingCardEnabled()) return null

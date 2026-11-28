@@ -451,6 +451,12 @@ class ConfigManager(
     fun dailyReportTime(): String =
         plugin.config.getString("daily-report.time", "08:00")?.trim().orEmpty().ifBlank { "08:00" }
 
+    fun linkEnabled(): Boolean = plugin.config.getBoolean("link.enabled", false)
+    fun linkBaseUrl(): String = plugin.config.getString("link.base-url", "")?.trim().orEmpty()
+    fun linkServerKey(): String = plugin.config.getString("link.server-key", "")?.trim().orEmpty()
+    fun linkWebuiUser(): String = plugin.config.getString("link.webui-user", "")?.trim().orEmpty()
+    fun linkWebuiPass(): String = plugin.config.getString("link.webui-pass", "")?.trim().orEmpty()
+
     fun agentExtraHeaders(): Map<String, String> {
         val section = plugin.config.getConfigurationSection("agent.headers") ?: return emptyMap()
         val out = LinkedHashMap<String, String>()
