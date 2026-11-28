@@ -455,7 +455,13 @@ object QClient {
         }
         Thread {
             try {
-                starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                try {
+                    starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                } catch (first: Exception) {
+                    // 发送失败自动重试一次（网络抖动/瞬时限频常见，第二次通常能成功）
+                    Thread.sleep(500)
+                    starter.bot.groupBaseV2.send(groupOpenId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                }
             } catch (e: Exception) {
                 if (passive != null) {
                     // 被动通道失败（窗口过期/seq 冲突）→ 回退一次主动发送
@@ -480,9 +486,14 @@ object QClient {
             plugin.getGroupOpenIdList().forEach { groupId ->
                 try {
                     attachPassive(payload, groupId)
-                    starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                    try {
+                        starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                    } catch (first: Exception) {
+                        Thread.sleep(500)
+                        starter.bot.groupBaseV2.send(groupId, JSON.toJSONString(payload), Channel.SEND_MESSAGE_HEADERS)
+                    }
                 } catch (e: Exception) {
-                    plugin.log_error("向QQ群 $groupId ${action}失败: ${e.message}")
+                    plugin.log_error("向QQ群 $groupId ${action}失败（已重试1次）: ${e.message}")
                 }
             }
         }.start()

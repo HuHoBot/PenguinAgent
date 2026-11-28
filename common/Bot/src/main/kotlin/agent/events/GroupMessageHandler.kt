@@ -133,10 +133,16 @@ class GroupMessageHandler(
         val moderation = plugin.audit(content)
         if (moderation.blocked) {
             plugin.log_warning("已拦截一条 QQ 入站违规消息（group=$groupId，命中=${moderation.matchedWords.size} 条${if (moderation.aiBlocked) "，AI复核" else ""}）")
-            agent.QClient.replyModerationWarning(event, "你的消息包含违规内容，已被拦截。")
+            // 提示可配置：默认只撤回不发送拦截提示（notify-user: false）。
+            if (plugin.isModerationNotifyUserEnabled()) {
+                agent.QClient.replyModerationWarning(event, "你的消息包含违规内容，已被拦截。")
+            }
             agent.QClient.autoRecallInbound(groupId, event.rawMessage.id.orEmpty(), "QQ入站违禁词")
             return
         }
+        // 「记忆」命令：分页查看 / 添加 / 删除 AI 记忆（存储于 data/agent-memory/*.yml）。
+        if (handleMemoryCommand(plugin, groupId, content.trim(), event)) return
+
         when (dispatchCommand(event)) {
             BaseCommand.DispatchResult.CUSTOM_COMMAND -> Unit
 
@@ -350,4 +356,63 @@ class GroupMessageHandler(
         val colored = formatted.replace(Regex("&([0-9a-fk-orA-FK-OR])")) { "§${it.groupValues[1].lowercase()}" }
         plugin.broadcastMessage(colored, mentionedPlayers)
     }
+}
+
+
+/**
+ * 「记忆」命令处理：查看（分页）/ 添加 / 删除 / 清空。
+ * - 记忆 [页码]         分页查看
+ * - 记忆添加 <内容>     追加一条记忆（受 agent.memory.max-items 上限约束）
+ * - 记忆删除 <序号>     删除指定序号
+ * - 记忆清空            清空本群记忆
+ */
+private fun handleMemoryCommand(
+    plugin: agent.HuHoBot,
+    groupId: String,
+    content: String,
+    event: io.github.kloping.qqbot.api.v2.GroupMessageEvent
+): Boolean {
+    if (!plugin.isAgentMemoryEnabled()) return false
+    val trimmed = content.trim()
+    val isList = trimmed == "记忆" || trimmed.startsWith("记忆 ")
+    val isAdd = trimmed.startsWith("记忆添加 ")
+    val isDel = trimmed == "记忆删除" || trimmed.startsWith("记忆删除 ")
+    val isClear = trimmed == "记忆清空"
+    if (!isList && !isAdd && !isDel && !isClear) return false
+    if (isList && trimmed.startsWith("记忆 ") && trimmed.substring(3).trim().toIntOrNull() == null) return false
+    val pageSize = 8
+    fun reply(text: String) {
+        runCatching { agent.QClient.replyText(event, text) }
+            .onFailure { plugin.log_warning("记忆命令回复失败: ${it.message}") }
+    }
+    when {
+        isList -> {
+            val pageArg = trimmed.substringAfter(" ", "").trim().toIntOrNull() ?: 1
+            val items = agent.ai.MemoryStore.list(groupId)
+            if (items.isEmpty()) { reply("本群还没有 AI 记忆。AI 会在需要时自动保存，也可以用「记忆添加 <内容>」手动添加。"); return true }
+            val totalPages = (items.size + pageSize - 1) / pageSize
+            val page = pageArg.coerceIn(1, totalPages)
+            val sb = StringBuilder("AI 记忆（第 $page/$totalPages 页，共 ${items.size} 条）\n")
+            val start = (page - 1) * pageSize
+            items.drop(start).take(pageSize).forEachIndexed { i, e ->
+                sb.append(start + i + 1).append(". ").append(e.text.take(60)).append('\n')
+            }
+            if (page < totalPages) sb.append("发送「记忆 ${page + 1}」查看下一页")
+            reply(sb.toString().trim())
+        }
+        isAdd -> {
+            val text = trimmed.removePrefix("记忆添加 ").trim()
+            if (text.isEmpty()) { reply("用法：记忆添加 <内容>"); return true }
+            reply(if (agent.ai.MemoryStore.add(groupId, text)) "已保存记忆" else "该记忆已存在或内容为空")
+        }
+        isDel -> {
+            val arg = trimmed.removePrefix("记忆删除").trim()
+            if (arg == "全部" || arg == "all") { agent.ai.MemoryStore.clear(groupId); reply("已清空本群全部记忆"); return true }
+            val idx = arg.toIntOrNull()
+            if (idx == null) { reply("用法：记忆删除 <序号> 或 记忆删除 全部"); return true }
+            reply(if (agent.ai.MemoryStore.removeAt(groupId, idx)) "已删除第 $idx 条记忆" else "序号 $idx 不存在")
+        }
+        isClear -> { agent.ai.MemoryStore.clear(groupId); reply("已清空本群全部记忆") }
+    }
+    return true
 }

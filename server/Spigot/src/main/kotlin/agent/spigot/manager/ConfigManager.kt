@@ -433,6 +433,24 @@ class ConfigManager(
     fun moderationAllowNone(): Boolean =
         plugin.config.getBoolean("moderation.sensitive-words.allow-none", false)
 
+    fun moderationNotifyUser(): Boolean =
+        plugin.config.getBoolean("moderation.sensitive-words.notify-user", false)
+
+    fun agentMemoryEnabled(): Boolean =
+        plugin.config.getBoolean("agent.memory.enabled", true)
+
+    fun agentMemoryMaxItems(): Int =
+        plugin.config.getInt("agent.memory.max-items", 200)
+
+    fun agentExtraHeaders(): Map<String, String> {
+        val section = plugin.config.getConfigurationSection("agent.headers") ?: return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (key in section.getKeys(false)) {
+            section.getString(key)?.takeIf(String::isNotBlank)?.let { out[key] = it }
+        }
+        return out
+    }
+
     fun customCommands(): List<CustomCommandDetail> =
         plugin.config.getMapList("custom-commands").mapNotNull(::parseCustomCommand)
 

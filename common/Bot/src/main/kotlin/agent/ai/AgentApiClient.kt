@@ -47,8 +47,8 @@ class AgentApiClient(
     /** 请求的 max_tokens 上限；null 表示不在请求体中出现（保持服务端默认）。 */
     private val maxTokens: Int? = null,
     /** 请求的读超时（秒）。 */
-    private val timeoutSeconds: Int = 120
-) {
+    private val timeoutSeconds: Int = 120,
+    private val extraHeaders: Map<String, String> = emptyMap()) {
 
     /**
      * 最近一次调用里"思考参数没能生效"的提示，由 [AgentManager] 取走记日志。
@@ -147,6 +147,7 @@ class AgentApiClient(
                 readTimeout = timeoutMillis
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Authorization", "Bearer $apiKey")
+                extraHeaders.forEach { (k, v) -> runCatching { setRequestProperty(k, v) } }
             }
         } catch (error: Exception) {
             throw AgentApiException("无法连接 AI 接口 $url: ${error.message}", error)

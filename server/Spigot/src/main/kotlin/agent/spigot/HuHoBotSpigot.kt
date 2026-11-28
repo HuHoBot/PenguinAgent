@@ -84,6 +84,11 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
 
     override fun onEnable() {
         instance = this
+        // 无头环境兜底：所有图片渲染（查在线/背包/聊天记录）都走 Java2D 软件渲染。
+        // 必须在任何 AWT 类初始化之前设置，否则字体/Toolkit 初始化会因 "no screen devices" 失败。
+        if (System.getProperty("java.awt.headless") == null) {
+            System.setProperty("java.awt.headless", "true")
+        }
         if (readPluginYamlSwitch("foiladebug")) logger.fine("Scheduler diagnostics active")
         showBanner(false)
         agent.state.DataLayout.migrate(dataFolder) { message -> log_info(message) }
@@ -1161,6 +1166,10 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun isModerationAiReviewEnabled(): Boolean = configManager.moderationAiReviewEnabled()
     override fun isModerationAutoRecallEnabled(): Boolean = configManager.moderationAutoRecallEnabled()
     override fun isModerationAllowNone(): Boolean = configManager.moderationAllowNone()
+    override fun isModerationNotifyUserEnabled(): Boolean = configManager.moderationNotifyUser()
+    override fun isAgentMemoryEnabled(): Boolean = configManager.agentMemoryEnabled()
+    override fun getAgentMemoryMaxItems(): Int = configManager.agentMemoryMaxItems()
+    override fun getAgentExtraHeaders(): Map<String, String> = configManager.agentExtraHeaders()
     override fun getCustomCommands(): List<CustomCommandDetail> = configManager.customCommands()
     override fun getBotName(): String = configManager.botName()
     override fun getServerName(): String = configManager.serverName()

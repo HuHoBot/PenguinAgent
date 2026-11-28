@@ -57,7 +57,9 @@ class AgentConfig(
     /** 是否启用网页抓取。 */
     val searchFetchPages: Boolean = false,
     /** JS 自定义搜索代码（provider=js 时使用）。 */
-    val searchJsCode: String = ""
+    val searchJsCode: String = "",
+    /** 自定义请求头（网关鉴权、防套话标记等），随每次模型请求发送。 */
+    val extraHeaders: Map<String, String> = emptyMap()
 ) {
     /** 是否具备调用 AI 的前提条件（已启用且配置了接口地址与密钥）。 */
     val usable: Boolean

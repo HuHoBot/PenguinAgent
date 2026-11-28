@@ -226,7 +226,8 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
             searchApiUrl = getAgentSearchApiUrl(),
             searchApiKey = getAgentSearchApiKey(),
             searchFetchPages = getSearchFetchPages(),
-            searchJsCode = getSearchJsCode()
+            searchJsCode = getSearchJsCode(),
+            extraHeaders = getAgentExtraHeaders()
         )
     }
 

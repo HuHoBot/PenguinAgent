@@ -45,6 +45,9 @@ object AgentTools {
 
     /** 联网搜索（配置了搜索 provider 时可用） */
     const val TOOL_WEB_SEARCH = "web_search"
+    const val TOOL_SAVE_MEMORY = "save_memory"
+    const val TOOL_RECALL_MEMORY = "recall_memory"
+    const val TOOL_LIST_MEMORY = "list_memory"
 
     // ── QQ 群管理工具 ──
 
@@ -303,6 +306,13 @@ object AgentTools {
         add(toolDef(TOOL_WEB_SEARCH, "联网搜索（需要在配置中启用搜索 provider）。", mapOf(
             "query" to "搜索关键词"
         )))
+        add(toolDef(TOOL_SAVE_MEMORY, "把重要信息保存为本群长期记忆（重启不丢失），适合记录服主偏好、服务器约定、账号对照等。", mapOf(
+            "content" to "要记住的内容（一句话，最多500字）"
+        )))
+        add(toolDef(TOOL_RECALL_MEMORY, "检索本群长期记忆（含远古记忆，重启后仍在）。有关键词时按关键词检索，无关键词返回最近记忆。", mapOf(
+            "keyword" to "检索关键词（可选）"
+        )))
+        add(toolDef(TOOL_LIST_MEMORY, "列出本群最近的长期记忆条目（带序号，便于让用户删除）。", mapOf()))
 
         // ── QQ 群管理工具 ──
         add(toolDef(TOOL_GET_GROUP_INFO, "获取当前 QQ 群基本信息（群名、人数、标签等）。group_openid 已自动绑定当前群，无需提供。", mapOf(

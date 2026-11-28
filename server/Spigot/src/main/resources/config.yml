@@ -82,6 +82,9 @@ moderation:
     # 默认关闭。打开后停用内置基础词，只使用 data/sensitive-words/*.txt 中的自定义词。
     # 这不会绕过平台审核、机器人权限或QQ/Minecraft协议；风险由服主承担。
     allow-none: false
+    # 违禁词命中后是否发送「你的消息包含违规内容」的拦截提示。
+    # false（默认）=只静默撤回，不在群里发提示；true=撤回并 @ 提醒触发者。
+    notify-user: false
 # 查在线图片、皮肤来源、名称样式及布局。
 # ==================== 查在线图片 ====================
 online-list:
@@ -309,6 +312,18 @@ agent:
   # 工具名白名单，空列表允许全部；例如 [calculate, random_choice, sleep, get_online_list]。
   # 仅允许列表中的工具执行；不要把需要的管理工具漏掉。
   tools: []
+  # 长期记忆（AI 可通过工具随时写入/调取，用户可用「记忆」命令分页查看与削减）。
+  # 存储在 data/agent-memory/<群>.yml，纯 YAML 文件，适配面板服，无数据库依赖。
+  memory:
+    # 是否启用长期记忆。
+    enabled: true
+    # 每个群最多保留的记忆条数（10~2000）。
+    max-items: 200
+  # 自定义请求头（防套话/网关鉴权等场景）。示例：
+  # headers:
+  #   X-Custom-Auth: 'your-token'
+  #   X-Source: 'Minecraft-Server'
+  headers: {}
 # 群聊 AI 的模型、触发词、上下文和可用工具。
 # ==================== 群聊 AI ====================
 chat-ai:

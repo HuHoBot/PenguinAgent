@@ -90,6 +90,18 @@ interface ConfigProvider {
     fun isModerationAutoRecallEnabled(): Boolean = false
     /** Explicitly disables built-in words. This is intentionally off by default. */
     fun isModerationAllowNone(): Boolean = false
+
+    /** 违禁词命中后是否发送拦截提示；false=只撤回不打扰群。 */
+    fun isModerationNotifyUserEnabled(): Boolean = false
+
+    /** AI 长期记忆开关（存储在 data/agent-memory 目录，YAML 文件）。 */
+    fun isAgentMemoryEnabled(): Boolean = true
+
+    /** 每个群最多保留的记忆条数。 */
+    fun getAgentMemoryMaxItems(): Int = 200
+
+    /** AI 接口自定义请求头。 */
+    fun getAgentExtraHeaders(): Map<String, String> = emptyMap()
     fun getSensitiveWords(): List<String> {
         val directories =
             listOfNotNull(getDataDirectory()?.resolve("sensitive-words"), getConfigFile()?.parentFile?.resolve("sensitive-words"))

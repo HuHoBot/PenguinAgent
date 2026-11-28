@@ -194,10 +194,10 @@ object AgentManager {
         // 深度思考与思考引导互斥，开启思考引导后深度思考相关设置一律不生效
         val client = if (config.effectiveThink) {
             AgentApiClient(config.baseUrl, config.apiKey, config.model, config.thinkLevel, config.thinkParam,
-                maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds)
+                maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds, extraHeaders = config.extraHeaders)
         } else {
             AgentApiClient(config.baseUrl, config.apiKey, config.model,
-                maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds)
+                maxTokens = config.maxTokens, timeoutSeconds = config.timeoutSeconds, extraHeaders = config.extraHeaders)
         }
         val tools = filterAllowedTools(AgentTools.buildTools(), config.allowedTools)
 
@@ -400,6 +400,28 @@ object AgentManager {
                             )
                             SearchProvider.summarize(results)
                         }
+                        session.messages.add(toolMessage(toolCallId, text))
+                    }
+
+                    AgentTools.TOOL_SAVE_MEMORY -> {
+                        val content0 = query.getString("content")?.trim().orEmpty()
+                        val ok = if (content0.isEmpty()) false else MemoryStore.add(session.groupOpenId, content0)
+                        session.messages.add(toolMessage(toolCallId, if (ok) "已保存到本群长期记忆" else "保存失败（内容为空或已存在）"))
+                    }
+
+                    AgentTools.TOOL_RECALL_MEMORY -> {
+                        val kw = query.getString("keyword")?.trim().orEmpty()
+                        val items = if (kw.isEmpty()) MemoryStore.list(session.groupOpenId).takeLast(20)
+                            else MemoryStore.search(session.groupOpenId, kw).takeLast(20)
+                        val text = if (items.isEmpty()) "没有匹配的长期记忆"
+                        else items.mapIndexed { i, e -> "${i + 1}. ${e.text}" }.joinToString("\n")
+                        session.messages.add(toolMessage(toolCallId, text))
+                    }
+
+                    AgentTools.TOOL_LIST_MEMORY -> {
+                        val items = MemoryStore.list(session.groupOpenId).takeLast(30)
+                        val text = if (items.isEmpty()) "本群暂无长期记忆"
+                        else items.mapIndexed { i, e -> "${i + 1}. ${e.text}" }.joinToString("\n")
                         session.messages.add(toolMessage(toolCallId, text))
                     }
 
