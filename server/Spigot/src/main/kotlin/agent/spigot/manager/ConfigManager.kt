@@ -442,6 +442,15 @@ class ConfigManager(
     fun agentMemoryMaxItems(): Int =
         plugin.config.getInt("agent.memory.max-items", 200)
 
+    fun bindingCardEnabled(): Boolean =
+        plugin.config.getBoolean("binding.card.enabled", true)
+
+    fun dailyReportEnabled(): Boolean =
+        plugin.config.getBoolean("daily-report.enabled", false)
+
+    fun dailyReportTime(): String =
+        plugin.config.getString("daily-report.time", "08:00")?.trim().orEmpty().ifBlank { "08:00" }
+
     fun agentExtraHeaders(): Map<String, String> {
         val section = plugin.config.getConfigurationSection("agent.headers") ?: return emptyMap()
         val out = LinkedHashMap<String, String>()

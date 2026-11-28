@@ -142,6 +142,8 @@ class GroupMessageHandler(
         }
         // 「记忆」命令：分页查看 / 添加 / 删除 AI 记忆（存储于 data/agent-memory/*.yml）。
         if (handleMemoryCommand(plugin, groupId, content.trim(), event)) return
+        // 「我的绑定」：绑定角色卡片图（binding.card.enabled 时）。
+        if (handleBindingCardCommand(plugin, senderOpenId.orEmpty(), content.trim(), event)) return
 
         when (dispatchCommand(event)) {
             BaseCommand.DispatchResult.CUSTOM_COMMAND -> Unit
@@ -413,6 +415,33 @@ private fun handleMemoryCommand(
             reply(if (agent.ai.MemoryStore.removeAt(groupId, idx)) "已删除第 $idx 条记忆" else "序号 $idx 不存在")
         }
         isClear -> { agent.ai.MemoryStore.clear(groupId); reply("已清空本群全部记忆") }
+    }
+    return true
+}
+
+
+/** 「我的绑定」：渲染并回复个人绑定卡片图；未启用或无绑定时返回 false 走原命令流。 */
+private fun handleBindingCardCommand(
+    plugin: agent.HuHoBot,
+    userId: String,
+    content: String,
+    event: io.github.kloping.qqbot.api.v2.GroupMessageEvent
+): Boolean {
+    if (content != "我的绑定") return false
+    if (!plugin.isBindingCardEnabled()) return false
+    if (userId.isBlank()) return false
+    val png = plugin.getBindingCardImage(userId)
+    if (png == null) {
+        runCatching { agent.QClient.replyText(event, "你还没有绑定角色，先发「绑定 <游戏ID>」完成绑定。") }
+        return true
+    }
+    try {
+        val chain = io.github.kloping.qqbot.entities.ex.msg.MessageChain()
+            .apply { text(" ") }
+            .image(png)
+        event.sendMessage(chain)
+    } catch (error: Exception) {
+        plugin.log_warning("绑定卡片发送失败: ${error.message}")
     }
     return true
 }

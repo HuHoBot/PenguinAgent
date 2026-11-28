@@ -13,7 +13,10 @@ object DataLayout {
         "command-state.ini", "command-state.properties", "permission-groups.yml", "timed-tasks.yml",
         "nicknames.dat", "installed-addons.json", "group-names.dat", "webui-password",
         "server-notify-state.properties", "online-history.json", "release-state.json", "tts-cache", "tts-voices",
-        "sensitive-words", "groups", "inventory", "fonts", "modules", "engines", "logs", "backups", "Markdown", "translations", "storage.db", "storage.db-wal", "storage.db-shm", "Q&A.txt", "Q&A.txt.new"
+        "sensitive-words", "groups", "inventory", "fonts", "modules", "engines", "logs", "backups", "Markdown", "translations", "storage.db", "storage.db-wal", "storage.db-shm", "Q&A.txt", "Q&A.txt.new",
+        "bindings.json", "bindings.yml", "player-bindings.json", "pending-bindings.json", "bind-codes.json",
+        "bot-state.json", "group-dirs.json", "whitelist-commands.yml", "addon-registry.json",
+        "avatar-cache", "skin-cache", "chat-log.dat", "chatlog", "panel-state.json", "menu-state.json"
     )
     private val addonData = listOf("config", "data", "files")
 
@@ -56,6 +59,36 @@ object DataLayout {
                     log("数据迁移失败，保留原路径 $oldName：${error.message}")
                 }
             }
+        }
+        migrateLooseAddons(root, log)
+    }
+
+    /**
+     * 极老版本（1.14~1.20 时代）的扩展是 addons/ 根上直接放 main.js / xxx.lua 单文件；
+     * 现在只认目录插件。这里自动把它们逐个搬进同名目录并生成 metadata.yaml，
+     * 老扩展零改动即可被 1.24 加载。
+     */
+    private fun migrateLooseAddons(root: File, log: (String) -> Unit) {
+        val addons = root.resolve("addons")
+        if (!addons.isDirectory) return
+        for (file in addons.listFiles().orEmpty()) {
+            if (file.isDirectory) continue
+            val name = file.name
+            if (name.endsWith(".metadata.yaml") || name == "metadata.yaml") continue
+            val ext = listOf(".js", ".lua", ".py", ".java").firstOrNull { name.lowercase().endsWith(it) } ?: continue
+            val base = name.removeSuffix(ext).ifBlank { return }
+            val dir = addons.resolve(base)
+            if (dir.exists()) { log("扩展 $name 无法自动目录化：addons/$base/ 已存在，请手动整理"); continue }
+            runCatching {
+                dir.mkdirs()
+                Files.move(file.toPath(), dir.resolve("main$ext").toPath(), StandardCopyOption.ATOMIC_MOVE)
+                val metadata = dir.resolve("metadata.yaml")
+                if (!metadata.exists()) {
+                    val safe = base.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                    metadata.writeText("name: $safe\nversion: '1.0.0'\nauthor: 'migrated'\ndescription: '由旧版单文件扩展自动迁移'\nentry: main$ext\n")
+                }
+                log("旧版单文件扩展 $name 已自动迁移为目录插件 addons/$base/")
+            }.onFailure { log("迁移扩展 $name 失败，原文件保留：${it.message}") }
         }
     }
 

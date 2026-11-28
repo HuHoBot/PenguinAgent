@@ -515,6 +515,10 @@ binding:
   force-bind-groups: []
   # 「玩家绑定与入服验证 · 免验证名单」列表；每项单独占一行。
   verify-exempt: []
+  # 「我的绑定」个人卡片图（头像+角色列表+在线状态）。群友发「我的绑定」即可查看。
+  card:
+    # 是否启用绑定卡片图。
+    enabled: true
 # 服务器状态查询和 MOTD 输出设置。
 motd:
   # 查询服务器地址；不会自动扫描公网 IP。
@@ -529,6 +533,12 @@ motd:
   post-img: true
   # 是否启用本项行为；true 开启，false 关闭。
   use-markdown: true
+# 每日群报：到设定时间向所有配置群推送过去 24 小时的服务器摘要。
+daily-report:
+  # 是否启用每日群报。
+  enabled: false
+  # 发送时间（HH:mm），例如 08:00。
+  time: '08:00'
 # Markdown 模板文件映射。
 markdown:
   # 「Markdown 模板 · 在线查询模板」设置；按此用途填写，未使用时保持默认值。

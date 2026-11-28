@@ -130,6 +130,8 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         agent.spigot.onlinelist.OnlineHistoryStore.configureAsync(runtimeDataFolder)
         // 性能预警（TPS/内存持续异常与恢复时通报 QQ 群）
         performanceWatcher.start()
+        // 每日群报（daily-report.enabled 时按设定时间推送）
+        agent.spigot.monitor.DailyReportTask.start(this)
         // 强制 OTA（应急漏洞修补；未配置清单地址时完全静默）
         otaUpdater.start()
         // 退群自动解绑（轮询群成员列表，需 QQ 白名单能力）
@@ -210,6 +212,7 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
         runCatching { assetExecutor.shutdownNow() }
         runCatching { agent.spigot.manager.FontManager.shutdown() }
         runCatching { performanceWatcher.stop() }
+        runCatching { agent.spigot.monitor.DailyReportTask.stop() }
         runCatching { otaUpdater.stop() }
         // 必须赶在 shutdownRuntime() 关掉 QQ 连接之前发送，否则关机通知发不出去。
         if (::serverNotifyManager.isInitialized) serverNotifyManager.onServerStopping()
@@ -1168,6 +1171,19 @@ class HuHoBotSpigot : JavaPlugin(), HuHoBot {
     override fun isModerationAllowNone(): Boolean = configManager.moderationAllowNone()
     override fun isModerationNotifyUserEnabled(): Boolean = configManager.moderationNotifyUser()
     override fun isAgentMemoryEnabled(): Boolean = configManager.agentMemoryEnabled()
+    override fun isBindingCardEnabled(): Boolean = configManager.bindingCardEnabled()
+    override fun isDailyReportEnabled(): Boolean = configManager.dailyReportEnabled()
+    override fun getDailyReportTime(): String = configManager.dailyReportTime()
+
+    override fun getBindingCardImage(qqUserId: String): ByteArray? {
+        if (!configManager.bindingCardEnabled()) return null
+        val bound = agent.state.CommandRepositories.bindings.getBinding(qqUserId) ?: return null
+        val names = bound.playerNames
+        if (names.isEmpty()) return null
+        return runCatching {
+            agent.spigot.inventory.BindingCardRenderer.render(this, names, configManager.serverName() + " · 绑定卡片")
+        }.onFailure { log_warning("绑定卡片渲染失败: ${it.message}") }.getOrNull()
+    }
     override fun getAgentMemoryMaxItems(): Int = configManager.agentMemoryMaxItems()
     override fun getAgentExtraHeaders(): Map<String, String> = configManager.agentExtraHeaders()
     override fun getCustomCommands(): List<CustomCommandDetail> = configManager.customCommands()

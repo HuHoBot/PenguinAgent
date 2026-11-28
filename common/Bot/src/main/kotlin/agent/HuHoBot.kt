@@ -330,6 +330,9 @@ interface HuHoBot : LoggerProvider, ConfigProvider, CommandProvider, SchedulerPr
     /** 获取指定在线玩家的背包内容（文本格式）；玩家离线返回 null。 */
     fun getPlayerInventory(playerName: String): String? = null
 
+    /** 「我的绑定」个人卡片图；未启用或无绑定返回 null。 */
+    fun getBindingCardImage(qqUserId: String): ByteArray? = null
+
     /** 获取指定在线玩家的背包 PNG 图片字节数组；玩家离线或渲染失败返回 null。 */
     fun getPlayerInventoryImage(playerName: String): ByteArray? = null
 

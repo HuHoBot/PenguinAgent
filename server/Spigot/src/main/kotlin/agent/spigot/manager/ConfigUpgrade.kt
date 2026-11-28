@@ -99,7 +99,12 @@ object ConfigUpgrade {
         "online-list.columns" to listOf("online-list.render.columns"),
         "online-list.address" to listOf("online-list.display.address"),
         "online-list.footer-text" to listOf("online-list.render.footer-text"),
-        "update-check" to listOf("update")
+        "update-check" to listOf("update"),
+        "serverName" to listOf("server-name", "server.name"),
+        "webui-port" to listOf("webui.port", "webui.port.port"),
+        "motd.server-ip" to listOf("motd.serverIP"),
+        "language" to listOf("lang", "locale"),
+        "command-sender" to listOf("sender-mode")
     )
 
     private fun insertChild(text: String, defaultLines: List<String>, parentPath: String, child: Field, current: Document): String {

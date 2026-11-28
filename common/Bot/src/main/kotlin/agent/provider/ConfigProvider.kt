@@ -97,6 +97,15 @@ interface ConfigProvider {
     /** AI 长期记忆开关（存储在 data/agent-memory 目录，YAML 文件）。 */
     fun isAgentMemoryEnabled(): Boolean = true
 
+    /** 「我的绑定」个人卡片图开关。 */
+    fun isBindingCardEnabled(): Boolean = true
+
+    /** 每日群报开关（默认关闭）。 */
+    fun isDailyReportEnabled(): Boolean = false
+
+    /** 每日群报发送时间（HH:mm）。 */
+    fun getDailyReportTime(): String = "08:00"
+
     /** 每个群最多保留的记忆条数。 */
     fun getAgentMemoryMaxItems(): Int = 200
 
